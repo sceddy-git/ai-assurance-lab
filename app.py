@@ -589,13 +589,20 @@ def list_students():
         return jsonify({'error': 'Access denied'}), 403
     
     try:
-        response = cognito_client.list_users(
-            UserPoolId=os.getenv('COGNITO_USER_POOL_ID'),
-            Limit=100
-        )
-        
+        users = []
+        pagination_token = None
+        while True:
+            kwargs = {'UserPoolId': os.getenv('COGNITO_USER_POOL_ID'), 'Limit': 60}
+            if pagination_token:
+                kwargs['PaginationToken'] = pagination_token
+            response = cognito_client.list_users(**kwargs)
+            users.extend(response.get('Users', []))
+            pagination_token = response.get('PaginationToken')
+            if not pagination_token:
+                break
+
         students = []
-        for user in response.get('Users', []):
+        for user in users:
             email = next((attr['Value'] for attr in user['Attributes'] if attr['Name'] == 'email'), '')
             first_name = next((attr['Value'] for attr in user['Attributes'] if attr['Name'] == 'given_name'), '')
             last_name = next((attr['Value'] for attr in user['Attributes'] if attr['Name'] == 'family_name'), '')
@@ -630,13 +637,20 @@ def delete_all_students():
         return jsonify({'error': 'Access denied'}), 403
     
     try:
-        response = cognito_client.list_users(
-            UserPoolId=os.getenv('COGNITO_USER_POOL_ID'),
-            Limit=100
-        )
-        
+        users = []
+        pagination_token = None
+        while True:
+            kwargs = {'UserPoolId': os.getenv('COGNITO_USER_POOL_ID'), 'Limit': 60}
+            if pagination_token:
+                kwargs['PaginationToken'] = pagination_token
+            response = cognito_client.list_users(**kwargs)
+            users.extend(response.get('Users', []))
+            pagination_token = response.get('PaginationToken')
+            if not pagination_token:
+                break
+
         deleted = 0
-        for user in response.get('Users', []):
+        for user in users:
             try:
                 cognito_client.admin_delete_user(
                     UserPoolId=os.getenv('COGNITO_USER_POOL_ID'),
