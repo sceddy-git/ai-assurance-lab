@@ -61,15 +61,15 @@ def save_user_credentials(
         table = get_table()
         current_time = int(time.time())
         
-        # Prepare update expression and values
-        update_expr = "SET updated_at = :updated_at"
+        # Prepare update expression and values (single SET clause, comma-separated assignments)
+        set_clauses = ["updated_at = :updated_at"]
         expr_values = {":updated_at": current_time}
         
         # Add new credentials to the update
         if te_token:
             try:
                 encrypted_te = encrypt_token(te_token, email)
-                update_expr += ", thousandeyes_token = :te_token"
+                set_clauses.append("thousandeyes_token = :te_token")
                 expr_values[":te_token"] = encrypted_te
             except EncryptionError as e:
                 logger.error(f"Failed to encrypt ThousandEyes token for {email}: {e}")
@@ -78,15 +78,16 @@ def save_user_credentials(
         if meraki_token:
             try:
                 encrypted_meraki = encrypt_token(meraki_token, email)
-                update_expr += ", meraki_token = :meraki_token"
+                set_clauses.append("meraki_token = :meraki_token")
                 expr_values[":meraki_token"] = encrypted_meraki
             except EncryptionError as e:
                 logger.error(f"Failed to encrypt Meraki token for {email}: {e}")
                 raise DynamoDBError(f"Failed to encrypt Meraki token: {str(e)}")
         
         # Set created_at if this is the first save
-        update_expr = "SET #created = if_not_exists(#created, :created_at), " + update_expr
+        set_clauses.insert(0, "#created = if_not_exists(#created, :created_at)")
         expr_values[":created_at"] = current_time
+        update_expr = "SET " + ", ".join(set_clauses)
         
         # Use AttributeNamePlaceholder to avoid conflicts with reserved words
         attr_names = {"#created": "created_at"}
