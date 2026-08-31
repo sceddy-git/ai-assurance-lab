@@ -393,7 +393,7 @@ def chat():
             response = bedrock_client.invoke_model(
                 modelId='us.anthropic.claude-sonnet-4-5-20250929-v1:0',
                 body=json.dumps({
-                    "anthropic_version": "bedrock-2023-06-01",
+                    "anthropic_version": "bedrock-2023-05-31",
                     "max_tokens": 2048,
                     "tools": available_tools,
                     "messages": messages
@@ -447,7 +447,7 @@ def chat():
                 final_response = bedrock_client.invoke_model(
                     modelId='us.anthropic.claude-sonnet-4-5-20250929-v1:0',
                     body=json.dumps({
-                        "anthropic_version": "bedrock-2023-06-01",
+                        "anthropic_version": "bedrock-2023-05-31",
                         "max_tokens": 2048,
                         "messages": messages
                     })
