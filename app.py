@@ -26,10 +26,12 @@ from dynamo_db import (
     DynamoDBError
 )
 from crypto import EncryptionError
-from tool_handlers import (
-    handle_thousandeyes_tool,
-    handle_meraki_tool,
-    get_available_tools
+from mcp_client import (
+    list_mcp_tools,
+    call_mcp_tool,
+    MCPClientError,
+    THOUSANDEYES_MCP_URL,
+    MERAKI_MCP_URL
 )
 
 # Configure logging
@@ -377,11 +379,29 @@ def chat():
         te_token = credentials.get('te_token')
         meraki_token = credentials.get('meraki_token')
         
-        # Check which services are available
-        available_tools = get_available_tools(
-            te_enabled=bool(te_token),
-            meraki_enabled=bool(meraki_token)
-        )
+        # Discover live tools from the user's own MCP servers (ThousandEyes and
+        # Meraki host their own MCP servers; we call them with the user's token
+        # rather than proxying REST calls ourselves).
+        available_tools = []
+        tool_routing = {}  # tool_name -> (mcp_url, token)
+        
+        if te_token:
+            try:
+                te_tools = list_mcp_tools(THOUSANDEYES_MCP_URL, te_token)
+                for tool in te_tools:
+                    available_tools.append(tool)
+                    tool_routing[tool['name']] = (THOUSANDEYES_MCP_URL, te_token)
+            except MCPClientError as e:
+                logger.warning(f"Failed to list ThousandEyes MCP tools for {email}: {e}")
+        
+        if meraki_token:
+            try:
+                meraki_tools = list_mcp_tools(MERAKI_MCP_URL, meraki_token)
+                for tool in meraki_tools:
+                    available_tools.append(tool)
+                    tool_routing[tool['name']] = (MERAKI_MCP_URL, meraki_token)
+            except MCPClientError as e:
+                logger.warning(f"Failed to list Meraki MCP tools for {email}: {e}")
         
         # Build messages for Claude
         messages = conversation_history + [
@@ -389,15 +409,18 @@ def chat():
         ]
         
         # Call Bedrock Claude model
+        request_body = {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 2048,
+            "messages": messages
+        }
+        if available_tools:
+            request_body["tools"] = available_tools
+        
         try:
             response = bedrock_client.invoke_model(
                 modelId='us.anthropic.claude-sonnet-4-5-20250929-v1:0',
-                body=json.dumps({
-                    "anthropic_version": "bedrock-2023-05-31",
-                    "max_tokens": 2048,
-                    "tools": available_tools,
-                    "messages": messages
-                })
+                body=json.dumps(request_body)
             )
             
             result = json.loads(response['body'].read())
@@ -418,17 +441,18 @@ def chat():
                 tool_input = tool_call.get('input', {})
                 tool_use_id = tool_call.get('id', '')
                 
-                # Route to appropriate handler using user's token
+                # Route to the MCP server (ThousandEyes or Meraki) that advertised this tool
                 try:
-                    if tool_name.startswith('get_') or tool_name in ['list_organizations', 'list_networks', 'list_devices', 'list_device', 'list_network_clients']:
-                        # Determine if ThousandEyes or Meraki
-                        if any(x in tool_name for x in ['account', 'agents', 'alerts', 'alert_rules', 'tests', 'test_results', 'outages', 'endpoint']):
-                            tool_result = handle_thousandeyes_tool(tool_name, tool_input, te_token)
-                        else:
-                            tool_result = handle_meraki_tool(tool_name, tool_input, meraki_token)
-                    else:
+                    routing = tool_routing.get(tool_name)
+                    if not routing:
                         tool_result = {"error": f"Unknown tool: {tool_name}"}
+                    else:
+                        mcp_url, mcp_token = routing
+                        tool_result = call_mcp_tool(mcp_url, mcp_token, tool_name, tool_input)
                 
+                except MCPClientError as e:
+                    logger.error(f"Tool execution error for {tool_name}: {e}")
+                    tool_result = {"error": f"Tool execution failed: {str(e)}"}
                 except Exception as e:
                     logger.error(f"Tool execution error for {tool_name}: {e}")
                     tool_result = {"error": f"Tool execution failed: {str(e)}"}

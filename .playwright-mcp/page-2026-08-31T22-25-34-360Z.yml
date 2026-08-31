@@ -1,0 +1,50 @@
+- generic [ref=f3e2]:
+  - generic [ref=f3e3]:
+    - heading "🔐 MCP Credentials" [level=1] [ref=f3e4]
+    - paragraph [ref=f3e5]: Manage your API tokens for ThousandEyes and Meraki
+  - generic [ref=f3e6]:
+    - strong [ref=f3e7]: 🔒 Security Notice
+    - text: Your credentials are encrypted and stored securely in our database. They are never displayed in plaintext on this page and are only used to authenticate your API requests on the backend. You can update or delete your credentials anytime.
+  - generic [ref=f3e8]:
+    - generic [ref=f3e9]:
+      - heading "ThousandEyes" [level=2] [ref=f3e10]
+      - generic [ref=f3e12]:
+        - generic [ref=f3e13]:
+          - generic [ref=f3e14]: "Token Configured:"
+          - generic [ref=f3e15]: "No"
+        - generic [ref=f3e16]:
+          - generic [ref=f3e17]: "Connection Status:"
+          - generic [ref=f3e18]: Unknown
+        - generic [ref=f3e19]:
+          - generic [ref=f3e20]: "Last Updated:"
+          - generic [ref=f3e21]: Never
+      - generic [ref=f3e22]:
+        - generic [ref=f3e23]: API Token
+        - textbox "API Token" [ref=f3e24]:
+          - /placeholder: Paste your ThousandEyes API token
+      - generic [ref=f3e25]:
+        - button "Save Token" [ref=f3e26] [cursor=pointer]
+        - button "Test Connection" [ref=f3e27] [cursor=pointer]
+        - button "Delete" [ref=f3e28] [cursor=pointer]
+    - generic [ref=f3e29]:
+      - heading "Meraki" [level=2] [ref=f3e30]
+      - generic [ref=f3e32]:
+        - generic [ref=f3e33]:
+          - generic [ref=f3e34]: "Token Configured:"
+          - generic [ref=f3e35]: "No"
+        - generic [ref=f3e36]:
+          - generic [ref=f3e37]: "Connection Status:"
+          - generic [ref=f3e38]: Unknown
+        - generic [ref=f3e39]:
+          - generic [ref=f3e40]: "Last Updated:"
+          - generic [ref=f3e41]: Never
+      - generic [ref=f3e42]:
+        - generic [ref=f3e43]: API Token
+        - textbox "API Token" [ref=f3e44]:
+          - /placeholder: Paste your Meraki API token
+      - generic [ref=f3e45]:
+        - button "Save Token" [ref=f3e46] [cursor=pointer]
+        - button "Test Connection" [ref=f3e47] [cursor=pointer]
+        - button "Delete" [ref=f3e48] [cursor=pointer]
+  - link "← Back to Chat" [ref=f3e50] [cursor=pointer]:
+    - /url: /lab

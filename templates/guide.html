@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Assurance — Partner MCP Day · Lab Guide</title>
+<style>
+  :root{
+    --navy:#0c122e; --navy2:#104b88; --te:#00adef; --meraki:#04aeb1;
+    --splunk:#f15e22; --n8n:#a54c96; --gabi:#0d5d70;
+    --cyan:#00adef; --coral:#fb7c32;
+    --ink:#32515b; --muted:#4f565c; --line:#e3e5e4; --bg:#ffffff;
+    --soft:#f1f3f3; --code:#0c122e; --gold:#f9a425;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink);background:var(--bg);line-height:1.65;font-size:16px}
+  .wrap{max-width:900px;margin:0 auto;padding:0 24px 90px}
+  a{color:var(--te)}
+
+  /* cover */
+  .cover{background:
+      radial-gradient(900px 360px at 88% -20%, rgba(0,173,239,.36), transparent 60%),
+      radial-gradient(700px 320px at -8% 30%, rgba(251,124,50,.30), transparent 60%),
+      linear-gradient(135deg,#0c122e 0%,#104b88 55%,#0e404c 100%);color:#fff;padding:54px 24px 46px;text-align:center}
+  .cover .kick{font-size:12px;letter-spacing:.28em;text-transform:uppercase;color:#a8d4ee;margin-bottom:14px}
+  .cover .kick b{color:var(--coral)}
+  .cover h1{font-size:40px;line-height:1.05;font-weight:800;letter-spacing:-.02em}
+  .cover h1 em{font-style:normal;color:var(--cyan)}
+  .cover .sub{margin-top:12px;color:#d7e6f0;font-size:17px}
+  .cover .pills{margin-top:22px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+  .cover .pill{font-size:12px;font-weight:700;padding:5px 13px;border-radius:100px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;text-decoration:none;transition:background .15s}
+  .cover a.pill:hover{background:rgba(255,255,255,.26);border-color:rgba(255,255,255,.5)}
+
+  /* control panel */
+  .builder{position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid var(--line);
+    box-shadow:0 2px 10px rgba(0,0,0,.04)}
+  .builder-in{max-width:900px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .builder b{font-size:13px;color:var(--navy);letter-spacing:.02em}
+  .opt{display:inline-flex;align-items:center;gap:7px;font-size:14px;font-weight:600;padding:6px 12px;border:1px solid var(--line);border-radius:8px;cursor:pointer;user-select:none;background:var(--soft)}
+  .opt input{width:16px;height:16px;accent-color:var(--navy);cursor:pointer}
+  .opt.req{opacity:.85;cursor:default}
+  .opt.req input{cursor:not-allowed}
+  .opt a{color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:7px}
+  .opt a:hover{text-decoration:underline}
+  .dot{width:9px;height:9px;border-radius:50%}
+  .d-te{background:var(--te)} .d-mk{background:var(--meraki)} .d-sp{background:var(--splunk)} .d-n8{background:var(--n8n)} .d-gb{background:var(--gabi)}
+  .printbtn{margin-left:auto;font-size:13px;font-weight:700;color:#fff;background:var(--navy);border:none;border-radius:8px;padding:8px 14px;cursor:pointer}
+
+  /* sections */
+  html{scroll-behavior:smooth}
+  section{padding-top:14px;scroll-margin-top:74px}
+  .sec-head{margin:42px 0 8px;padding-top:20px;border-top:3px solid var(--line)}
+  .sec-tag{font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+  .sec-tag a{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:none;color:var(--muted);text-decoration:none;opacity:.6}
+  .sec-tag a:hover{opacity:1;text-decoration:underline}
+  .sec-head h2{font-size:28px;font-weight:800;letter-spacing:-.01em;margin-top:3px;color:var(--navy)}
+  .sec-head.te h2{color:var(--te)} .sec-head.mk h2{color:var(--meraki)} .sec-head.sp h2{color:var(--splunk)} .sec-head.n8 h2{color:var(--n8n)} .sec-head.gb h2{color:var(--gabi)}
+  .sec-desc{color:var(--muted);margin-top:4px}
+  .badge{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.08em;padding:3px 9px;border-radius:100px;color:#fff;vertical-align:middle;margin-left:8px}
+  .b-req{background:#00adef} .b-opt{background:#f15e22}
+
+  h3{font-size:19px;font-weight:700;margin:26px 0 8px;color:var(--navy)}
+  h4{font-size:16px;font-weight:700;margin:18px 0 6px}
+  p{margin:9px 0}
+  .lead{font-size:17px}
+  code{font-family:"SF Mono",Consolas,Menlo,monospace;background:#eef2f5;border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:13.5px;color:var(--navy)}
+
+  /* callouts */
+  .note,.tip,.warn{border-radius:10px;padding:13px 16px;margin:14px 0;font-size:15px;display:flex;gap:11px}
+  .note{background:#e6f6fd;border:1px solid #b3e0f7}
+  .tip{background:#e8f9f5;border:1px solid #b3e5d8}
+  .warn{background:#fef3ec;border:1px solid #fad2b5}
+  .note .i,.tip .i,.warn .i{font-size:16px;flex-shrink:0}
+
+  /* steps */
+  ol.steps{list-style:none;counter-reset:s;margin:16px 0}
+  ol.steps>li{counter-increment:s;display:flex;gap:14px;margin-bottom:16px}
+  ol.steps>li::before{content:counter(s);flex-shrink:0;width:28px;height:28px;border-radius:50%;
+    background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;margin-top:2px}
+  .te ol.steps>li::before{background:var(--te)} .mk ol.steps>li::before{background:var(--meraki)}
+  .st-t{font-weight:700}
+  .st-d{color:var(--muted);font-size:15px}
+
+  pre{position:relative;background:var(--code);color:#dfe9f0;border-radius:8px;padding:13px 70px 13px 16px;overflow-x:auto;font-family:"SF Mono",Consolas,Menlo,monospace;font-size:13px;line-height:1.6;margin:10px 0}
+  pre .c{color:#7fa6bd}
+  /* prompt */
+  .prompt{position:relative;background:#0e2233;color:#8fe3c0;border-left:3px solid var(--te);border-radius:6px;padding:11px 70px 11px 15px;margin:8px 0;font-family:"SF Mono",Consolas,Menlo,monospace;font-size:13.5px;line-height:1.55;white-space:pre-wrap}
+  .copy-btn{position:absolute;top:8px;right:8px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:11px;font-weight:700;letter-spacing:.04em;color:#cfe0ee;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.28);border-radius:6px;padding:3px 10px;cursor:pointer;transition:background .12s}
+  .copy-btn:hover{background:rgba(255,255,255,.22)}
+  .copy-btn.done{color:#0e2233;background:#8fe3c0;border-color:#8fe3c0}
+  .mk .prompt{border-left-color:var(--meraki);color:#a7e9cf}
+  .sp .prompt{border-left-color:var(--splunk);color:#f2c39e}
+  .n8 .prompt{border-left-color:var(--n8n);color:#cdbbe6}
+  .gb .prompt{border-left-color:var(--gabi);color:#d6bdf7}
+  .plabel{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:14px 0 2px;font-weight:700}
+
+  .card{border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:14px 0;background:#fff}
+  .card.te{border-left:4px solid var(--te)} .card.mk{border-left:4px solid var(--meraki)}
+  .card.sp{border-left:4px solid var(--splunk)} .card.n8{border-left:4px solid var(--n8n)} .card.gb{border-left:4px solid var(--gabi)}
+
+  .lab{border:1px solid var(--line);border-radius:10px;margin:18px 0;overflow:hidden}
+  .lab-h{padding:12px 16px;font-weight:700;display:flex;align-items:center;gap:10px;background:var(--soft);border-bottom:1px solid var(--line)}
+  .lab-h .n{font-size:13px;font-weight:800;color:#fff;background:var(--te);border-radius:6px;padding:2px 8px}
+  .mk .lab-h .n{background:var(--meraki)} .sp .lab-h .n{background:var(--splunk)} .n8 .lab-h .n{background:var(--n8n)} .gb .lab-h .n{background:var(--gabi)}
+  .lab-b{padding:14px 16px}
+  .lab-b .sub{color:var(--muted);font-size:14px;margin:-2px 0 6px}
+
+  .toc{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:16px 20px;margin:22px 0}
+  .toc b{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+  .toc ul{list-style:none;margin-top:8px}
+  .toc li{padding:5px 0;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center;font-size:15px}
+  .toc li:last-child{border:none}
+
+  ul.tick{list-style:none;margin:8px 0}
+  ul.tick li{padding:4px 0 4px 22px;position:relative}
+  ul.tick li::before{content:"→";position:absolute;left:0;color:var(--gold)}
+
+  footer{text-align:center;color:var(--muted);font-size:13px;margin-top:50px;padding-top:22px;border-top:1px solid var(--line)}
+
+  /* ---- Module 4 (build-an-MCP-server) components ---- */
+  .wrap table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}
+  .wrap th,.wrap td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}
+  .wrap th{background:var(--navy2);color:#fff;font-weight:700;font-size:12.5px;letter-spacing:.02em}
+  .wrap tbody tr:nth-child(even){background:var(--soft)}
+  .wrap td code{font-size:12.5px}
+  .paths{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}
+  .pathcard{border:1px solid var(--line);border-radius:10px;padding:14px 16px;background:#fff}
+  .pathcard.rec{border:2px solid var(--n8n);background:linear-gradient(135deg,#fff,#f4eefb)}
+  .pathcard .pc-h{font-weight:800;color:var(--navy);margin-bottom:6px;font-size:15px}
+  .pathcard .pc-tag{display:inline-block;font-size:10px;font-weight:800;color:#fff;background:var(--n8n);border-radius:100px;padding:2px 9px;margin-left:6px;letter-spacing:.05em;text-transform:uppercase;vertical-align:middle}
+  .uistep{display:flex;gap:12px;align-items:flex-start;margin:9px 0;padding:11px 13px;background:var(--soft);border:1px solid var(--line);border-radius:8px}
+  .uistep .uic{flex:none;width:36px;height:36px;border-radius:8px;background:#fff;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:16px}
+  .uistep .ut b{color:var(--navy)}
+  .n8 ol.steps>li::before{background:var(--n8n)}
+  kbd{font-family:"SF Mono",Consolas,Menlo,monospace;font-size:12px;background:#eef2f5;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;color:var(--navy)}
+  .diagram{background:var(--code);color:#dfe9f0;border-radius:8px;padding:14px 16px;overflow-x:auto;font-family:"SF Mono",Consolas,Menlo,monospace;font-size:11.5px;line-height:1.45;white-space:pre;margin:12px 0}
+
+  @media print{
+    .builder,.copy-btn{display:none}
+    .paths{grid-template-columns:1fr 1fr}
+    .cover{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    pre,.prompt{white-space:pre-wrap}
+    body{font-size:12px}
+  }
+
+  /* ---- Narrow / sidebar embed (iframe inside the lab platform) ---- */
+  @media (max-width: 560px){
+    .wrap{padding:0 14px 60px}
+    .cover{padding:32px 16px 28px}
+    .cover h1{font-size:26px}
+    .cover .sub{font-size:14px}
+    .cover .pills{gap:6px}
+    .cover .pill{font-size:11px;padding:4px 10px}
+    .sec-head h2{font-size:22px}
+    .paths{grid-template-columns:1fr}
+    .wrap table{font-size:12.5px}
+  }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="kick">AI Assurance Lab Platform &nbsp;·&nbsp; Cisco <b>&times;</b> Anthropic &nbsp;·&nbsp; Full-Day Hands-on Workshop</div>
+  <h1>AI Assurance — Partner <em>MCP</em> Day</h1>
+  <div class="sub">Lab Guide — turning plain English into real network action with Claude &amp; MCP</div>
+  <div class="pills">
+    <a href="#sec-te" class="pill" style="border-color:var(--te)">ThousandEyes</a><a href="#sec-meraki" class="pill" style="border-color:var(--meraki)">Meraki Magic</a>
+    <a href="#sec-splunk" class="pill" style="border-color:var(--splunk)">Splunk</a><a href="#sec-n8n" class="pill" style="border-color:var(--n8n)">Build an MCP server</a><a href="#sec-gabi" class="pill" style="border-color:var(--gabi)">Catalyst Centre</a>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div style="display:flex;justify-content:flex-end;padding:18px 0 0">
+    <button class="printbtn" onclick="window.print()">Print / Save PDF</button>
+  </div>
+
+  <!-- BEFORE YOU START -->
+  <section>
+    <div class="sec-head"><div class="sec-tag">Start here</div><h2>Before you start</h2>
+      <div class="sec-desc">Five minutes of context so every lab makes sense.</div></div>
+
+    <h3>What is MCP, in one paragraph</h3>
+    <p>The <b>Model Context Protocol (MCP)</b> is an open standard — think of it as a <em>USB-C port for AI</em>. It lets Claude plug into external tools and data (like ThousandEyes or Meraki) through a standard interface. You ask Claude a question in plain English; Claude decides which tools to call, calls them, and weaves the results into its answer. You never touch an API or write a script.</p>
+
+    <div class="card">
+      <h4>Two ways to run Claude — pick based on which labs you're doing</h4>
+      <ul class="tick">
+        <li><b>Claude Desktop app (recommended)</b> — handles everything: the <b>ThousandEyes</b> OAuth connector <i>plus</i> the local <b>Meraki</b> and <b>Splunk</b> servers (a browser can't reach those). If you're doing more than ThousandEyes today, use Desktop so it's all in one place.</li>
+        <li><b>Claude in your browser (claude.ai)</b> — fine if you're <i>only</i> doing the ThousandEyes labs. Nothing to install; add the connector and sign in.</li>
+      </ul>
+    </div>
+
+    <div class="toc">
+      <b>What's in this guide</b>
+      <ul>
+        <li><a href="#sec-te" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-te"></span><b>1 · ThousandEyes</b> — connect (browser + OAuth) &amp; 4 labs <span class="badge b-req">Required</span></a></li>
+        <li><a href="#sec-meraki" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-mk"></span><b>2 · Meraki Magic</b> — local setup &amp; lab prompts <span class="badge b-req">Required</span></a></li>
+        <li><a href="#sec-splunk" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-sp"></span><b>3 · Splunk</b> — 3 investigation labs <span class="badge b-opt">Featured</span></a></li>
+        <li><a href="#sec-n8n" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-n8"></span><b>4 · MCP Tool-Building</b> — build your own MCP server with Cursor <span class="badge b-opt">Featured</span></a></li>
+        <li><a href="#sec-gabi" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-gb"></span><b>5 · Gabi's Repo</b> — Meraki API Explorer &amp; Catalyst Centre <span class="badge b-opt">Featured</span></a></li>
+      </ul>
+      <p style="margin:8px 0 0;font-size:14px;color:var(--muted)">Use the <b>Print / Save PDF</b> button at the top of the page to save a copy of this guide for your event.</p>
+    </div>
+  </section>
+
+  <!-- 1. THOUSANDEYES -->
+  <section id="sec-te">
+    <div class="sec-head te"><div class="sec-tag">Module 1 · Required<a href="#">↑ back to top</a></div>
+      <h2>ThousandEyes MCP</h2>
+      <div class="sec-desc">Connect Claude to Cisco's official ThousandEyes MCP server straight from your browser — no install, no config files.</div></div>
+
+    <div class="tip"><span class="i">🎟️</span><div><b>No ThousandEyes account?</b> See the lab proctor — demo licenses are provided for today. You'll use those credentials when you sign in below.</div></div>
+
+    <h3>Connect ThousandEyes (OAuth — browser or Desktop)</h3>
+    <p class="lead">The ThousandEyes MCP server is cloud-hosted by Cisco, so you connect to it directly as a custom connector — no install, no config files.</p>
+    <div class="tip"><span class="i">⭐</span><div><b>Browser or Desktop — your choice, same steps.</b> You can add this OAuth connector in Claude in your browser (claude.ai) <i>or</i> the Claude Desktop app. <b>Desktop is preferred for today</b>: the Meraki and Splunk labs run local servers that only Claude Desktop can reach, so doing ThousandEyes in Desktop too keeps everything in one place — no app switching.</div></div>
+    <div class="te">
+    <ol class="steps">
+      <li><div><div class="st-t">Open Claude and go to Connectors</div><div class="st-d">In Claude (claude.ai in your browser, or the Claude Desktop app), open <b>Settings → Connectors</b>.</div></div></li>
+      <li><div><div class="st-t">Add a custom connector</div><div class="st-d">Click <b>Add custom connector</b>.</div></div></li>
+      <li><div><div class="st-t">Enter the name and URL</div>
+        <div class="st-d">Name: <code>ThousandEyes MCP Server</code> &nbsp;·&nbsp; Remote MCP server URL:</div>
+        <pre>https://api.thousandeyes.com/mcp</pre>
+        <div class="st-d">Click <b>Add</b>.</div></div></li>
+      <li><div><div class="st-t">Sign in when the browser window opens</div><div class="st-d">A window opens asking you to sign in with your <b>ThousandEyes credentials</b> (use the demo account from the proctor if you don't have your own) and to <b>agree to share your token</b> with Claude.</div></div></li>
+      <li><div><div class="st-t">Turn on the tools</div><div class="st-d">Back in Claude, click <b>Configure</b> on the ThousandEyes connector and switch on <b>auto-allow</b> so tools run without prompting each time. Tools come in two groups — <b>Read-only</b> and <b>Write/delete</b>. Enable <b>Write/delete</b> too, because Lab 1 creates real tests.</div></div></li>
+    </ol>
+    </div>
+
+    <h4>Verify it's connected</h4>
+    <div class="te"><div class="prompt">What ThousandEyes MCP tools are available to you? List them all.</div></div>
+    <p>You should see tools like <code>list_alerts</code>, <code>get_anomalies</code>, <code>create_synthetic_test</code>, <code>search_outages</code> and many more. If Claude says it has no tools, re-check the sign-in step and that the connector is enabled.</p>
+    <div class="note"><span class="i">ℹ️</span><div>A single custom connector works on a free Claude account. Your org must not be opted out of ThousandEyes AI features, and your sign-in must have the <b>API Access</b> permission (the demo accounts already do).</div></div>
+
+    <!-- TE LABS -->
+    <h3 style="color:var(--te)">ThousandEyes Labs</h3>
+    <div class="te">
+
+    <div class="lab">
+      <div class="lab-h"><span class="n">LAB 1 ★</span> Prospect Demo — from a domain to a customer-ready report</div>
+      <div class="lab-b">
+        <div class="sub">The flagship sales-engineering workflow. ~15–20 minutes, start to finish.</div>
+        <h4>Step 1 — Discover the prospect's internet services</h4>
+        <p>Open <code>servicefinder.thousandeyesresearch.com</code>, search the prospect's primary domain (a real prospect, or a well-known brand), and take a screenshot of the results. Pick 5–10 meaningful URLs — homepage, login, API, CDN.</p>
+        <h4>Step 2 — Ask Claude to create the tests</h4>
+        <p>In Claude, attach your screenshot, then send:</p>
+        <div class="prompt">Here is a screenshot of ServiceFinder results for a prospect called [PROSPECT].
+Please create a ThousandEyes page load test for each of these URLs:
+[paste 5–10 URLs, one per line]
+
+For each test:
+1. Label it with the prefix "[PROSPECT] — " (e.g. "Acme — Homepage")
+2. Assign it to our closest available Enterprise Agent
+3. Use a 5-minute interval
+4. Confirm each test's name and ID once created</div>
+        <h4>Step 3 — Pull the results (after ~5 minutes)</h4>
+        <div class="prompt">The tests for [PROSPECT] should have their first results now. Retrieve the latest metrics for every test you created. For each URL show: page load time, HTTP response code, pass/fail, any errors, and which agent ran it. Summarise as a table.</div>
+        <h4>Step 4 — Generate the customer report ★</h4>
+        <div class="prompt">Using those results, write a professional customer-facing performance report for [PROSPECT] with: 1) Executive summary, 2) Test coverage table, 3) Key findings, 4) What this means for their business, 5) How ThousandEyes solves it, 6) Recommended next steps (a 30-day trial). Tone: trusted advisor, reference real numbers, not too technical. Audience: a Network Manager / IT Director.</div>
+        <div class="plabel">Push it further</div>
+        <div class="prompt">Turn this report into an email I can send to the IT Director — under 200 words, with a subject line referencing the specific issue you found.</div>
+        <div class="prompt">Based on what we found, which additional ThousandEyes test types would you recommend, and what business question does each answer for this prospect?</div>
+      </div>
+    </div>
+
+    <div class="lab">
+      <div class="lab-h"><span class="n">LAB 2</span> Real-time outage triage</div>
+      <div class="lab-b">
+        <div class="sub">Interrogate an active alert in plain English.</div>
+        <div class="prompt">List all active ThousandEyes alerts right now and tell me which have been firing for more than 15 minutes.</div>
+        <div class="prompt">Troubleshoot the most critical alert. Suggest a probable fault domain and give me the supporting evidence from the test data.</div>
+        <div class="prompt">Which enterprise agents are reporting packet loss greater than 1% to the affected target right now? Show me the path-visualisation summary.</div>
+      </div>
+    </div>
+
+    <div class="lab">
+      <div class="lab-h"><span class="n">LAB 3</span> Historical performance deep-dive</div>
+      <div class="lab-b">
+        <div class="sub">Prove or disprove a reported slowdown with data.</div>
+        <div class="prompt">Show me uptime and time-to-first-byte for the Customer Portal HTTP test over the last 24 hours. Call out any drops below our 99.5% SLA.</div>
+        <div class="prompt">Which regions showed elevated page-load time between 08:00 and 10:00 UTC today? Rank them worst to best.</div>
+        <div class="prompt">Compare this week's average latency against last week for the same test. Improved or degraded, and by how much?</div>
+      </div>
+    </div>
+
+    <div class="lab">
+      <div class="lab-h"><span class="n">LAB 4</span> Anomaly detection &amp; instant tests</div>
+      <div class="lab-b">
+        <div class="sub">Surface hidden problems before users notice.</div>
+        <div class="prompt">Analyse all ThousandEyes tests for metric anomalies in the past 2 hours. Flag anything statistically unusual even if it hasn't breached an alert threshold.</div>
+        <div class="prompt">Are there any tests with no data in the last 30 minutes? List them and suggest why they might be silent.</div>
+        <div class="prompt">Run an agent-to-server instant test from our Sydney Enterprise Agent to api.example.com port 443 and report the result immediately.</div>
+      </div>
+    </div>
+
+    </div>
+  </section>
+
+  <!-- 2. MERAKI -->
+  <section id="sec-meraki">
+    <div class="sec-head mk"><div class="sec-tag">Module 2 · Required<a href="#">↑ back to top</a></div>
+      <h2>Meraki Magic MCP</h2>
+      <div class="sec-desc">A local MCP server that talks to your Meraki Dashboard. Hands-on for anyone with a Meraki API key; everyone else follows the live demo.</div></div>
+
+    <div class="note"><span class="i">🖥️</span><div>Meraki Magic runs <b>on your laptop</b>, so it needs the <b>Claude Desktop app</b> (a browser can't reach a local server). You'll also need <b>Python 3.8+</b>, <b>Git</b>, and a <b>Meraki Dashboard API key + Org ID</b>. No key today? Follow the demo and complete this later.</div></div>
+
+    <h3>Set up Meraki Magic (one-time, ~10 minutes)</h3>
+    <div class="mk">
+    <ol class="steps">
+      <li><div><div class="st-t">Clone the repository</div>
+        <pre>git clone https://github.com/CiscoDevNet/meraki-magic-mcp-community.git
+cd meraki-magic-mcp-community</pre></div></li>
+      <li><div><div class="st-t">Create &amp; activate a Python virtual environment</div>
+        <pre><span class="c"># macOS</span>
+python3 -m venv .venv
+source .venv/bin/activate
+
+<span class="c"># Windows</span>
+python -m venv .venv
+.venv\Scripts\activate</pre>
+        <div class="st-d">Your prompt now shows <code>(.venv)</code>. Re-run the activate line each time you open a new terminal.</div></div></li>
+      <li><div><div class="st-t">Install dependencies</div><pre>pip install -r requirements.txt</pre></div></li>
+      <li><div><div class="st-t">Create your credentials file</div>
+        <pre><span class="c"># macOS</span>  cp .env-example .env  &amp;&amp;  open -e .env
+<span class="c"># Windows</span>  copy .env-example .env   (then open .env in Notepad)</pre>
+        <div class="st-d">Fill in — no quotes, no spaces around <code>=</code>:</div>
+        <pre>MERAKI_API_KEY=your_actual_api_key_here
+MERAKI_ORG_ID=your_actual_org_id_here
+ENABLE_CACHING=true
+CACHE_TTL_SECONDS=300
+READ_ONLY_MODE=false</pre></div></li>
+      <li><div><div class="st-t">Add it to Claude Desktop's config</div>
+        <div class="st-d">Open <code>claude_desktop_config.json</code> — Windows: <code>%APPDATA%\Claude</code> · macOS: <code>~/Library/Application Support/Claude/</code>. Add the Meraki block inside <code>"mcpServers"</code> (use your real path to <code>fastmcp</code>):</div>
+        <pre>"Meraki_Magic_MCP": {
+  "command": "<span class="c">/full/path/to/</span>meraki-magic-mcp-community/.venv/bin/fastmcp",
+  "args": ["run","-t","stdio",
+           "<span class="c">/full/path/to/</span>meraki-magic-mcp-community/meraki-mcp-dynamic.py"],
+  "env": {
+    "MERAKI_API_KEY": "your_key",
+    "MERAKI_ORG_ID": "your_org_id",
+    "READ_ONLY_MODE": "false"
+  }
+}</pre>
+        <div class="st-d">On Windows the command path ends in <code>\.venv\Scripts\fastmcp.exe</code> — use forward slashes or double back-slashes.</div></div></li>
+      <li><div><div class="st-t">Restart Claude Desktop and verify</div>
+        <div class="prompt">What MCP servers and tools are available to you right now?</div>
+        <div class="st-d">You should see the Meraki Magic tools listed.</div></div></li>
+    </ol>
+    </div>
+
+    <h3 style="color:var(--meraki)">Meraki Labs</h3>
+    <div class="mk">
+
+    <div class="lab"><div class="lab-h"><span class="n">LAB 1</span> Overview &amp; device health</div><div class="lab-b">
+      <div class="prompt">Give me a health snapshot of my Meraki organisation — how many networks, devices online vs offline, and any active alerts I should know about.</div>
+      <div class="prompt">Draw me a physical diagram of my [network] — show every device, how they connect, and what model they are.</div>
+      <div class="prompt">Summarise the IP schema for my organisation — networks, VLANs, subnet ranges, and the default gateway for each subnet.</div>
+      <div class="prompt">Check all switch ports on my [switch model] — which are active, and are any showing errors, drops, or a duplex mismatch?</div>
+    </div></div>
+
+    <div class="lab"><div class="lab-h"><span class="n">LAB 2</span> Security &amp; visibility</div><div class="lab-b">
+      <div class="prompt">Show all firewall rules on my [MX model] and flag any that allow unrestricted inbound traffic from 0.0.0.0/0. Rank by risk and suggest which to tighten.</div>
+      <div class="prompt">List clients from the last 7 days I don't recognise — MAC, manufacturer (OUI), IP, SSID/port, first/last seen. Flag any that connected outside business hours.</div>
+      <div class="prompt">Conduct a full security audit of my Meraki organisation: risky firewall rules, SSID auth modes, rogue APs (last 7 days), firmware with known CVEs, VPN peers. Give each finding a High/Medium/Low risk and a remediation for the top 3.</div>
+    </div></div>
+
+    <div class="lab"><div class="lab-h"><span class="n">LAB 3</span> Performance &amp; usage</div><div class="lab-b">
+      <div class="prompt">Draw a performance dashboard for my network — client count per AP, top bandwidth consumers, WAN uplink health, and any high-error devices.</div>
+      <div class="prompt">Show the top 10 bandwidth consumers this week, broken down by device and application. Flag anyone over 10GB.</div>
+      <div class="prompt">Pull channel utilisation for all my APs — are any congested on 2.4GHz or 5GHz? Identify co-channel interference and suggest changes.</div>
+    </div></div>
+
+    <div class="lab"><div class="lab-h"><span class="n">LAB 4</span> Config &amp; optimisation</div><div class="lab-b">
+      <div class="prompt">Show the VLAN configuration on all switch ports in [network] and flag anything misconfigured — wrong access VLANs, untagged where tagged should be, inconsistencies. Suggest tidy-ups.</div>
+      <div class="prompt">Is 802.11r fast roaming enabled on my APs? If not, what are the steps and caveats to turn it on?</div>
+      <div class="prompt">Generate a full configuration audit of my [network] — devices &amp; serials, SSIDs &amp; security, VLANs &amp; subnets, firewall rules, firmware status, and anything non-standard. Format it as a report I could hand to a customer.</div>
+    </div></div>
+
+    </div>
+  </section>
+
+  <!-- 3. SPLUNK (optional) -->
+  <section id="sec-splunk">
+    <div class="sec-head sp"><div class="sec-tag">Module 3 · Featured<a href="#">↑ back to top</a></div>
+      <h2>Splunk MCP <span class="badge b-opt">Featured</span></h2>
+      <div class="sec-desc">Investigate your Splunk data in plain English — no SPL required.</div></div>
+    <div class="note"><span class="i">🖥️</span><div>The Splunk MCP server runs locally (via Claude Desktop), pointed at your Splunk host. Your facilitator will provide the exact connection details (host, port 8089, and credentials) on the day.</div></div>
+    <div class="sp">
+    <div class="lab"><div class="lab-h"><span class="n">LAB 1</span> Natural-language threat hunt</div><div class="lab-b">
+      <div class="sub">Investigate suspicious activity without writing SPL.</div>
+      <div class="prompt">Search Splunk for failed login attempts (Windows Event ID 4625) in the last 2 hours. Show the top 10 source IPs by failure count and flag any with more than 50 — likely brute force.</div>
+      <div class="prompt">For the top offending IP, check for any successful logins in the last 24 hours. If so, which accounts and from which endpoints?</div>
+      <div class="prompt">Write an optimised SPL saved search that alerts when more than 20 failed logins come from the same IP within 5 minutes, and suggest an alert action.</div>
+    </div></div>
+    <div class="lab"><div class="lab-h"><span class="n">LAB 2</span> Operational health &amp; index audit</div><div class="lab-b">
+      <div class="sub">Know what data you have and whether it's still flowing.</div>
+      <div class="prompt">List all Splunk indexes and tell me which haven't received events in the last 60 minutes. Flag these as potentially broken pipelines.</div>
+      <div class="prompt">What's the current indexer disk usage? Are any indexers above 85% capacity?</div>
+      <div class="prompt">Show event volume by index for the last 24 hours, sorted descending. Highlight any index down more than 50% vs the same window yesterday.</div>
+    </div></div>
+    <div class="lab"><div class="lab-h"><span class="n">LAB 3</span> Network event correlation</div><div class="lab-b">
+      <div class="sub">Join Meraki syslog &amp; ThousandEyes data already in Splunk.</div>
+      <div class="prompt">Search the Meraki syslog index for 802.11 disassociation events in the last 4 hours. Correlate the timestamps with ThousandEyes latency spikes in the network_performance index — are they happening simultaneously?</div>
+      <div class="prompt">Build a timeline starting from the first Meraki disassociation event, then show network performance over the next 15 minutes. Which event was likely causal?</div>
+      <div class="prompt">Write an SPL search that joins these two sources on timestamp within a 5-minute window and produces a correlation table I can save as a dashboard panel.</div>
+    </div></div>
+    </div>
+  </section>
+
+  <!-- 4. BUILD YOUR OWN MCP SERVER -->
+  <section id="sec-n8n">
+    <div class="sec-head n8"><div class="sec-tag">Module 4 · Featured<a href="#">↑ back to top</a></div>
+      <h2>MCP Tool-Building — Build Your Own MCP Server <span class="badge b-opt">Featured</span></h2>
+      <div class="sec-desc">Go beyond <i>using</i> MCP servers — build one. Use Cursor's AI to scaffold a working MCP server with little or no coding, then connect it to Cursor, Claude Desktop or Claude Code.</div></div>
+
+    <div class="tip"><span class="i">🎯</span><div><b>Lab outcome.</b> By the end you'll have a working <b>stdio MCP server</b>, connected in <b>Cursor → Settings → MCP</b> (green status), and you can ask the AI in plain English to call your tools — list alerts, check utilisation, query an API. You do <i>not</i> need to write TypeScript by hand if you follow the Cursor path.</div></div>
+
+    <h3 style="color:var(--n8n)">Choose your path</h3>
+    <div class="paths">
+      <div class="pathcard rec">
+        <div class="pc-h">Path A — Cursor Agent <span class="pc-tag">Recommended</span></div>
+        <p style="margin:0"><b>Little coding knowledge required.</b> You describe what you want; Cursor's AI creates files, runs terminal commands, and fixes errors. You copy prompts, paste your API docs link, and approve changes.</p>
+      </div>
+      <div class="pathcard">
+        <div class="pc-h">Path B — Manual coding</div>
+        <p style="margin:0">For developers who want to understand every line. Follow Labs 1–4 below, then connect Cursor or Claude using the same <code>mcp.json</code> pattern.</p>
+      </div>
+    </div>
+
+    <h3>What you'll build</h3>
+    <div class="diagram">┌──────────────────┐     stdin/stdout      ┌──────────────────────┐
+│  Cursor Chat     │ ◄────────────────────► │  Your MCP Server     │
+│  Claude Desktop  │   JSON-RPC (MCP)       │  (node dist/index.js)│
+│  or Claude Code  │                        └──────────┬───────────┘
+└──────────────────┘                                   │ HTTPS
+                                                       ▼
+                                            ┌──────────────────────┐
+                                            │  External API / Data │
+                                            │  (REST, DB, files…)  │
+                                            └──────────────────────┘</div>
+    <p>Your MCP server exposes <b>Tools</b> (actions the model can invoke — the focus of this lab), and optionally <b>Resources</b> (read-only data by URI) and <b>Prompts</b> (reusable templates). For Cursor and Claude on your laptop, servers use <b>stdio transport</b>: the client spawns your process and talks over stdin/stdout — no HTTP port required.</p>
+
+    <h3>Prerequisites</h3>
+    <ul class="tick">
+      <li><b>Cursor</b> installed — <a href="https://cursor.com" target="_blank" rel="noopener">cursor.com</a></li>
+      <li>Node.js <b>18+</b> — ask Cursor: <i>"Check if Node 18+ is installed; if not, tell me how to install it on my OS."</i></li>
+      <li>API credentials for the system you're integrating (a token — keep it private)</li>
+      <li>A link to the API documentation (paste it into Cursor chat)</li>
+      <li>Optional: <b>Claude Desktop</b> or <b>Claude Code</b> if you also want to drive the server from Claude</li>
+    </ul>
+    <div class="note"><span class="i">ℹ️</span><div>You don't need to know TypeScript, JSON-RPC, or MCP internals. In <b>Agent</b> mode, Cursor runs the terminal commands for you.</div></div>
+
+    <div class="n8">
+
+    <!-- PATH A -->
+    <h3 style="color:var(--n8n)">Path A — Cursor beginner lab (little coding knowledge)</h3>
+    <p>This assumes you can open Cursor, type in chat, and click <b>Accept</b> when the AI suggests file changes. The AI writes the code.</p>
+
+    <h4>Cursor UI you'll use</h4>
+    <div class="uistep"><div class="uic">💬</div><div class="ut"><b>Chat</b> — ask questions, get explanations. Good for "what does this error mean?"</div></div>
+    <div class="uistep"><div class="uic">🤖</div><div class="ut"><b>Agent</b> (Composer in Agent mode) — the AI edits files, runs commands, builds the project. Use this for the lab.</div></div>
+    <div class="uistep"><div class="uic">⌘⇧P</div><div class="ut"><b>Command Palette</b> — <kbd>Cmd+Shift+P</kbd> (Mac) / <kbd>Ctrl+Shift+P</kbd> (Windows). Search "Terminal: Create New Terminal" or "Developer: Reload Window".</div></div>
+    <div class="uistep"><div class="uic">⚙️</div><div class="ut"><b>Settings → MCP</b> — where you connect your server after it's built. Green dot = working.</div></div>
+
+    <h4>Lab steps (do these in order)</h4>
+    <ol class="steps">
+      <li><div><div class="st-t">Open a folder in Cursor</div><div class="st-d">Create an empty folder (e.g. <code>Documents/my-mcp-project</code>) and open it: <b>File → Open Folder</b>.</div></div></li>
+      <li><div><div class="st-t">Open Agent chat</div><div class="st-d">Open the AI panel and switch to <b>Agent</b> mode so Cursor can create files and run commands.</div></div></li>
+      <li><div><div class="st-t">Paste the "Build MCP server" prompt</div><div class="st-d">Use prompt 1 below. Fill in your API name, docs URL, and example questions.</div></div></li>
+      <li><div><div class="st-t">Let Cursor work</div><div class="st-d">Approve file creations and terminal runs (<code>npm install</code>, <code>npm run build</code>). If something fails, paste the error back: <i>"Fix this build error."</i></div></div></li>
+      <li><div><div class="st-t">Ask Cursor to configure MCP</div><div class="st-d">Use prompt 2 ("Connect to Cursor MCP"). It edits <code>~/.cursor/mcp.json</code> with the correct path.</div></div></li>
+      <li><div><div class="st-t">Reload Cursor</div><div class="st-d">Command Palette → <b>Developer: Reload Window</b>. Check <b>Settings → MCP</b> for a green connected status.</div></div></li>
+      <li><div><div class="st-t">Test in chat</div><div class="st-d">Try <i>"List my MCP tools,"</i> then a real question using your API.</div></div></li>
+    </ol>
+
+    <div class="tip"><span class="i">✅</span><div><b>What you never have to do manually:</b> write TypeScript from scratch · figure out MCP SDK imports (Cursor generates them) · memorise <code>mcp.json</code> syntax (ask Cursor) · debug alone (paste errors into Agent chat).</div></div>
+    <div class="warn"><span class="i">⚠️</span><div><b>What you still must do:</b> provide your API token in the MCP config env (never paste it in chat if your screen is shared) · approve Agent actions · reload Cursor after config changes · keep tokens out of git.</div></div>
+
+    <!-- PROMPTS -->
+    <h3 style="color:var(--n8n)">Copy-paste prompts for Cursor Agent</h3>
+    <p>Replace the <code>[PLACEHOLDERS]</code> before sending. Designed for minimal coding experience — each box has a copy button.</p>
+
+    <div class="plabel">1 · Build a new MCP server</div>
+    <div class="prompt">Build a new MCP server in this folder using Node.js 18+ and TypeScript.
+
+Target API: [e.g. ThousandEyes API v7]
+API docs: [paste URL to documentation]
+Auth: API token in environment variable [e.g. MY_API_TOKEN]
+
+I want to ask the AI things like:
+- [example question 1]
+- [example question 2]
+- [example question 3]
+
+Requirements:
+- Use @modelcontextprotocol/sdk with stdio transport
+- Create src/index.ts, src/client.ts, package.json, tsconfig.json
+- Add tools that map to the API endpoints I need (read-only first)
+- Never hardcode secrets; read the token from env
+- Add npm scripts: build (tsc) and test:mcp if possible
+- Run npm install and npm run build and fix any errors
+- Tell me the absolute path to dist/index.js when done</div>
+
+    <div class="plabel">2 · Connect to Cursor MCP (after the build succeeds)</div>
+    <div class="prompt">Add this MCP server to my Cursor MCP config (~/.cursor/mcp.json).
+
+Server name: [e.g. my-service]
+Entrypoint: [absolute path to dist/index.js — or ask Cursor to find it]
+Environment variable for token: [e.g. MY_API_TOKEN]
+
+Use command "node" and args with the full path to dist/index.js.
+Put a placeholder in env for the token — I will paste my real token myself.
+Show me the exact JSON block you added.</div>
+
+    <div class="plabel">3 · Fix build or MCP errors</div>
+    <div class="prompt">My MCP server is failing. Here is the error:
+
+[paste full error from terminal or Cursor MCP settings]
+
+Fix the issue, rebuild if needed, and tell me what changed in plain English.</div>
+
+    <div class="plabel">4 · Add another tool later</div>
+    <div class="prompt">Add a new MCP tool to my existing server:
+
+Tool name: [e.g. list_alerts]
+What it should do: [describe in plain English]
+API endpoint: [from docs]
+
+Update the ListTools and CallTool handlers, rebuild, and confirm the tool appears in MCP.</div>
+
+    <!-- CONNECT MCP IN CURSOR -->
+    <h3 style="color:var(--n8n)">Connect MCP in Cursor</h3>
+    <p>After your server is built, Cursor needs to know how to start it.</p>
+    <table>
+      <thead><tr><th>OS</th><th>Config file path</th></tr></thead>
+      <tbody>
+        <tr><td>macOS / Linux</td><td><code>~/.cursor/mcp.json</code></td></tr>
+        <tr><td>Windows</td><td><code>%USERPROFILE%\.cursor\mcp.json</code></td></tr>
+      </tbody>
+    </table>
+    <p>Or: <b>Cursor Settings</b> (⌘+,) → search <b>MCP</b> → edit configuration.</p>
+    <pre>{
+  "mcpServers": {
+    "my-service": {
+      "command": "node",
+      "args": ["/ABSOLUTE/PATH/TO/your-mcp-server/dist/index.js"],
+      "env": {
+        "MY_API_TOKEN": "paste-your-token-here"
+      }
+    }
+  }
+}</pre>
+    <ol class="steps">
+      <li><div><div class="st-t">Open Settings → MCP</div><div class="st-d">You'll see your MCP servers and connection status (green = good, red = failed).</div></div></li>
+      <li><div><div class="st-t">Add or edit <code>mcp.json</code></div><div class="st-d">Use the block above. Ask Cursor Agent: <i>"What is the absolute path to my MCP server's dist/index.js?"</i></div></div></li>
+      <li><div><div class="st-t">Paste your API token</div><div class="st-d">In the <code>env</code> section, on your machine only. Don't share that file publicly.</div></div></li>
+      <li><div><div class="st-t">Reload Cursor</div><div class="st-d">Command Palette → <b>Developer: Reload Window</b>.</div></div></li>
+      <li><div><div class="st-t">Confirm green status</div><div class="st-d">Settings → MCP should show your server connected.</div></div></li>
+    </ol>
+    <div class="warn"><span class="i">🔴</span><div><b>If MCP shows red / failed,</b> use prompt 3. Common fixes: wrong path, forgot <code>npm run build</code>, Node not installed, or invalid JSON in <code>mcp.json</code>.</div></div>
+
+    <h4>Use it in Cursor chat</h4>
+    <p>Once MCP is green, the AI calls your tools automatically when your question matches a tool description.</p>
+    <table>
+      <thead><tr><th>Say this in Cursor chat</th><th>What should happen</th></tr></thead>
+      <tbody>
+        <tr><td>"What MCP tools do you have access to?"</td><td>Lists tool names from your server</td></tr>
+        <tr><td>"Use the hello tool with name Lab"</td><td>Sanity check, if you built a hello tool</td></tr>
+        <tr><td>"List my account groups"</td><td>Calls your list tool, returns JSON</td></tr>
+        <tr><td>"What's my utilisation?"</td><td>Calls usage / quota tools</td></tr>
+      </tbody>
+    </table>
+    <div class="tip"><span class="i">💡</span><div><b>Pro tip for non-coders.</b> Describe outcomes, not code: <i>"Show alerts from the last 24 hours"</i> works better than <i>"call list_alerts with aid=…"</i>. The model picks the right tool when descriptions are good.</div></div>
+
+    <!-- PATH B -->
+    <h3 style="color:var(--n8n)">Path B — Manual coding (optional, for developers)</h3>
+    <p class="lead">Skip this if you followed Path A. These four labs build the same server by hand so you understand every line.</p>
+
+    <div class="lab"><div class="lab-h"><span class="n">LAB 1</span> Scaffold the project</div><div class="lab-b">
+      <div class="sub">Create the folder and install the MCP SDK.</div>
+      <pre>mkdir my-mcp-server &amp;&amp; cd my-mcp-server
+npm init -y
+npm install @modelcontextprotocol/sdk zod
+npm install -D typescript @types/node</pre>
+      <h4>tsconfig.json</h4>
+      <pre>{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*"]
+}</pre>
+      <h4>package.json — set <code>"type": "module"</code> and scripts</h4>
+      <pre>{
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "engines": { "node": "&gt;=18" }
+}</pre>
+      <h4>src/index.ts — minimal server skeleton</h4>
+      <pre>#!/usr/bin/env node
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+} from "@modelcontextprotocol/sdk/types.js";
+
+const server = new Server(
+  { name: "my-mcp-server", version: "1.0.0" },
+  { capabilities: { tools: {} } }
+);
+
+server.setRequestHandler(ListToolsRequestSchema, async () =&gt; ({
+  tools: [
+    {
+      name: "hello",
+      description: "Returns a greeting. Use to verify MCP is working.",
+      inputSchema: {
+        type: "object",
+        properties: { name: { type: "string", description: "Name to greet" } },
+        required: ["name"],
+      },
+    },
+  ],
+}));
+
+server.setRequestHandler(CallToolRequestSchema, async (request) =&gt; {
+  if (request.params.name === "hello") {
+    const name = String(request.params.arguments?.name ?? "world");
+    return { content: [{ type: "text", text: `Hello, ${name}! MCP server is running.` }] };
+  }
+  return { content: [{ type: "text", text: `Unknown tool: ${request.params.name}` }], isError: true };
+});
+
+const transport = new StdioServerTransport();
+await server.connect(transport);</pre>
+      <h4>Build</h4>
+      <pre>npm run build   <span class="c"># produces dist/index.js</span></pre>
+    </div></div>
+
+    <div class="lab"><div class="lab-h"><span class="n">LAB 2</span> Add real tools</div><div class="lab-b">
+      <div class="sub">Each tool needs a name, a description (the model reads this to decide when to call it), and an inputSchema.</div>
+      <ul class="tick">
+        <li>Use clear, prefixed names: <code>te_list_alerts</code>, <code>sf_get_account</code></li>
+        <li>Descriptions should say <i>when</i> to use the tool, not just what it does</li>
+        <li>Return JSON as formatted text in <code>content: [{ type: "text", text: "…" }]</code></li>
+        <li>On failure, set <code>isError: true</code> with a helpful message</li>
+        <li>Never log secrets; use <code>console.error</code> for diagnostics (stdout is for MCP only)</li>
+      </ul>
+      <h4>Register a second tool in ListTools</h4>
+      <pre>{
+  name: "list_items",
+  description: "List items from the API. Use when the user asks to see records or inventory.",
+  inputSchema: {
+    type: "object",
+    properties: { limit: { type: "number", description: "Max items (default 10)" } },
+  },
+}</pre>
+      <h4>Handle it in CallTool</h4>
+      <pre>if (request.params.name === "list_items") {
+  const limit = Number(request.params.arguments?.limit ?? 10);
+  const data = await apiGet("/items?limit=" + limit);
+  return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+}</pre>
+    </div></div>
+
+    <div class="lab"><div class="lab-h"><span class="n">LAB 3</span> API client &amp; authentication</div><div class="lab-b">
+      <div class="sub">Create src/client.ts to isolate HTTP calls from the MCP handlers.</div>
+      <pre>const BASE = process.env.MY_API_BASE_URL ?? "https://api.example.com/v1";
+const TOKEN = process.env.MY_API_TOKEN;
+
+export async function apiGet(path: string) {
+  if (!TOKEN) throw new Error("MY_API_TOKEN is not set");
+  const res = await fetch(`${BASE}${path}`, {
+    headers: { Authorization: `Bearer ${TOKEN}`, Accept: "application/json" },
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`API ${res.status}: ${body.slice(0, 200)}`);
+  }
+  return res.json();
+}</pre>
+      <div class="warn"><span class="i">🔒</span><div>Store tokens in environment variables only. Never commit them to git or paste them into chat. Use a dedicated env-var name per service.</div></div>
+    </div></div>
+
+    <div class="lab"><div class="lab-h"><span class="n">LAB 4</span> Build &amp; test locally</div><div class="lab-b">
+      <div class="sub">Test the server before connecting Claude.</div>
+      <ol class="steps">
+        <li><div><div class="st-t">Build</div><pre>npm run build</pre></div></li>
+        <li><div><div class="st-t">Smoke test</div><div class="st-d">The server should start and wait (no stdout except MCP messages). Ctrl+C to stop.</div>
+          <pre>MY_API_TOKEN="your-token" node dist/index.js</pre></div></li>
+        <li><div><div class="st-t">Optional MCP test client</div><div class="st-d">Create <code>test-mcp.mjs</code> using the SDK client, then run <code>node test-mcp.mjs</code>:</div>
+          <pre>import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+
+const transport = new StdioClientTransport({
+  command: "node",
+  args: ["dist/index.js"],
+  env: { ...process.env, MY_API_TOKEN: process.env.MY_API_TOKEN },
+});
+const client = new Client({ name: "test", version: "1.0.0" }, {});
+await client.connect(transport);
+
+const { tools } = await client.listTools();
+console.log("Tools:", tools.map((t) =&gt; t.name));
+
+const result = await client.callTool({ name: "hello", arguments: { name: "Lab" } });
+console.log(result.content[0].text);</pre></div></li>
+      </ol>
+      <div class="tip"><span class="i">🏁</span><div><b>Checkpoint.</b> You should see your tool list and a successful <code>hello</code> (or live API) response before connecting Cursor MCP or Claude.</div></div>
+    </div></div>
+
+    <!-- CONNECT CLAUDE -->
+    <h3 style="color:var(--n8n)">Attach the server to Claude Desktop</h3>
+    <p>Claude Desktop uses its own MCP config file (not Cursor's).</p>
+    <table>
+      <thead><tr><th>OS</th><th>Config file path</th></tr></thead>
+      <tbody>
+        <tr><td>macOS</td><td><code>~/Library/Application Support/Claude/claude_desktop_config.json</code></td></tr>
+        <tr><td>Windows</td><td><code>%APPDATA%\Claude\claude_desktop_config.json</code></td></tr>
+        <tr><td>Linux</td><td><code>~/.config/Claude/claude_desktop_config.json</code></td></tr>
+      </tbody>
+    </table>
+    <p>Or open via <b>Claude Desktop → Settings → Developer → Edit Config</b>. Add your server (merge into any existing <code>mcpServers</code>), then <b>fully quit and reopen</b> Claude Desktop:</p>
+    <pre>{
+  "mcpServers": {
+    "my-service": {
+      "command": "node",
+      "args": ["/ABSOLUTE/PATH/TO/my-mcp-server/dist/index.js"],
+      "env": { "MY_API_TOKEN": "your-api-token-here" }
+    }
+  }
+}</pre>
+    <div class="warn"><span class="i">🛠️</span><div><b>If env vars don't pass through,</b> use a wrapper script that exports the token and runs node — set <code>"command": "/path/to/wrapper.sh"</code>, <code>"args": []</code>, and <code>chmod 600 wrapper.sh</code>:
+      <pre>#!/bin/bash
+export MY_API_TOKEN="your-token"
+exec node /ABSOLUTE/PATH/TO/dist/index.js</pre></div></div>
+
+    <h4>Attach to Claude Code (CLI)</h4>
+    <p>Same <code>mcpServers</code> structure, in <code>~/.claude.json</code> (global) or <code>.mcp.json</code> (project root). Add the server, restart Claude Code (or open a new session in the project), then run <code>/mcp</code> to verify.</p>
+
+    <!-- VERIFY -->
+    <h3 style="color:var(--n8n)">Verify &amp; example prompts</h3>
+    <ul class="tick">
+      <li><b>Cursor:</b> Settings → MCP shows green for your server</li>
+      <li><b>Claude:</b> the server appears in the MCP / tools UI without errors</li>
+      <li>"List your available MCP tools" shows your tool names</li>
+      <li>A simple prompt invokes a tool and returns real data</li>
+      <li>Errors are readable (401 → check token; path error → check the absolute path)</li>
+    </ul>
+    <div class="prompt">What MCP tools do you have for my-service? Then call the hello tool with name Lab, and show alerts from the last 24 hours.</div>
+
+    <!-- TROUBLESHOOTING -->
+    <h3 style="color:var(--n8n)">Troubleshooting</h3>
+    <table>
+      <thead><tr><th>Problem</th><th>Likely cause</th><th>Fix</th></tr></thead>
+      <tbody>
+        <tr><td>Server not listed (Cursor / Claude)</td><td>Wrong config file or invalid JSON</td><td>Validate JSON (no trailing commas); use the correct config path; Reload Window / fully quit the app</td></tr>
+        <tr><td>Server shows red / failed</td><td>Bad path, Node not found, build missing</td><td>Use <code>realpath dist/index.js</code>; run <code>npm run build</code>; try the full path to <code>node</code></td></tr>
+        <tr><td>401 Unauthorized</td><td>Token missing or wrong</td><td>Test the API with curl; use a wrapper script for env; verify the token in the target system</td></tr>
+        <tr><td>Tools never called</td><td>Weak tool descriptions</td><td>Improve descriptions — say <i>when</i> to use each tool</td></tr>
+        <tr><td>Garbled MCP / hangs</td><td>Logging to stdout</td><td>Only MCP protocol on stdout; use <code>console.error</code> for logs</td></tr>
+        <tr><td>Works in terminal, fails in Claude</td><td>Env not passed</td><td>Use a wrapper script with exported vars</td></tr>
+      </tbody>
+    </table>
+
+    <!-- SECURITY -->
+    <h3 style="color:var(--n8n)">Security</h3>
+    <ul class="tick">
+      <li><b>Secrets:</b> environment variables or OS keychain — never in source code</li>
+      <li><b>Least privilege:</b> scope API tokens to the minimum permissions</li>
+      <li><b>Write tools:</b> require confirmation for destructive actions</li>
+      <li><b>Output:</b> redact PII and secrets from tool responses</li>
+      <li><b>Config files:</b> <code>chmod 600</code> on configs and wrapper scripts; keep them out of git</li>
+      <li><b>Revocation:</b> rotate tokens if exposed; revoke in the provider UI</li>
+    </ul>
+    <div class="note"><span class="i">📚</span><div>Reference: <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener">modelcontextprotocol.io</a> · <a href="https://www.npmjs.com/package/@modelcontextprotocol/sdk" target="_blank" rel="noopener">@modelcontextprotocol/sdk</a>. (This is a build-it-yourself local server — distinct from the Module 1 ThousandEyes cloud connector you added over OAuth.)</div></div>
+
+    </div>
+  </section>
+
+  <!-- 5. GABI (optional) -->
+  <section id="sec-gabi">
+    <div class="sec-head gb"><div class="sec-tag">Module 5 · Featured<a href="#">↑ back to top</a></div>
+      <h2>Gabi's Repo — Meraki &amp; Catalyst Centre <span class="badge b-opt">Featured</span></h2>
+      <div class="sec-desc">A community MCP that adds a Meraki API Explorer and Catalyst Centre tools. Repo link provided by your facilitator.</div></div>
+    <div class="gb">
+    <div class="lab"><div class="lab-h"><span class="n">LAB 1</span> Meraki API Explorer</div><div class="lab-b">
+      <div class="sub">Anything the pre-built tools can't answer gets routed through the API spec search.</div>
+      <div class="prompt">What Meraki organisations do I have access to? List their names, IDs, and licence status.</div>
+      <div class="prompt">Show all networks in my organisation and which product types (MX, MS, MR, MV) are deployed in each.</div>
+      <div class="prompt">Which devices haven't been seen online in the last 7 days? Include model, serial, and last-seen timestamp.</div>
+      <div class="prompt">Are there any devices running firmware more than 2 major versions behind the current release?</div>
+    </div></div>
+    <div class="lab"><div class="lab-h"><span class="n">LAB 2</span> Catalyst Centre</div><div class="lab-b">
+      <div class="sub">Inventory, assurance, issues, compliance — all in plain English.</div>
+      <div class="prompt">Give me a full device inventory from Catalyst Centre — how many devices, what models, and their health-score distribution.</div>
+      <div class="prompt">Are there any active P1 or P2 issues right now? For each, give the affected device, issue type, and when it was first detected.</div>
+      <div class="prompt">Show client health for the last 24 hours, wired vs wireless. Any sites below a health score of 7?</div>
+      <div class="prompt">List all devices out of compliance — what the check failed on and which sites are affected.</div>
+    </div></div>
+    </div>
+  </section>
+
+  <!-- APPENDIX -->
+  <section>
+    <div class="sec-head"><div class="sec-tag">Appendix</div><h2>Troubleshooting &amp; glossary</h2></div>
+    <h4>Claude says it has no tools</h4>
+    <p>Re-open <b>Settings → Connectors</b> and confirm the connector is enabled. For ThousandEyes, re-run the browser sign-in. For Meraki/Splunk, fully quit and reopen Claude Desktop and check your config paths.</p>
+    <h4>ThousandEyes connector won't sign in</h4>
+    <p>Confirm your account has <b>API Access</b> permission and your org isn't opted out of AI features. Demo accounts from the proctor already satisfy both.</p>
+    <h4>Meraki server won't start</h4>
+    <p>Check the <code>fastmcp</code> path in your config is the full absolute path, the <code>.venv</code> was activated when you ran <code>pip install</code>, and your <code>.env</code> has no quotes or stray spaces.</p>
+    <h4>Quick glossary</h4>
+    <ul class="tick">
+      <li><b>MCP</b> — Model Context Protocol; the standard that lets Claude use external tools.</li>
+      <li><b>Connector</b> — how you add an MCP server to Claude (remote URL + OAuth, or a local command).</li>
+      <li><b>Enterprise Agent</b> — a ThousandEyes vantage point that runs your tests.</li>
+      <li><b>Org ID / API key</b> — your Meraki Dashboard credentials the local server uses.</li>
+    </ul>
+  </section>
+
+  <footer>
+    AI Assurance — Partner MCP Day · Lab Guide &nbsp;·&nbsp; Cisco &times; Anthropic<br>
+    ThousandEyes &amp; Meraki are required modules; Splunk, Build an MCP server and Gabi's Repo are featured add-ons.
+  </footer>
+</div>
+
+<script>
+  function toggle(id, on){
+    var el = document.getElementById(id);
+    if(el) el.style.display = on ? '' : 'none';
+  }
+  function fallbackCopy(t){
+    var ta=document.createElement('textarea');
+    ta.value=t; ta.style.position='fixed'; ta.style.top='0'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    try{document.execCommand('copy');}catch(e){}
+    document.body.removeChild(ta);
+  }
+  document.addEventListener('DOMContentLoaded', function(){
+    document.querySelectorAll('.prompt, pre').forEach(function(p){
+      var text = p.textContent;                 // capture before adding the button
+      var b = document.createElement('button');
+      b.className = 'copy-btn'; b.type = 'button'; b.textContent = 'Copy';
+      b.addEventListener('click', function(){
+        var done = function(){
+          b.textContent = 'Copied!'; b.classList.add('done');
+          setTimeout(function(){ b.textContent = 'Copy'; b.classList.remove('done'); }, 1200);
+        };
+        if(navigator.clipboard && navigator.clipboard.writeText){
+          navigator.clipboard.writeText(text).then(done, function(){ fallbackCopy(text); done(); });
+        } else { fallbackCopy(text); done(); }
+      });
+      p.appendChild(b);
+    });
+  });
+</script>
+</body>
+</html>
