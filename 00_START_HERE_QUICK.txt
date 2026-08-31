@@ -1,0 +1,84 @@
+================================================================================
+                      🚀 START HERE - QUICK GUIDE
+================================================================================
+
+Your AI Assurance Lab is ready! Follow these 3 simple steps:
+
+================================================================================
+STEP 1: START DOCKER & DEPLOY (10 minutes)
+================================================================================
+
+1. Open Docker Desktop:
+   /Applications/Docker.app
+
+2. Wait for "Docker Desktop is running" message
+
+3. Run deployment:
+   cd "/Users/sceddy/Documents/AI Assurance MCP day"
+   bash DEPLOY_SCRIPT.sh
+
+4. This creates AppRunner service
+   (You'll see the service URL at the end - SAVE IT)
+
+================================================================================
+STEP 2: PREPARE YOUR STUDENTS (5 minutes)
+================================================================================
+
+1. Create a file: students.csv
+
+2. Format (first row is header):
+   email,first_name,last_name
+   alice@example.com,Alice,Smith
+   bob@example.com,Bob,Jones
+   charlie@example.com,Charlie,Brown
+   ... (all 40 students)
+
+3. Save it in: "/Users/sceddy/Documents/AI Assurance MCP day/"
+
+================================================================================
+STEP 3: CREATE STUDENT ACCOUNTS (2 minutes)
+================================================================================
+
+1. Run:
+   bash CREATE_STUDENTS_ONLY.sh students.csv
+
+2. It creates all 40 student accounts automatically
+
+3. Done! All students can now log in
+
+================================================================================
+STEP 4: SHARE WITH STUDENTS
+================================================================================
+
+Send each student:
+
+  Welcome to AI Assurance Lab!
+  
+  Login URL: https://xxxxx.us-east-1.apprunner.amazonaws.com
+  (Use the URL from Step 1)
+  
+  Your email: alice@example.com
+  
+  First login:
+  1. Enter email and temporary password (check email)
+  2. Set a new permanent password
+  3. Go to ⚙️ Credentials page
+  4. Add your API tokens
+  5. Start using the lab!
+
+================================================================================
+TOTAL TIME: ~20 minutes
+================================================================================
+
+That's it! You're done.
+
+For more details, see:
+  → AUTOMATED_SETUP_GUIDE.md (detailed instructions)
+  → SETUP_STATUS.md (what's ready)
+  → LAB_SETUP_CHECKLIST.md (lab day checklist)
+
+Questions? See PROCTOR_DEPLOYMENT_GUIDE.md for troubleshooting.
+
+================================================================================
+                     LET'S GO! 🚀
+================================================================================

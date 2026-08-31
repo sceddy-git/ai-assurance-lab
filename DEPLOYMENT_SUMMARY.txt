@@ -1,0 +1,231 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                                                                            ║
+║           🚀 AI ASSURANCE LAB - EC2 WEB-MANAGED DEPLOYMENT 🚀              ║
+║                                                                            ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           QUICK START (20 MIN)                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. LAUNCH EC2 (5 min)                                                     │
+│     └─ AWS Console → EC2 → Launch Instances                                │
+│     └─ Ubuntu 22.04 LTS, t3.small instance type                            │
+│     └─ Copy public IP address                                              │
+│                                                                             │
+│  2. SSH & RUN SETUP (5 min)                                                │
+│     └─ ssh -i key.pem ubuntu@YOUR_IP                                       │
+│     └─ curl -fsSL https://...ec2-setup.sh | bash                           │
+│     └─ exit                                                                 │
+│                                                                             │
+│  3. CONFIGURE WEB PORTAL (5 min)                                           │
+│     └─ Browser → http://YOUR_IP                                            │
+│     └─ Login with Cognito                                                   │
+│     └─ Settings → Fill Cognito details → Save                              │
+│                                                                             │
+│  4. UPLOAD STUDENTS (1 min)                                                │
+│     └─ Students tab → Drag CSV → Done! ✓                                   │
+│                                                                             │
+│  5. SHARE LAB URL                                                          │
+│     └─ Students log in and use lab!                                        │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        WEB-BASED OPERATIONS                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ✓ Upload Students CSV         → Students tab                             │
+│  ✓ View All Students           → Students tab → Refresh List               │
+│  ✓ Reset for New Cohort        → Students tab → Delete All                 │
+│  ✓ Check System Status         → Settings → System Status                  │
+│  ✓ View Application Logs       → Settings → Logs                           │
+│  ✓ Restart Flask App           → Settings → System Status → Restart        │
+│  ✓ Deploy Code Updates         → Settings → Deployment → Pull Latest       │
+│  ✓ Configure Settings          → Settings → Configuration                  │
+│                                                                             │
+│  ALL OPERATIONS ARE POINT-AND-CLICK - NO TERMINAL NEEDED!                 │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            COST ANALYSIS                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  EC2 t3.small (recommended):    $10-12/month                               │
+│  DynamoDB (student data):        $1-5/month                                │
+│  Data Transfer (AWS region):     FREE                                      │
+│  ─────────────────────────────────────                                     │
+│  TOTAL:                          ~$15/month                                │
+│                                                                             │
+│  Alternative Costs:                                                        │
+│    AppRunner:  $30-50/month  (deprecated)                                  │
+│    ECS:        $20-30/month  (more complex)                                │
+│    Lambda:     $1-5/month    (cold starts, complexity)                     │
+│                                                                             │
+│  Our EC2 Solution: CHEAPEST + SIMPLEST + MOST RELIABLE                    │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        FEATURES INCLUDED                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  🎓 Student Management                                                     │
+│     ✓ CSV upload for bulk student creation                                 │
+│     ✓ View all students in table                                           │
+│     ✓ Delete all students (for cohort reset)                               │
+│     ✓ Real-time success/failure reporting                                  │
+│                                                                             │
+│  ⚙️  Administration Portal                                                  │
+│     ✓ Cognito configuration (domain, client ID, secret)                    │
+│     ✓ Encryption key management                                            │
+│     ✓ Proctor email configuration                                          │
+│     ✓ System status monitoring (CPU, memory, service health)               │
+│     ✓ Application log viewer (real-time)                                   │
+│     ✓ Flask app restart (1 click)                                          │
+│     ✓ Code deployment via git pull                                         │
+│                                                                             │
+│  🔐 Security Features                                                      │
+│     ✓ Cognito-based authentication                                         │
+│     ✓ Fernet encryption for API credentials                                │
+│     ✓ Proctor-only access control                                          │
+│     ✓ Session management                                                   │
+│     ✓ No plaintext secrets                                                 │
+│                                                                             │
+│  💬 Chat & Tools                                                           │
+│     ✓ Claude AI integration (Bedrock)                                      │
+│     ✓ ThousandEyes connectivity                                            │
+│     ✓ Meraki API integration                                               │
+│     ✓ User-configurable credentials                                        │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          FILES PROVIDED                                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  📖 DOCUMENTATION (Read in order)                                          │
+│     1. START_HERE_EC2.md                    ← BEGIN HERE                    │
+│     2. EC2_SETUP_MINIMAL.md                 ← Quick setup guide             │
+│     3. EC2_FULL_DEPLOYMENT_GUIDE.md         ← Complete reference            │
+│     4. WEB_MANAGED_LAB_SUMMARY.md           ← Architecture overview         │
+│                                                                             │
+│  🛠️  SETUP SCRIPTS                                                         │
+│     • ec2-setup.sh                          ← One-command setup             │
+│     • requirements.txt                      ← Python dependencies           │
+│     • .env.example                          ← Configuration template        │
+│                                                                             │
+│  🎨 WEB INTERFACES (Automatically Served)                                  │
+│     • templates/admin_students.html         ← Student management UI         │
+│     • templates/admin_settings.html         ← Settings/admin portal         │
+│     • templates/lab.html                    ← Main lab interface            │
+│     • templates/credentials.html            ← Credential management         │
+│                                                                             │
+│  🐍 FLASK APPLICATION                                                      │
+│     • app.py                                ← Main Flask application         │
+│     • dynamo_db.py                          ← DynamoDB operations           │
+│     • crypto.py                             ← Encryption/decryption         │
+│     • tool_handlers.py                      ← API integrations              │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         TECHNICAL STACK                                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  HOSTING                AWS EC2 (Ubuntu 22.04 LTS)                         │
+│  RUNTIME                Python 3.11                                        │
+│  WEB FRAMEWORK          Flask 3.0.0                                        │
+│  WSGI SERVER            Gunicorn 21.2.0                                    │
+│  SERVICE MANAGER        systemd                                            │
+│  PROCESS SUPERVISOR     systemd (auto-restart on crash)                    │
+│                                                                             │
+│  AWS SERVICES           Cognito (auth) + DynamoDB (data)                   │
+│  AI MODEL               AWS Bedrock (Claude)                               │
+│  ENCRYPTION             Fernet (cryptography library)                      │
+│  MONITORING             systemd logs + psutil                              │
+│                                                                             │
+│  NO DEPENDENCIES        Docker, Kubernetes, CodeBuild                      │
+│  SIMPLIFIED             Instant setup, web-based management                │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        WORKFLOW EXAMPLES                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  FIRST DAY - Initial Deployment                                            │
+│  ─────────────────────────────                                             │
+│  9:00 AM:  Launch EC2 (5 min in AWS console)                               │
+│  9:05 AM:  SSH + run setup script (5 min)                                  │
+│  9:10 AM:  Configure via web portal (5 min)                                │
+│  9:15 AM:  Upload student CSV (1 min)                                      │
+│  9:16 AM:  Share lab URL with students                                     │
+│  9:20 AM:  Lab is LIVE with 40 students! 🎉                                │
+│                                                                             │
+│  LATER THAT DAY - Reset for New Cohort                                     │
+│  ─────────────────────────────────────────                                 │
+│  2:00 PM:  Click Students tab                                              │
+│  2:01 PM:  Click Delete All Students                                       │
+│  2:02 PM:  Upload new CSV with 40 different students                       │
+│  2:03 PM:  Share new lab URL                                               │
+│  2:04 PM:  New cohort ready! ✓ (3 minutes!)                                │
+│                                                                             │
+│  ONGOING - Monitor & Manage                                                │
+│  ─────────────────────────────────                                         │
+│  Anytime:  Click Settings → Check System Status                            │
+│  Anytime:  View logs in Settings → Logs                                    │
+│  Anytime:  Restart app (Settings → Restart Flask)                          │
+│  Anytime:  Deploy code (Settings → Pull Latest)                            │
+│  Anytime:  Everything from browser - NO terminal! ✓                        │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        WHAT YOU ALREADY HAVE                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ✓ Full Flask application with all routes                                  │
+│  ✓ Student management portal (CSV upload, delete, list)                    │
+│  ✓ Settings/admin portal (configuration, monitoring, deployment)           │
+│  ✓ Cognito authentication integration                                      │
+│  ✓ DynamoDB credential storage (encrypted)                                 │
+│  ✓ Claude AI chatbot (Bedrock)                                             │
+│  ✓ ThousandEyes API integration                                            │
+│  ✓ Meraki API integration                                                  │
+│  ✓ Systemd service configuration                                           │
+│  ✓ EC2 setup automation script                                             │
+│  ✓ Comprehensive documentation                                             │
+│  ✓ All ready to deploy!                                                    │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        NEXT STEPS                                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. Open and read: START_HERE_EC2.md                                       │
+│  2. Prepare: AWS account, GitHub repo, Cognito setup                       │
+│  3. Follow: EC2_SETUP_MINIMAL.md (4 simple steps)                          │
+│  4. Done: Lab is live and web-managed!                                     │
+│                                                                             │
+│  Deployment time: ~20 minutes                                              │
+│  Monthly cost: ~$15                                                        │
+│  Management method: Web browser (point-and-click!)                         │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+
+Your AI Assurance Lab is ready to deploy! 🚀
+
+Everything is built. Everything is documented. Everything is web-managed.
+
+No more Docker. No more CodeBuild. No more complexity.
+
+Just EC2, Flask, and a beautiful web portal for managing it all.
+
+Let's teach! 🎓
+
+═══════════════════════════════════════════════════════════════════════════════

@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - AI Assurance Lab</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .content {
+            padding: 30px;
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            gap: 30px;
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .sidebar-item {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .sidebar-item:hover {
+            background: #e8ebff;
+            border-color: #667eea;
+        }
+
+        .sidebar-item.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .section h2 {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #667eea;
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .button-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .button-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .button-secondary {
+            background: #e0e7ff;
+            color: #667eea;
+        }
+
+        .button-secondary:hover {
+            background: #c7d2ff;
+        }
+
+        .button-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .button-danger:hover {
+            background: #dc2626;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-badge.active {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-badge.inactive {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: white;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+
+        .status-item strong {
+            color: #667eea;
+        }
+
+        .message {
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .message.success {
+            display: block;
+            background: #d1fae5;
+            color: #065f46;
+            border-left: 4px solid #10b981;
+        }
+
+        .message.error {
+            display: block;
+            background: #fee2e2;
+            color: #991b1b;
+            border-left: 4px solid #ef4444;
+        }
+
+        .log-viewer {
+            background: #1f2937;
+            color: #e5e7eb;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            line-height: 1.6;
+        }
+
+        .log-line {
+            margin: 3px 0;
+        }
+
+        .help-text {
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        .spinner {
+            border: 2px solid #f3f4f6;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .info-box {
+            background: #eff6ff;
+            border-left: 4px solid #3b82f6;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-size: 13px;
+            color: #1e40af;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚙️ Settings & Administration</h1>
+            <p>Manage your AI Assurance Lab deployment</p>
+        </div>
+
+        <div class="content">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <div class="sidebar-item active" onclick="switchTab('configuration')">
+                    📋 Configuration
+                </div>
+                <div class="sidebar-item" onclick="switchTab('status')">
+                    📊 System Status
+                </div>
+                <div class="sidebar-item" onclick="switchTab('logs')">
+                    📝 Logs
+                </div>
+                <div class="sidebar-item" onclick="switchTab('deployment')">
+                    🚀 Deployment
+                </div>
+                <div class="sidebar-item" onclick="switchTab('help')">
+                    ❓ Help
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="main-content">
+                <!-- Configuration Tab -->
+                <div class="tab-content active" id="configuration">
+                    <div id="configMessage"></div>
+
+                    <div class="section">
+                        <h2>Cognito Configuration</h2>
+                        <p class="help-text">Get these from your AWS Cognito console</p>
+
+                        <div class="form-group">
+                            <label>Cognito Domain</label>
+                            <input type="text" id="cognito_domain" placeholder="e.g., your-pool.auth.us-east-1.amazoncognito.com">
+                            <p class="help-text">From Cognito → User Pool → App Integration → Domain</p>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Cognito Client ID</label>
+                            <input type="text" id="cognito_client_id" placeholder="Your client ID">
+                            <p class="help-text">From Cognito → App Clients → Client ID</p>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Cognito Client Secret</label>
+                            <input type="password" id="cognito_client_secret" placeholder="Your client secret">
+                            <p class="help-text">From Cognito → App Clients → Client Secret (keep confidential!)</p>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Proctor Emails (comma-separated)</label>
+                            <input type="text" id="proctor_emails" placeholder="admin@example.com, proctor@example.com">
+                            <p class="help-text">Only these emails can access student and deployment controls</p>
+                        </div>
+                    </div>
+
+                    <div class="section" style="margin-top: 20px;">
+                        <h2>Encryption Configuration</h2>
+                        <p class="help-text">For encrypting stored API credentials</p>
+
+                        <div class="form-group">
+                            <label>Encryption Key</label>
+                            <textarea id="encryption_key" placeholder="Paste your Fernet encryption key or generate one"></textarea>
+                            <p class="help-text">Generate: <code>python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"</code></p>
+                        </div>
+                    </div>
+
+                    <div class="button-group">
+                        <button class="button button-primary" onclick="saveConfiguration()">
+                            Save Configuration
+                        </button>
+                        <button class="button button-secondary" onclick="loadConfiguration()">
+                            Reload Current
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Status Tab -->
+                <div class="tab-content" id="status">
+                    <div class="section">
+                        <h2>System Status</h2>
+                        <p class="help-text">Real-time system and application status</p>
+
+                        <div id="statusContent">
+                            <div style="text-align: center; padding: 30px;">
+                                <div class="spinner"></div>
+                                <p>Loading status...</p>
+                            </div>
+                        </div>
+
+                        <div class="button-group" style="margin-top: 20px;">
+                            <button class="button button-secondary" onclick="loadStatus()">
+                                Refresh Status
+                            </button>
+                            <button class="button button-danger" onclick="restartFlask()">
+                                Restart Flask App
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Logs Tab -->
+                <div class="tab-content" id="logs">
+                    <div class="section">
+                        <h2>Application Logs</h2>
+                        <p class="help-text">Last 100 lines from systemd journal</p>
+
+                        <div id="logsContent">
+                            <div style="text-align: center; padding: 30px;">
+                                <div class="spinner"></div>
+                                <p>Loading logs...</p>
+                            </div>
+                        </div>
+
+                        <div class="button-group" style="margin-top: 20px;">
+                            <button class="button button-secondary" onclick="loadLogs()">
+                                Refresh Logs
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Deployment Tab -->
+                <div class="tab-content" id="deployment">
+                    <div class="section">
+                        <h2>🚀 Deployment Control</h2>
+                        <p class="help-text">Deploy latest code from your git repository</p>
+
+                        <div class="info-box">
+                            <strong>ℹ️ Git Pull:</strong> Pulls latest code from main branch, runs pip install, and restarts Flask automatically.
+                        </div>
+
+                        <button class="button button-primary" onclick="gitPull()">
+                            Pull Latest Code & Restart
+                        </button>
+
+                        <div id="deploymentMessage" style="margin-top: 20px;"></div>
+                    </div>
+                </div>
+
+                <!-- Help Tab -->
+                <div class="tab-content" id="help">
+                    <div class="section">
+                        <h2>Getting Started</h2>
+                        <ol style="margin: 15px 0; margin-left: 20px; line-height: 1.8;">
+                            <li>Configure Cognito settings in the Configuration tab</li>
+                            <li>Add your email to Proctor Emails</li>
+                            <li>Generate and paste an encryption key</li>
+                            <li>Click Save Configuration</li>
+                            <li>Flask will restart automatically</li>
+                            <li>Go to Students tab to upload student list</li>
+                        </ol>
+                    </div>
+
+                    <div class="section" style="margin-top: 20px;">
+                        <h2>Common Tasks</h2>
+                        <ul style="margin: 15px 0; margin-left: 20px; line-height: 1.8;">
+                            <li><strong>View Logs:</strong> Click Logs tab to see application errors</li>
+                            <li><strong>Restart App:</strong> Status tab → Restart Flask App button</li>
+                            <li><strong>Deploy Changes:</strong> Deployment tab → Pull Latest Code</li>
+                            <li><strong>Upload Students:</strong> Click Students link at top</li>
+                            <li><strong>Check System:</strong> Status tab shows CPU, memory, uptime</li>
+                        </ul>
+                    </div>
+
+                    <div class="section" style="margin-top: 20px;">
+                        <h2>Troubleshooting</h2>
+                        <ul style="margin: 15px 0; margin-left: 20px; line-height: 1.8;">
+                            <li><strong>Students can't log in:</strong> Check Cognito configuration</li>
+                            <li><strong>Credentials not working:</strong> Check encryption key is set</li>
+                            <li><strong>App crashed:</strong> Check logs, then restart Flask</li>
+                            <li><strong>Need to update code:</strong> Use Deployment tab → Pull Latest</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tab switching
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.sidebar-item').forEach(item => {
+                item.classList.remove('active');
+            });
+
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+
+            // Load content if needed
+            if (tabName === 'status') loadStatus();
+            if (tabName === 'logs') loadLogs();
+        }
+
+        function showMessage(elementId, message, type) {
+            const el = document.getElementById(elementId);
+            el.className = `message ${type}`;
+            el.textContent = message;
+        }
+
+        // Configuration
+        function loadConfiguration() {
+            fetch('/api/admin/settings/config')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('cognito_domain').value = data.cognito_domain || '';
+                    document.getElementById('cognito_client_id').value = data.cognito_client_id || '';
+                    document.getElementById('proctor_emails').value = data.proctor_emails || '';
+                    // Don't show sensitive values
+                    document.getElementById('cognito_client_secret').value = '';
+                    document.getElementById('encryption_key').value = '';
+                    showMessage('configMessage', 'Configuration loaded', 'success');
+                })
+                .catch(err => showMessage('configMessage', 'Error loading: ' + err, 'error'));
+        }
+
+        function saveConfiguration() {
+            const data = {
+                cognito_domain: document.getElementById('cognito_domain').value,
+                cognito_client_id: document.getElementById('cognito_client_id').value,
+                cognito_client_secret: document.getElementById('cognito_client_secret').value,
+                proctor_emails: document.getElementById('proctor_emails').value,
+                encryption_key: document.getElementById('encryption_key').value
+            };
+
+            fetch('/api/admin/settings/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(r => r.json())
+            .then(data => {
+                showMessage('configMessage', data.message || 'Saved! Restart needed.', data.error ? 'error' : 'success');
+            })
+            .catch(err => showMessage('configMessage', 'Error: ' + err, 'error'));
+        }
+
+        // Status
+        function loadStatus() {
+            const el = document.getElementById('statusContent');
+            fetch('/api/admin/system/status')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) {
+                        el.innerHTML = `<p style="color: red;">Error: ${data.error}</p>`;
+                        return;
+                    }
+
+                    let html = `
+                        <div class="status-item">
+                            <strong>Flask Status:</strong>
+                            <span class="status-badge ${data.flask_status === 'active' ? 'active' : 'inactive'}">
+                                ${data.flask_status === 'active' ? '✓ Running' : '✗ Stopped'}
+                            </span>
+                        </div>
+                        <div class="status-item">
+                            <strong>CPU Usage:</strong>
+                            <span>${data.cpu_percent}%</span>
+                        </div>
+                        <div class="status-item">
+                            <strong>Memory:</strong>
+                            <span>${data.memory_used_mb}MB / ${data.memory_total_mb}MB (${data.memory_percent}%)</span>
+                        </div>
+                    `;
+                    el.innerHTML = html;
+                })
+                .catch(err => {
+                    el.innerHTML = `<p style="color: red;">Error loading status</p>`;
+                });
+        }
+
+        function restartFlask() {
+            if (!confirm('Restart Flask app? This will cause brief downtime.')) return;
+
+            const el = document.getElementById('statusContent');
+            el.innerHTML = '<div style="text-align: center; padding: 30px;"><div class="spinner"></div><p>Restarting...</p></div>';
+
+            fetch('/api/admin/system/restart', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    showMessage('statusContent', data.message, 'success');
+                    setTimeout(loadStatus, 5000);
+                })
+                .catch(err => {
+                    el.innerHTML = `<p style="color: red;">Error: ${err}</p>`;
+                });
+        }
+
+        // Logs
+        function loadLogs() {
+            const el = document.getElementById('logsContent');
+            fetch('/api/admin/system/logs')
+                .then(r => r.json())
+                .then(data => {
+                    const html = `<div class="log-viewer">${data.logs.map(l => `<div class="log-line">${l}</div>`).join('')}</div>`;
+                    el.innerHTML = html;
+                })
+                .catch(err => {
+                    el.innerHTML = `<p style="color: red;">Error loading logs</p>`;
+                });
+        }
+
+        // Deployment
+        function gitPull() {
+            if (!confirm('Pull latest code and restart? This will take 30 seconds.')) return;
+
+            const el = document.getElementById('deploymentMessage');
+            el.innerHTML = '<div style="text-align: center;"><div class="spinner"></div><p>Deploying...</p></div>';
+
+            fetch('/api/admin/deploy/git-pull', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) {
+                        el.innerHTML = `<div class="message error">Error: ${data.error}</div>`;
+                    } else {
+                        el.innerHTML = `<div class="message success"><strong>✅ Deployed!</strong> ${data.message}</div>`;
+                    }
+                })
+                .catch(err => {
+                    el.innerHTML = `<div class="message error">Error: ${err}</div>`;
+                });
+        }
+
+        // Load config on page load
+        window.addEventListener('load', loadConfiguration);
+    </script>
+</body>
+</html>
