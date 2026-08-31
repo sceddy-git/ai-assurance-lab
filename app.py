@@ -344,6 +344,13 @@ def lab():
     return render_template('lab.html', email=email)
 
 
+@app.route('/guide')
+@login_required
+def guide():
+    """Display the lab guide (rendered standalone, embedded via iframe in the lab sidebar)."""
+    return render_template('guide.html')
+
+
 @app.route('/api/chat', methods=['POST'])
 @login_required
 def chat():
@@ -384,7 +391,7 @@ def chat():
         # Call Bedrock Claude model
         try:
             response = bedrock_client.invoke_model(
-                modelId='anthropic.claude-3-5-sonnet-20241022-v2:0',
+                modelId='us.anthropic.claude-sonnet-4-5-20250929-v1:0',
                 body=json.dumps({
                     "anthropic_version": "bedrock-2023-06-01",
                     "max_tokens": 2048,
@@ -438,7 +445,7 @@ def chat():
             
             try:
                 final_response = bedrock_client.invoke_model(
-                    modelId='anthropic.claude-3-5-sonnet-20241022-v2:0',
+                    modelId='us.anthropic.claude-sonnet-4-5-20250929-v1:0',
                     body=json.dumps({
                         "anthropic_version": "bedrock-2023-06-01",
                         "max_tokens": 2048,
