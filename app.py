@@ -1235,41 +1235,69 @@ def restart_flask():
 @app.route('/api/admin/system/logs', methods=['GET'])
 @login_required
 def get_logs():
-    """Get recent Flask logs, optionally filtered to lines mentioning a
-    given user (email). Filtering is a simple case-insensitive substring
-    match over the raw log line, so it also matches partial addresses.
+    """Get recent Flask logs, with optional filters:
+      - user: case-insensitive substring match on email (or any text)
+      - q: case-insensitive substring match on free text
+      - level: ERROR | WARNING | INFO - matches the level Flask's logger
+        writes into each line (e.g. "app - ERROR - ...")
+      - since: minutes; only journal lines from the last N minutes
+
+    All filters are ANDed together. Filtering pulls a much bigger tail
+    window since matches could otherwise easily fall outside the default
+    last-100-lines view.
     """
     user_email = session.get('user_email', '')
     if not _is_proctor(user_email):
         return jsonify({'error': 'Access denied'}), 403
 
     user_filter = (request.args.get('user') or '').strip()
-    # Pull a much bigger window when filtering, since a substring match
-    # over just the last 100 lines could easily miss the user's activity.
-    tail_lines = '2000' if user_filter else '100'
+    text_filter = (request.args.get('q') or '').strip()
+    level_filter = (request.args.get('level') or '').strip().upper()
+    since_minutes = (request.args.get('since') or '').strip()
+
+    any_filter = bool(user_filter or text_filter or level_filter or since_minutes)
+    tail_lines = '5000' if any_filter else '100'
 
     try:
         import subprocess
-        
-        result = subprocess.run(
-            ['/usr/bin/sudo', '/usr/bin/journalctl', '-u', 'flask-app', '-n', tail_lines, '--no-pager'],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        
+
+        cmd = ['/usr/bin/sudo', '/usr/bin/journalctl', '-u', 'flask-app', '--no-pager']
+        if since_minutes.isdigit():
+            cmd += ['--since', f'{since_minutes} minutes ago']
+        else:
+            cmd += ['-n', tail_lines]
+
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+
         logs = result.stdout.split('\n')
 
         if user_filter:
             needle = user_filter.lower()
             logs = [line for line in logs if needle in line.lower()]
-            # Keep the response light even if the filter matches a lot.
-            logs = logs[-200:]
+        if text_filter:
+            needle = text_filter.lower()
+            logs = [line for line in logs if needle in line.lower()]
+        if level_filter in ('ERROR', 'WARNING', 'INFO'):
+            # Flask's default formatter writes "LEVEL" as its own token
+            # (e.g. "... - ERROR - ..."), so match on word boundaries to
+            # avoid "ERROR" also matching inside unrelated words.
+            import re
+            pattern = re.compile(r'\b' + re.escape(level_filter) + r'\b')
+            logs = [line for line in logs if pattern.search(line)]
+
+        if any_filter:
+            # Keep the response light even if filters match a lot.
+            logs = logs[-300:]
 
         return jsonify({
             'status': 'success',
             'logs': logs,
-            'filtered_by': user_filter or None
+            'filters': {
+                'user': user_filter or None,
+                'q': text_filter or None,
+                'level': level_filter or None,
+                'since_minutes': since_minutes or None
+            }
         })
     
     except Exception as e:

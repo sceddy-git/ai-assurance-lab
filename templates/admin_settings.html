@@ -391,16 +391,38 @@
                         <h2>Application Logs</h2>
                         <p class="help-text" id="logsHelpText">Last 100 lines from systemd journal</p>
 
-                        <div class="form-group" style="display: flex; gap: 8px; align-items: center; margin-bottom: 15px;">
+                        <div class="form-group" style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap;">
                             <input
                                 type="text"
                                 id="logsUserFilter"
                                 placeholder="Filter by user email (e.g. student@cisco.com)"
-                                style="flex: 1; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px;"
+                                style="flex: 2; min-width: 220px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px;"
                                 onkeydown="if (event.key === 'Enter') loadLogs();"
                             >
-                            <button class="button button-secondary" onclick="loadLogs()">Filter</button>
-                            <button class="button button-secondary" onclick="document.getElementById('logsUserFilter').value=''; loadLogs();">Clear</button>
+                            <input
+                                type="text"
+                                id="logsTextFilter"
+                                placeholder="Search text (e.g. 'meraki', 'failed', a route path...)"
+                                style="flex: 2; min-width: 220px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px;"
+                                onkeydown="if (event.key === 'Enter') loadLogs();"
+                            >
+                            <select id="logsLevelFilter" style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px;">
+                                <option value="">All levels</option>
+                                <option value="ERROR">Errors only</option>
+                                <option value="WARNING">Warnings only</option>
+                                <option value="INFO">Info only</option>
+                            </select>
+                            <select id="logsSinceFilter" style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px;">
+                                <option value="">Any time</option>
+                                <option value="15">Last 15 min</option>
+                                <option value="60">Last hour</option>
+                                <option value="240">Last 4 hours</option>
+                                <option value="1440">Last 24 hours</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="display: flex; gap: 8px; margin-bottom: 15px;">
+                            <button class="button button-secondary" onclick="loadLogs()">Apply filters</button>
+                            <button class="button button-secondary" onclick="clearLogFilters()">Clear</button>
                         </div>
 
                         <div id="logsContent">
@@ -596,25 +618,44 @@
             return div.innerHTML;
         }
 
+        function clearLogFilters() {
+            document.getElementById('logsUserFilter').value = '';
+            document.getElementById('logsTextFilter').value = '';
+            document.getElementById('logsLevelFilter').value = '';
+            document.getElementById('logsSinceFilter').value = '';
+            loadLogs();
+        }
+
         function loadLogs() {
             const el = document.getElementById('logsContent');
             const helpEl = document.getElementById('logsHelpText');
             const userFilter = document.getElementById('logsUserFilter').value.trim();
+            const textFilter = document.getElementById('logsTextFilter').value.trim();
+            const levelFilter = document.getElementById('logsLevelFilter').value;
+            const sinceFilter = document.getElementById('logsSinceFilter').value;
 
             el.innerHTML = '<div style="text-align: center; padding: 30px;"><div class="spinner"></div><p>Loading logs...</p></div>';
 
-            const url = userFilter
-                ? `/api/admin/system/logs?user=${encodeURIComponent(userFilter)}`
-                : '/api/admin/system/logs';
+            const params = new URLSearchParams();
+            if (userFilter) params.set('user', userFilter);
+            if (textFilter) params.set('q', textFilter);
+            if (levelFilter) params.set('level', levelFilter);
+            if (sinceFilter) params.set('since', sinceFilter);
+            const url = params.toString() ? `/api/admin/system/logs?${params}` : '/api/admin/system/logs';
 
             fetch(url)
                 .then(r => r.json())
                 .then(data => {
-                    if (data.filtered_by) {
-                        helpEl.textContent = `Showing lines mentioning "${data.filtered_by}" (searched last 2000 lines, showing up to 200 matches)`;
-                    } else {
-                        helpEl.textContent = 'Last 100 lines from systemd journal';
-                    }
+                    const f = data.filters || {};
+                    const activeParts = [];
+                    if (f.user) activeParts.push(`user contains "${f.user}"`);
+                    if (f.q) activeParts.push(`text contains "${f.q}"`);
+                    if (f.level) activeParts.push(`level = ${f.level}`);
+                    if (f.since_minutes) activeParts.push(`within last ${f.since_minutes} min`);
+
+                    helpEl.textContent = activeParts.length
+                        ? `Filtered: ${activeParts.join(', ')} (showing up to 300 matches)`
+                        : 'Last 100 lines from systemd journal';
 
                     if (!data.logs || data.logs.length === 0 || (data.logs.length === 1 && !data.logs[0])) {
                         el.innerHTML = '<p class="help-text">No matching log lines found.</p>';
