@@ -557,84 +557,165 @@ def admin_students():
     return render_template('admin_students.html', email=user_email)
 
 
+def _is_proctor(user_email: str) -> bool:
+    proctor_emails = os.getenv('PROCTOR_EMAILS', 'admin@example.com').split(',')
+    return user_email in proctor_emails
+
+
+def _create_cognito_student(email: str, first_name: str = '', last_name: str = '') -> None:
+    """
+    Create a single student user in Cognito with a suppressed invite email.
+    Raises the underlying boto3 exception on failure so callers can classify it
+    (e.g. UsernameExistsException vs. other errors).
+    """
+    import secrets
+    temp_password = secrets.token_urlsafe(12)
+
+    cognito_client.admin_create_user(
+        UserPoolId=os.getenv('COGNITO_USER_POOL_ID'),
+        Username=email,
+        TemporaryPassword=temp_password,
+        UserAttributes=[
+            {'Name': 'email', 'Value': email},
+            {'Name': 'email_verified', 'Value': 'true'},
+            {'Name': 'given_name', 'Value': first_name},
+            {'Name': 'family_name', 'Value': last_name}
+        ],
+        MessageAction='SUPPRESS'
+    )
+
+
+def _parse_students_csv(file) -> list:
+    import io
+    import csv
+    stream = io.StringIO(file.stream.read().decode('UTF-8'))
+    reader = csv.DictReader(stream)
+    return [
+        {
+            'email': (row.get('email') or '').strip(),
+            'first_name': (row.get('first_name') or '').strip(),
+            'last_name': (row.get('last_name') or '').strip(),
+        }
+        for row in reader
+    ]
+
+
+def _parse_students_excel(file) -> list:
+    from openpyxl import load_workbook
+    wb = load_workbook(file.stream, read_only=True, data_only=True)
+    sheet = wb[wb.sheetnames[0]]
+
+    rows_iter = sheet.iter_rows(values_only=True)
+    header = [str(h).strip().lower() if h else '' for h in next(rows_iter, [])]
+
+    def col_index(*names):
+        for name in names:
+            if name in header:
+                return header.index(name)
+        return None
+
+    email_idx = col_index('email', 'e-mail', 'email address')
+    first_idx = col_index('first_name', 'first name', 'firstname')
+    last_idx = col_index('last_name', 'last name', 'lastname')
+
+    if email_idx is None:
+        raise ValueError("Spreadsheet must have an 'email' column header in the first row")
+
+    students = []
+    for row in rows_iter:
+        if row is None or email_idx >= len(row):
+            continue
+        email = str(row[email_idx] or '').strip()
+        if not email:
+            continue
+        first_name = str(row[first_idx]).strip() if first_idx is not None and first_idx < len(row) and row[first_idx] else ''
+        last_name = str(row[last_idx]).strip() if last_idx is not None and last_idx < len(row) and row[last_idx] else ''
+        students.append({'email': email, 'first_name': first_name, 'last_name': last_name})
+
+    return students
+
+
 @app.route('/api/admin/students/upload', methods=['POST'])
 @login_required
 def upload_students_csv():
-    """Upload and create students from CSV file."""
+    """Upload and create students from a CSV or Excel (.xlsx/.xls) file."""
     user_email = session.get('user_email', '')
-    proctor_emails = os.getenv('PROCTOR_EMAILS', 'admin@example.com').split(',')
-    
-    if user_email not in proctor_emails:
+    if not _is_proctor(user_email):
         return jsonify({'error': 'Access denied'}), 403
-    
+
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
-    
+
     file = request.files['file']
     if not file or file.filename == '':
         return jsonify({'error': 'No file selected'}), 400
-    
-    if not file.filename.endswith('.csv'):
-        return jsonify({'error': 'File must be CSV format'}), 400
-    
+
+    filename_lower = file.filename.lower()
     try:
-        # Read CSV
-        import io
-        import csv
-        
-        stream = io.StringIO(file.stream.read().decode('UTF-8'))
-        reader = csv.DictReader(stream)
-        
-        created = 0
-        failed = 0
-        errors = []
-        
-        for row in reader:
-            email = row.get('email', '').strip()
-            first_name = row.get('first_name', '').strip()
-            last_name = row.get('last_name', '').strip()
-            
-            if not email:
-                failed += 1
-                errors.append('Empty email in row')
-                continue
-            
-            try:
-                # Generate temporary password
-                import secrets
-                temp_password = secrets.token_urlsafe(12)
-                
-                # Create user in Cognito
-                cognito_client.admin_create_user(
-                    UserPoolId=os.getenv('COGNITO_USER_POOL_ID'),
-                    Username=email,
-                    TemporaryPassword=temp_password,
-                    UserAttributes=[
-                        {'Name': 'email', 'Value': email},
-                        {'Name': 'email_verified', 'Value': 'true'},
-                        {'Name': 'given_name', 'Value': first_name},
-                        {'Name': 'family_name', 'Value': last_name}
-                    ],
-                    MessageAction='SUPPRESS'
-                )
-                created += 1
-                
-            except cognito_client.exceptions.UsernameExistsException:
-                failed += 1
-                errors.append(f'{email}: User already exists')
-            except Exception as e:
-                failed += 1
-                errors.append(f'{email}: {str(e)}')
-        
-        return jsonify({
-            'status': 'success',
-            'created': created,
-            'failed': failed,
-            'errors': errors[:10]  # Return first 10 errors
-        })
-    
+        if filename_lower.endswith('.csv'):
+            students = _parse_students_csv(file)
+        elif filename_lower.endswith('.xlsx') or filename_lower.endswith('.xls'):
+            students = _parse_students_excel(file)
+        else:
+            return jsonify({'error': 'File must be CSV or Excel (.xlsx/.xls) format'}), 400
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
-        logger.error(f"Error uploading students: {str(e)}")
+        logger.error(f"Error parsing student file: {str(e)}")
+        return jsonify({'error': f'Could not read file: {type(e).__name__}'}), 400
+
+    created = 0
+    failed = 0
+    errors = []
+
+    for student in students:
+        email = student['email']
+        if not email:
+            failed += 1
+            errors.append('Empty email in row')
+            continue
+
+        try:
+            _create_cognito_student(email, student['first_name'], student['last_name'])
+            created += 1
+        except cognito_client.exceptions.UsernameExistsException:
+            failed += 1
+            errors.append(f'{email}: User already exists')
+        except Exception as e:
+            failed += 1
+            errors.append(f'{email}: {str(e)}')
+
+    return jsonify({
+        'status': 'success',
+        'created': created,
+        'failed': failed,
+        'errors': errors[:10]  # Return first 10 errors
+    })
+
+
+@app.route('/api/admin/students/add', methods=['POST'])
+@login_required
+def add_single_student():
+    """Create a single student account from the proctor portal form."""
+    user_email = session.get('user_email', '')
+    if not _is_proctor(user_email):
+        return jsonify({'error': 'Access denied'}), 403
+
+    data = request.json or {}
+    email = (data.get('email') or '').strip()
+    first_name = (data.get('first_name') or '').strip()
+    last_name = (data.get('last_name') or '').strip()
+
+    if not email or '@' not in email:
+        return jsonify({'error': 'A valid email address is required'}), 400
+
+    try:
+        _create_cognito_student(email, first_name, last_name)
+        return jsonify({'status': 'success', 'email': email})
+    except cognito_client.exceptions.UsernameExistsException:
+        return jsonify({'error': f'{email} already exists'}), 409
+    except Exception as e:
+        logger.error(f"Error creating student {email}: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 

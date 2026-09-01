@@ -284,6 +284,42 @@
             margin: 10px 0;
             font-size: 14px;
         }
+
+        .single-add-form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .single-add-form input[type="email"],
+        .single-add-form input[type="text"] {
+            padding: 10px 14px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .single-add-form input[type="email"] {
+            flex: 2;
+            min-width: 220px;
+        }
+
+        .single-add-form input[type="text"] {
+            flex: 1;
+            min-width: 140px;
+        }
+
+        .single-add-form input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .single-add-form .button {
+            margin-top: 0;
+        }
     </style>
 </head>
 <body>
@@ -294,20 +330,45 @@
         </div>
 
         <div class="content">
+            <!-- Add Single Student Section -->
+            <div class="section">
+                <h2><span class="icon">➕</span> Add a Single Student</h2>
+
+                <div class="help-text">
+                    Create one student account at a time. They'll be able to log in immediately
+                    with the email address below (no password to set up front — Cognito handles
+                    first-time sign-in).
+                </div>
+
+                <div class="single-add-form">
+                    <input type="email" id="singleEmail" placeholder="student@example.com" required>
+                    <input type="text" id="singleFirstName" placeholder="First name (optional)">
+                    <input type="text" id="singleLastName" placeholder="Last name (optional)">
+                    <button class="button" onclick="addSingleStudent()" id="addSingleBtn">
+                        Add Student
+                    </button>
+                </div>
+
+                <div class="results" id="singleResults">
+                    <div id="singleResultsContent"></div>
+                </div>
+            </div>
+
             <!-- Upload Section -->
             <div class="section">
-                <h2><span class="icon">📤</span> Upload Students CSV</h2>
+                <h2><span class="icon">📤</span> Bulk Import (CSV or Excel)</h2>
                 
                 <div class="help-text">
-                    <strong>CSV Format:</strong> email, first_name, last_name<br>
+                    <strong>Columns:</strong> email, first_name, last_name (header row required)<br>
                     <strong>Example:</strong> alice@example.com, Alice, Smith<br>
+                    Accepts <code>.csv</code>, <code>.xlsx</code>, or <code>.xls</code> files.
                     Students will be created in Cognito and can log in immediately.
                 </div>
 
                 <div class="upload-area" id="dropZone">
-                    <strong>📁 Click to select CSV file or drag and drop</strong>
-                    <p>Maximum 10MB, CSV format only</p>
-                    <input type="file" id="fileInput" accept=".csv" />
+                    <strong>📁 Click to select a file or drag and drop</strong>
+                    <p>Maximum 10MB &middot; .csv, .xlsx, or .xls</p>
+                    <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" />
                 </div>
 
                 <div class="results" id="uploadResults">
@@ -401,6 +462,68 @@
 
         // File input change
         fileInput.addEventListener('change', uploadFile);
+
+        function addSingleStudent() {
+            const emailInput = document.getElementById('singleEmail');
+            const firstNameInput = document.getElementById('singleFirstName');
+            const lastNameInput = document.getElementById('singleLastName');
+            const addBtn = document.getElementById('addSingleBtn');
+            const singleResults = document.getElementById('singleResults');
+            const singleResultsContent = document.getElementById('singleResultsContent');
+
+            const email = emailInput.value.trim();
+            if (!email || !email.includes('@')) {
+                emailInput.focus();
+                return;
+            }
+
+            addBtn.disabled = true;
+            addBtn.textContent = 'Adding...';
+            singleResults.classList.remove('show', 'success', 'error');
+
+            fetch('/api/admin/students/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: email,
+                    first_name: firstNameInput.value.trim(),
+                    last_name: lastNameInput.value.trim()
+                })
+            })
+            .then(response => response.json().then(data => ({ ok: response.ok, data })))
+            .then(({ ok, data }) => {
+                addBtn.disabled = false;
+                addBtn.textContent = 'Add Student';
+                singleResults.classList.add('show');
+
+                if (ok && data.status === 'success') {
+                    singleResults.classList.add('success');
+                    singleResultsContent.innerHTML = `
+                        <div class="result-stat">
+                            <span style="color: #10b981;">✓ Created ${data.email}</span>
+                        </div>`;
+                    emailInput.value = '';
+                    firstNameInput.value = '';
+                    lastNameInput.value = '';
+                    setTimeout(loadStudents, 800);
+                } else {
+                    singleResults.classList.add('error');
+                    singleResultsContent.innerHTML = `
+                        <div class="result-stat">
+                            <span style="color: #ef4444;">✗ ${data.error || 'Unknown error'}</span>
+                        </div>`;
+                }
+            })
+            .catch(error => {
+                addBtn.disabled = false;
+                addBtn.textContent = 'Add Student';
+                singleResults.classList.add('show', 'error');
+                singleResultsContent.innerHTML = `
+                    <div class="result-stat">
+                        <span style="color: #ef4444;">✗ Error: ${error.message}</span>
+                    </div>`;
+            });
+        }
 
         function uploadFile() {
             const file = fileInput.files[0];
