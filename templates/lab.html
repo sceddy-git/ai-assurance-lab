@@ -145,6 +145,60 @@
             max-width: 1200px;
             width: 100%;
             margin: 0 auto;
+            transition: max-width 0.2s;
+        }
+
+        .main.guide-open {
+            max-width: 1560px;
+        }
+
+        /* Lab Guide Sidebar (left) */
+        .guide-sidebar {
+            width: 380px;
+            background: var(--bg-panel);
+            border-right: 1px solid var(--border-subtle);
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .main.guide-open .guide-sidebar {
+            display: flex;
+        }
+
+        .guide-sidebar .sidebar-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .guide-close {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            color: var(--text-secondary);
+            font-size: 13px;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .guide-close:hover {
+            background: var(--accent-soft);
+            color: var(--accent);
+        }
+
+        .guide-frame {
+            flex: 1;
+            width: 100%;
+            border: none;
+            background: white;
+        }
+
+        @media (max-width: 1300px) {
+            .guide-sidebar {
+                width: 320px;
+            }
         }
 
         /* Chat Area */
@@ -568,6 +622,10 @@
                 display: none;
             }
 
+            .main.guide-open .guide-sidebar {
+                display: none;
+            }
+
             .message.user .message-content {
                 max-width: 85%;
             }
@@ -612,6 +670,7 @@
                         </div>
                     </div>
                     <div class="header-links">
+                        <a href="#" id="guideToggle" onclick="toggleGuide(event)">📘 Lab Guide</a>
                         <a href="/credentials">⚙️ Credentials</a>
                         <a href="/admin/students" id="adminLink" style="display: none;">👥 Students</a>
                         <a href="/admin/settings" id="settingsLink" style="display: none;">⚙️ Settings</a>
@@ -622,7 +681,16 @@
         </div>
 
         <!-- Main Content -->
-        <div class="main">
+        <div class="main" id="mainArea">
+            <!-- Lab Guide Sidebar (left) -->
+            <div class="guide-sidebar" id="guideSidebar">
+                <div class="sidebar-title">
+                    <span>📘 Lab Guide</span>
+                    <button class="guide-close" onclick="toggleGuide(event)" title="Hide guide">✕</button>
+                </div>
+                <iframe class="guide-frame" id="guideFrame" src="" title="AI Assurance Lab Guide"></iframe>
+            </div>
+
             <!-- Chat Area -->
             <div class="chat-area">
                 <div class="messages" id="messages">
@@ -686,6 +754,27 @@
         const availabilityStatus = document.getElementById('availability-status');
 
         let conversationHistory = [];
+
+        // ---- Lab Guide sidebar ----
+        function toggleGuide(event) {
+            if (event) event.preventDefault();
+            const mainArea = document.getElementById('mainArea');
+            const isOpen = mainArea.classList.toggle('guide-open');
+            localStorage.setItem('labGuideOpen', isOpen ? '1' : '0');
+
+            // Lazy-load the guide iframe only the first time it's opened.
+            const frame = document.getElementById('guideFrame');
+            if (isOpen && !frame.src) {
+                frame.src = '/guide';
+            }
+        }
+
+        // Restore guide visibility from a previous session.
+        (function restoreGuideState() {
+            if (localStorage.getItem('labGuideOpen') === '1') {
+                toggleGuide();
+            }
+        })();
 
         // Load credential status on page load
         document.addEventListener('DOMContentLoaded', () => {
