@@ -684,24 +684,30 @@ def _restart_flask_service() -> None:
 
 def _create_cognito_student(email: str, first_name: str = '', last_name: str = '') -> None:
     """
-    Create a single student user in Cognito with a suppressed invite email.
+    Create a single student user in Cognito and let Cognito email the
+    temporary password via SES (do NOT suppress the message).
+
+    Why: accounts land in FORCE_CHANGE_PASSWORD after admin_create_user, and
+    Cognito refuses to run the "Forgot password" flow for accounts in that
+    state ("User password cannot be reset in the current state"). If the
+    invite email is suppressed, the user has no way to ever learn their
+    temporary password and is permanently locked out until an admin manually
+    resets it. So the invite email is the only path in for a brand new
+    account - it must be sent.
+
     Raises the underlying boto3 exception on failure so callers can classify it
     (e.g. UsernameExistsException vs. other errors).
     """
-    import secrets
-    temp_password = secrets.token_urlsafe(12)
-
     cognito_client.admin_create_user(
         UserPoolId=os.getenv('COGNITO_USER_POOL_ID'),
         Username=email,
-        TemporaryPassword=temp_password,
         UserAttributes=[
             {'Name': 'email', 'Value': email},
             {'Name': 'email_verified', 'Value': 'true'},
             {'Name': 'given_name', 'Value': first_name},
             {'Name': 'family_name', 'Value': last_name}
         ],
-        MessageAction='SUPPRESS'
+        DesiredDeliveryMediums=['EMAIL']
     )
 
 
