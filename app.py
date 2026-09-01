@@ -960,7 +960,7 @@ def system_status():
         
         # Get Flask service status
         result = subprocess.run(
-            ['systemctl', 'is-active', 'flask-app'],
+            ['/usr/bin/systemctl', 'is-active', 'flask-app'],
             capture_output=True,
             text=True,
             timeout=5
@@ -969,7 +969,7 @@ def system_status():
         
         # Get last restart time
         result = subprocess.run(
-            ['systemctl', 'show', 'flask-app', '-p', 'StateChangeTimestamp'],
+            ['/usr/bin/systemctl', 'show', 'flask-app', '-p', 'StateChangeTimestamp'],
             capture_output=True,
             text=True,
             timeout=5
@@ -1009,7 +1009,7 @@ def restart_flask():
         logger.info(f"Flask restart requested by {user_email}")
         
         subprocess.run(
-            ['sudo', 'systemctl', 'restart', 'flask-app'],
+            ['/usr/bin/sudo', '/usr/bin/systemctl', 'restart', 'flask-app'],
             timeout=10
         )
         
@@ -1037,7 +1037,7 @@ def get_logs():
         import subprocess
         
         result = subprocess.run(
-            ['sudo', 'journalctl', '-u', 'flask-app', '-n', '100', '--no-pager'],
+            ['/usr/bin/sudo', '/usr/bin/journalctl', '-u', 'flask-app', '-n', '100', '--no-pager'],
             capture_output=True,
             text=True,
             timeout=5
@@ -1073,7 +1073,7 @@ def git_pull():
         logger.info(f"Git pull requested by {user_email}")
         
         result = subprocess.run(
-            ['git', 'pull', 'origin', 'main'],
+            ['/usr/bin/git', 'pull', 'origin', 'main'],
             capture_output=True,
             text=True,
             timeout=30,
@@ -1082,7 +1082,7 @@ def git_pull():
         
         # Restart Flask
         subprocess.run(
-            ['sudo', 'systemctl', 'restart', 'flask-app'],
+            ['/usr/bin/sudo', '/usr/bin/systemctl', 'restart', 'flask-app'],
             timeout=10
         )
         
