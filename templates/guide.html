@@ -118,27 +118,8 @@
 
   footer{text-align:center;color:var(--muted);font-size:13px;margin-top:50px;padding-top:22px;border-top:1px solid var(--line)}
 
-  /* ---- Module 4 (build-an-MCP-server) components ---- */
-  .wrap table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}
-  .wrap th,.wrap td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}
-  .wrap th{background:var(--navy2);color:#fff;font-weight:700;font-size:12.5px;letter-spacing:.02em}
-  .wrap tbody tr:nth-child(even){background:var(--soft)}
-  .wrap td code{font-size:12.5px}
-  .paths{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}
-  .pathcard{border:1px solid var(--line);border-radius:10px;padding:14px 16px;background:#fff}
-  .pathcard.rec{border:2px solid var(--n8n);background:linear-gradient(135deg,#fff,#f4eefb)}
-  .pathcard .pc-h{font-weight:800;color:var(--navy);margin-bottom:6px;font-size:15px}
-  .pathcard .pc-tag{display:inline-block;font-size:10px;font-weight:800;color:#fff;background:var(--n8n);border-radius:100px;padding:2px 9px;margin-left:6px;letter-spacing:.05em;text-transform:uppercase;vertical-align:middle}
-  .uistep{display:flex;gap:12px;align-items:flex-start;margin:9px 0;padding:11px 13px;background:var(--soft);border:1px solid var(--line);border-radius:8px}
-  .uistep .uic{flex:none;width:36px;height:36px;border-radius:8px;background:#fff;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:16px}
-  .uistep .ut b{color:var(--navy)}
-  .n8 ol.steps>li::before{background:var(--n8n)}
-  kbd{font-family:"SF Mono",Consolas,Menlo,monospace;font-size:12px;background:#eef2f5;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;color:var(--navy)}
-  .diagram{background:var(--code);color:#dfe9f0;border-radius:8px;padding:14px 16px;overflow-x:auto;font-family:"SF Mono",Consolas,Menlo,monospace;font-size:11.5px;line-height:1.45;white-space:pre;margin:12px 0}
-
   @media print{
     .builder,.copy-btn{display:none}
-    .paths{grid-template-columns:1fr 1fr}
     .cover{-webkit-print-color-adjust:exact;print-color-adjust:exact}
     pre,.prompt{white-space:pre-wrap}
     body{font-size:12px}
@@ -166,7 +147,7 @@
   <div class="sub">Lab Guide — turning plain English into real network action with Claude &amp; MCP</div>
   <div class="pills">
     <a href="#sec-te" class="pill" style="border-color:var(--te)">ThousandEyes</a><a href="#sec-meraki" class="pill" style="border-color:var(--meraki)">Meraki Magic</a>
-    <a href="#sec-splunk" class="pill" style="border-color:var(--splunk)">Splunk</a><a href="#sec-n8n" class="pill" style="border-color:var(--n8n)">Build an MCP server</a>
+    <a href="#sec-splunk" class="pill" style="border-color:var(--splunk)">Splunk</a>
   </div>
 </div>
 
@@ -199,7 +180,6 @@
         <li><a href="#sec-te" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-te"></span><b>1 · ThousandEyes</b> — connect via Credentials &amp; 4 labs <span class="badge b-req">Required</span></a></li>
         <li><a href="#sec-meraki" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-mk"></span><b>2 · Meraki</b> — connect via Credentials &amp; lab prompts <span class="badge b-req">Required</span></a></li>
         <li><a href="#sec-splunk" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-sp"></span><b>3 · Splunk</b> — 3 investigation labs (bonus, needs Claude Desktop) <span class="badge b-opt">Optional</span></a></li>
-        <li><a href="#sec-n8n" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-n8"></span><b>4 · MCP Tool-Building</b> — build your own MCP server with Cursor (bonus) <span class="badge b-opt">Optional</span></a></li>
       </ul>
       <p style="margin:8px 0 0;font-size:14px;color:var(--muted)">Modules 1 &amp; 2 run entirely inside this web app. Modules 3–5 are bonus material for anyone who wants to go further using their own Claude Desktop or Cursor install — see each section for details. Use the <b>Print / Save PDF</b> button at the top of the page to save a copy of this guide for your event.</p>
     </div>
@@ -375,390 +355,6 @@ For each test:
     </div>
   </section>
 
-  <!-- 4. BUILD YOUR OWN MCP SERVER -->
-  <section id="sec-n8n">
-    <div class="sec-head n8"><div class="sec-tag">Module 4 · Optional / Bonus<a href="#">↑ back to top</a></div>
-      <h2>MCP Tool-Building — Build Your Own MCP Server <span class="badge b-opt">Optional</span></h2>
-      <div class="sec-desc">Go beyond <i>using</i> MCP servers — build one. Use Cursor's AI to scaffold a working MCP server with little or no coding, then connect it to Cursor, Claude Desktop or Claude Code.</div></div>
-
-    <div class="note"><span class="i">🖥️</span><div><b>This module runs outside the lab web app</b>, on your own laptop with your own Cursor / Claude Desktop install. It's optional bonus content for anyone who wants to go deeper after finishing Modules 1–2.</div></div>
-
-    <div class="tip"><span class="i">🎯</span><div><b>Lab outcome.</b> By the end you'll have a working <b>stdio MCP server</b>, connected in <b>Cursor → Settings → MCP</b> (green status), and you can ask the AI in plain English to call your tools — list alerts, check utilisation, query an API. You do <i>not</i> need to write TypeScript by hand if you follow the Cursor path.</div></div>
-
-    <h3 style="color:var(--n8n)">Choose your path</h3>
-    <div class="paths">
-      <div class="pathcard rec">
-        <div class="pc-h">Path A — Cursor Agent <span class="pc-tag">Recommended</span></div>
-        <p style="margin:0"><b>Little coding knowledge required.</b> You describe what you want; Cursor's AI creates files, runs terminal commands, and fixes errors. You copy prompts, paste your API docs link, and approve changes.</p>
-      </div>
-      <div class="pathcard">
-        <div class="pc-h">Path B — Manual coding</div>
-        <p style="margin:0">For developers who want to understand every line. Follow Labs 1–4 below, then connect Cursor or Claude using the same <code>mcp.json</code> pattern.</p>
-      </div>
-    </div>
-
-    <h3>What you'll build</h3>
-    <div class="diagram">┌──────────────────┐     stdin/stdout      ┌──────────────────────┐
-│  Cursor Chat     │ ◄────────────────────► │  Your MCP Server     │
-│  Claude Desktop  │   JSON-RPC (MCP)       │  (node dist/index.js)│
-│  or Claude Code  │                        └──────────┬───────────┘
-└──────────────────┘                                   │ HTTPS
-                                                       ▼
-                                            ┌──────────────────────┐
-                                            │  External API / Data │
-                                            │  (REST, DB, files…)  │
-                                            └──────────────────────┘</div>
-    <p>Your MCP server exposes <b>Tools</b> (actions the model can invoke — the focus of this lab), and optionally <b>Resources</b> (read-only data by URI) and <b>Prompts</b> (reusable templates). For Cursor and Claude on your laptop, servers use <b>stdio transport</b>: the client spawns your process and talks over stdin/stdout — no HTTP port required.</p>
-
-    <h3>Prerequisites</h3>
-    <ul class="tick">
-      <li><b>Cursor</b> installed — <a href="https://cursor.com" target="_blank" rel="noopener">cursor.com</a></li>
-      <li>Node.js <b>18+</b> — ask Cursor: <i>"Check if Node 18+ is installed; if not, tell me how to install it on my OS."</i></li>
-      <li>API credentials for the system you're integrating (a token — keep it private)</li>
-      <li>A link to the API documentation (paste it into Cursor chat)</li>
-      <li>Optional: <b>Claude Desktop</b> or <b>Claude Code</b> if you also want to drive the server from Claude</li>
-    </ul>
-    <div class="note"><span class="i">ℹ️</span><div>You don't need to know TypeScript, JSON-RPC, or MCP internals. In <b>Agent</b> mode, Cursor runs the terminal commands for you.</div></div>
-
-    <div class="n8">
-
-    <!-- PATH A -->
-    <h3 style="color:var(--n8n)">Path A — Cursor beginner lab (little coding knowledge)</h3>
-    <p>This assumes you can open Cursor, type in chat, and click <b>Accept</b> when the AI suggests file changes. The AI writes the code.</p>
-
-    <h4>Cursor UI you'll use</h4>
-    <div class="uistep"><div class="uic">💬</div><div class="ut"><b>Chat</b> — ask questions, get explanations. Good for "what does this error mean?"</div></div>
-    <div class="uistep"><div class="uic">🤖</div><div class="ut"><b>Agent</b> (Composer in Agent mode) — the AI edits files, runs commands, builds the project. Use this for the lab.</div></div>
-    <div class="uistep"><div class="uic">⌘⇧P</div><div class="ut"><b>Command Palette</b> — <kbd>Cmd+Shift+P</kbd> (Mac) / <kbd>Ctrl+Shift+P</kbd> (Windows). Search "Terminal: Create New Terminal" or "Developer: Reload Window".</div></div>
-    <div class="uistep"><div class="uic">⚙️</div><div class="ut"><b>Settings → MCP</b> — where you connect your server after it's built. Green dot = working.</div></div>
-
-    <h4>Lab steps (do these in order)</h4>
-    <ol class="steps">
-      <li><div><div class="st-t">Open a folder in Cursor</div><div class="st-d">Create an empty folder (e.g. <code>Documents/my-mcp-project</code>) and open it: <b>File → Open Folder</b>.</div></div></li>
-      <li><div><div class="st-t">Open Agent chat</div><div class="st-d">Open the AI panel and switch to <b>Agent</b> mode so Cursor can create files and run commands.</div></div></li>
-      <li><div><div class="st-t">Paste the "Build MCP server" prompt</div><div class="st-d">Use prompt 1 below. Fill in your API name, docs URL, and example questions.</div></div></li>
-      <li><div><div class="st-t">Let Cursor work</div><div class="st-d">Approve file creations and terminal runs (<code>npm install</code>, <code>npm run build</code>). If something fails, paste the error back: <i>"Fix this build error."</i></div></div></li>
-      <li><div><div class="st-t">Ask Cursor to configure MCP</div><div class="st-d">Use prompt 2 ("Connect to Cursor MCP"). It edits <code>~/.cursor/mcp.json</code> with the correct path.</div></div></li>
-      <li><div><div class="st-t">Reload Cursor</div><div class="st-d">Command Palette → <b>Developer: Reload Window</b>. Check <b>Settings → MCP</b> for a green connected status.</div></div></li>
-      <li><div><div class="st-t">Test in chat</div><div class="st-d">Try <i>"List my MCP tools,"</i> then a real question using your API.</div></div></li>
-    </ol>
-
-    <div class="tip"><span class="i">✅</span><div><b>What you never have to do manually:</b> write TypeScript from scratch · figure out MCP SDK imports (Cursor generates them) · memorise <code>mcp.json</code> syntax (ask Cursor) · debug alone (paste errors into Agent chat).</div></div>
-    <div class="warn"><span class="i">⚠️</span><div><b>What you still must do:</b> provide your API token in the MCP config env (never paste it in chat if your screen is shared) · approve Agent actions · reload Cursor after config changes · keep tokens out of git.</div></div>
-
-    <!-- PROMPTS -->
-    <h3 style="color:var(--n8n)">Copy-paste prompts for Cursor Agent</h3>
-    <p>Replace the <code>[PLACEHOLDERS]</code> before sending. Designed for minimal coding experience — each box has a copy button.</p>
-
-    <div class="plabel">1 · Build a new MCP server</div>
-    <div class="prompt">Build a new MCP server in this folder using Node.js 18+ and TypeScript.
-
-Target API: [e.g. ThousandEyes API v7]
-API docs: [paste URL to documentation]
-Auth: API token in environment variable [e.g. MY_API_TOKEN]
-
-I want to ask the AI things like:
-- [example question 1]
-- [example question 2]
-- [example question 3]
-
-Requirements:
-- Use @modelcontextprotocol/sdk with stdio transport
-- Create src/index.ts, src/client.ts, package.json, tsconfig.json
-- Add tools that map to the API endpoints I need (read-only first)
-- Never hardcode secrets; read the token from env
-- Add npm scripts: build (tsc) and test:mcp if possible
-- Run npm install and npm run build and fix any errors
-- Tell me the absolute path to dist/index.js when done</div>
-
-    <div class="plabel">2 · Connect to Cursor MCP (after the build succeeds)</div>
-    <div class="prompt">Add this MCP server to my Cursor MCP config (~/.cursor/mcp.json).
-
-Server name: [e.g. my-service]
-Entrypoint: [absolute path to dist/index.js — or ask Cursor to find it]
-Environment variable for token: [e.g. MY_API_TOKEN]
-
-Use command "node" and args with the full path to dist/index.js.
-Put a placeholder in env for the token — I will paste my real token myself.
-Show me the exact JSON block you added.</div>
-
-    <div class="plabel">3 · Fix build or MCP errors</div>
-    <div class="prompt">My MCP server is failing. Here is the error:
-
-[paste full error from terminal or Cursor MCP settings]
-
-Fix the issue, rebuild if needed, and tell me what changed in plain English.</div>
-
-    <div class="plabel">4 · Add another tool later</div>
-    <div class="prompt">Add a new MCP tool to my existing server:
-
-Tool name: [e.g. list_alerts]
-What it should do: [describe in plain English]
-API endpoint: [from docs]
-
-Update the ListTools and CallTool handlers, rebuild, and confirm the tool appears in MCP.</div>
-
-    <!-- CONNECT MCP IN CURSOR -->
-    <h3 style="color:var(--n8n)">Connect MCP in Cursor</h3>
-    <p>After your server is built, Cursor needs to know how to start it.</p>
-    <table>
-      <thead><tr><th>OS</th><th>Config file path</th></tr></thead>
-      <tbody>
-        <tr><td>macOS / Linux</td><td><code>~/.cursor/mcp.json</code></td></tr>
-        <tr><td>Windows</td><td><code>%USERPROFILE%\.cursor\mcp.json</code></td></tr>
-      </tbody>
-    </table>
-    <p>Or: <b>Cursor Settings</b> (⌘+,) → search <b>MCP</b> → edit configuration.</p>
-    <pre>{
-  "mcpServers": {
-    "my-service": {
-      "command": "node",
-      "args": ["/ABSOLUTE/PATH/TO/your-mcp-server/dist/index.js"],
-      "env": {
-        "MY_API_TOKEN": "paste-your-token-here"
-      }
-    }
-  }
-}</pre>
-    <ol class="steps">
-      <li><div><div class="st-t">Open Settings → MCP</div><div class="st-d">You'll see your MCP servers and connection status (green = good, red = failed).</div></div></li>
-      <li><div><div class="st-t">Add or edit <code>mcp.json</code></div><div class="st-d">Use the block above. Ask Cursor Agent: <i>"What is the absolute path to my MCP server's dist/index.js?"</i></div></div></li>
-      <li><div><div class="st-t">Paste your API token</div><div class="st-d">In the <code>env</code> section, on your machine only. Don't share that file publicly.</div></div></li>
-      <li><div><div class="st-t">Reload Cursor</div><div class="st-d">Command Palette → <b>Developer: Reload Window</b>.</div></div></li>
-      <li><div><div class="st-t">Confirm green status</div><div class="st-d">Settings → MCP should show your server connected.</div></div></li>
-    </ol>
-    <div class="warn"><span class="i">🔴</span><div><b>If MCP shows red / failed,</b> use prompt 3. Common fixes: wrong path, forgot <code>npm run build</code>, Node not installed, or invalid JSON in <code>mcp.json</code>.</div></div>
-
-    <h4>Use it in Cursor chat</h4>
-    <p>Once MCP is green, the AI calls your tools automatically when your question matches a tool description.</p>
-    <table>
-      <thead><tr><th>Say this in Cursor chat</th><th>What should happen</th></tr></thead>
-      <tbody>
-        <tr><td>"What MCP tools do you have access to?"</td><td>Lists tool names from your server</td></tr>
-        <tr><td>"Use the hello tool with name Lab"</td><td>Sanity check, if you built a hello tool</td></tr>
-        <tr><td>"List my account groups"</td><td>Calls your list tool, returns JSON</td></tr>
-        <tr><td>"What's my utilisation?"</td><td>Calls usage / quota tools</td></tr>
-      </tbody>
-    </table>
-    <div class="tip"><span class="i">💡</span><div><b>Pro tip for non-coders.</b> Describe outcomes, not code: <i>"Show alerts from the last 24 hours"</i> works better than <i>"call list_alerts with aid=…"</i>. The model picks the right tool when descriptions are good.</div></div>
-
-    <!-- PATH B -->
-    <h3 style="color:var(--n8n)">Path B — Manual coding (optional, for developers)</h3>
-    <p class="lead">Skip this if you followed Path A. These four labs build the same server by hand so you understand every line.</p>
-
-    <div class="lab"><div class="lab-h"><span class="n">LAB 1</span> Scaffold the project</div><div class="lab-b">
-      <div class="sub">Create the folder and install the MCP SDK.</div>
-      <pre>mkdir my-mcp-server &amp;&amp; cd my-mcp-server
-npm init -y
-npm install @modelcontextprotocol/sdk zod
-npm install -D typescript @types/node</pre>
-      <h4>tsconfig.json</h4>
-      <pre>{
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "Node16",
-    "moduleResolution": "Node16",
-    "outDir": "dist",
-    "rootDir": "src",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true
-  },
-  "include": ["src/**/*"]
-}</pre>
-      <h4>package.json — set <code>"type": "module"</code> and scripts</h4>
-      <pre>{
-  "type": "module",
-  "main": "dist/index.js",
-  "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js"
-  },
-  "engines": { "node": "&gt;=18" }
-}</pre>
-      <h4>src/index.ts — minimal server skeleton</h4>
-      <pre>#!/usr/bin/env node
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
-
-const server = new Server(
-  { name: "my-mcp-server", version: "1.0.0" },
-  { capabilities: { tools: {} } }
-);
-
-server.setRequestHandler(ListToolsRequestSchema, async () =&gt; ({
-  tools: [
-    {
-      name: "hello",
-      description: "Returns a greeting. Use to verify MCP is working.",
-      inputSchema: {
-        type: "object",
-        properties: { name: { type: "string", description: "Name to greet" } },
-        required: ["name"],
-      },
-    },
-  ],
-}));
-
-server.setRequestHandler(CallToolRequestSchema, async (request) =&gt; {
-  if (request.params.name === "hello") {
-    const name = String(request.params.arguments?.name ?? "world");
-    return { content: [{ type: "text", text: `Hello, ${name}! MCP server is running.` }] };
-  }
-  return { content: [{ type: "text", text: `Unknown tool: ${request.params.name}` }], isError: true };
-});
-
-const transport = new StdioServerTransport();
-await server.connect(transport);</pre>
-      <h4>Build</h4>
-      <pre>npm run build   <span class="c"># produces dist/index.js</span></pre>
-    </div></div>
-
-    <div class="lab"><div class="lab-h"><span class="n">LAB 2</span> Add real tools</div><div class="lab-b">
-      <div class="sub">Each tool needs a name, a description (the model reads this to decide when to call it), and an inputSchema.</div>
-      <ul class="tick">
-        <li>Use clear, prefixed names: <code>te_list_alerts</code>, <code>sf_get_account</code></li>
-        <li>Descriptions should say <i>when</i> to use the tool, not just what it does</li>
-        <li>Return JSON as formatted text in <code>content: [{ type: "text", text: "…" }]</code></li>
-        <li>On failure, set <code>isError: true</code> with a helpful message</li>
-        <li>Never log secrets; use <code>console.error</code> for diagnostics (stdout is for MCP only)</li>
-      </ul>
-      <h4>Register a second tool in ListTools</h4>
-      <pre>{
-  name: "list_items",
-  description: "List items from the API. Use when the user asks to see records or inventory.",
-  inputSchema: {
-    type: "object",
-    properties: { limit: { type: "number", description: "Max items (default 10)" } },
-  },
-}</pre>
-      <h4>Handle it in CallTool</h4>
-      <pre>if (request.params.name === "list_items") {
-  const limit = Number(request.params.arguments?.limit ?? 10);
-  const data = await apiGet("/items?limit=" + limit);
-  return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
-}</pre>
-    </div></div>
-
-    <div class="lab"><div class="lab-h"><span class="n">LAB 3</span> API client &amp; authentication</div><div class="lab-b">
-      <div class="sub">Create src/client.ts to isolate HTTP calls from the MCP handlers.</div>
-      <pre>const BASE = process.env.MY_API_BASE_URL ?? "https://api.example.com/v1";
-const TOKEN = process.env.MY_API_TOKEN;
-
-export async function apiGet(path: string) {
-  if (!TOKEN) throw new Error("MY_API_TOKEN is not set");
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { Authorization: `Bearer ${TOKEN}`, Accept: "application/json" },
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`API ${res.status}: ${body.slice(0, 200)}`);
-  }
-  return res.json();
-}</pre>
-      <div class="warn"><span class="i">🔒</span><div>Store tokens in environment variables only. Never commit them to git or paste them into chat. Use a dedicated env-var name per service.</div></div>
-    </div></div>
-
-    <div class="lab"><div class="lab-h"><span class="n">LAB 4</span> Build &amp; test locally</div><div class="lab-b">
-      <div class="sub">Test the server before connecting Claude.</div>
-      <ol class="steps">
-        <li><div><div class="st-t">Build</div><pre>npm run build</pre></div></li>
-        <li><div><div class="st-t">Smoke test</div><div class="st-d">The server should start and wait (no stdout except MCP messages). Ctrl+C to stop.</div>
-          <pre>MY_API_TOKEN="your-token" node dist/index.js</pre></div></li>
-        <li><div><div class="st-t">Optional MCP test client</div><div class="st-d">Create <code>test-mcp.mjs</code> using the SDK client, then run <code>node test-mcp.mjs</code>:</div>
-          <pre>import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-
-const transport = new StdioClientTransport({
-  command: "node",
-  args: ["dist/index.js"],
-  env: { ...process.env, MY_API_TOKEN: process.env.MY_API_TOKEN },
-});
-const client = new Client({ name: "test", version: "1.0.0" }, {});
-await client.connect(transport);
-
-const { tools } = await client.listTools();
-console.log("Tools:", tools.map((t) =&gt; t.name));
-
-const result = await client.callTool({ name: "hello", arguments: { name: "Lab" } });
-console.log(result.content[0].text);</pre></div></li>
-      </ol>
-      <div class="tip"><span class="i">🏁</span><div><b>Checkpoint.</b> You should see your tool list and a successful <code>hello</code> (or live API) response before connecting Cursor MCP or Claude.</div></div>
-    </div></div>
-
-    <!-- CONNECT CLAUDE -->
-    <h3 style="color:var(--n8n)">Attach the server to Claude Desktop</h3>
-    <p>Claude Desktop uses its own MCP config file (not Cursor's).</p>
-    <table>
-      <thead><tr><th>OS</th><th>Config file path</th></tr></thead>
-      <tbody>
-        <tr><td>macOS</td><td><code>~/Library/Application Support/Claude/claude_desktop_config.json</code></td></tr>
-        <tr><td>Windows</td><td><code>%APPDATA%\Claude\claude_desktop_config.json</code></td></tr>
-        <tr><td>Linux</td><td><code>~/.config/Claude/claude_desktop_config.json</code></td></tr>
-      </tbody>
-    </table>
-    <p>Or open via <b>Claude Desktop → Settings → Developer → Edit Config</b>. Add your server (merge into any existing <code>mcpServers</code>), then <b>fully quit and reopen</b> Claude Desktop:</p>
-    <pre>{
-  "mcpServers": {
-    "my-service": {
-      "command": "node",
-      "args": ["/ABSOLUTE/PATH/TO/my-mcp-server/dist/index.js"],
-      "env": { "MY_API_TOKEN": "your-api-token-here" }
-    }
-  }
-}</pre>
-    <div class="warn"><span class="i">🛠️</span><div><b>If env vars don't pass through,</b> use a wrapper script that exports the token and runs node — set <code>"command": "/path/to/wrapper.sh"</code>, <code>"args": []</code>, and <code>chmod 600 wrapper.sh</code>:
-      <pre>#!/bin/bash
-export MY_API_TOKEN="your-token"
-exec node /ABSOLUTE/PATH/TO/dist/index.js</pre></div></div>
-
-    <h4>Attach to Claude Code (CLI)</h4>
-    <p>Same <code>mcpServers</code> structure, in <code>~/.claude.json</code> (global) or <code>.mcp.json</code> (project root). Add the server, restart Claude Code (or open a new session in the project), then run <code>/mcp</code> to verify.</p>
-
-    <!-- VERIFY -->
-    <h3 style="color:var(--n8n)">Verify &amp; example prompts</h3>
-    <ul class="tick">
-      <li><b>Cursor:</b> Settings → MCP shows green for your server</li>
-      <li><b>Claude:</b> the server appears in the MCP / tools UI without errors</li>
-      <li>"List your available MCP tools" shows your tool names</li>
-      <li>A simple prompt invokes a tool and returns real data</li>
-      <li>Errors are readable (401 → check token; path error → check the absolute path)</li>
-    </ul>
-    <div class="prompt">What MCP tools do you have for my-service? Then call the hello tool with name Lab, and show alerts from the last 24 hours.</div>
-
-    <!-- TROUBLESHOOTING -->
-    <h3 style="color:var(--n8n)">Troubleshooting</h3>
-    <table>
-      <thead><tr><th>Problem</th><th>Likely cause</th><th>Fix</th></tr></thead>
-      <tbody>
-        <tr><td>Server not listed (Cursor / Claude)</td><td>Wrong config file or invalid JSON</td><td>Validate JSON (no trailing commas); use the correct config path; Reload Window / fully quit the app</td></tr>
-        <tr><td>Server shows red / failed</td><td>Bad path, Node not found, build missing</td><td>Use <code>realpath dist/index.js</code>; run <code>npm run build</code>; try the full path to <code>node</code></td></tr>
-        <tr><td>401 Unauthorized</td><td>Token missing or wrong</td><td>Test the API with curl; use a wrapper script for env; verify the token in the target system</td></tr>
-        <tr><td>Tools never called</td><td>Weak tool descriptions</td><td>Improve descriptions — say <i>when</i> to use each tool</td></tr>
-        <tr><td>Garbled MCP / hangs</td><td>Logging to stdout</td><td>Only MCP protocol on stdout; use <code>console.error</code> for logs</td></tr>
-        <tr><td>Works in terminal, fails in Claude</td><td>Env not passed</td><td>Use a wrapper script with exported vars</td></tr>
-      </tbody>
-    </table>
-
-    <!-- SECURITY -->
-    <h3 style="color:var(--n8n)">Security</h3>
-    <ul class="tick">
-      <li><b>Secrets:</b> environment variables or OS keychain — never in source code</li>
-      <li><b>Least privilege:</b> scope API tokens to the minimum permissions</li>
-      <li><b>Write tools:</b> require confirmation for destructive actions</li>
-      <li><b>Output:</b> redact PII and secrets from tool responses</li>
-      <li><b>Config files:</b> <code>chmod 600</code> on configs and wrapper scripts; keep them out of git</li>
-      <li><b>Revocation:</b> rotate tokens if exposed; revoke in the provider UI</li>
-    </ul>
-    <div class="note"><span class="i">📚</span><div>Reference: <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener">modelcontextprotocol.io</a> · <a href="https://www.npmjs.com/package/@modelcontextprotocol/sdk" target="_blank" rel="noopener">@modelcontextprotocol/sdk</a>. (This is a build-it-yourself local server — distinct from the Module 1 ThousandEyes cloud connector you added over OAuth.)</div></div>
-
-    </div>
-  </section>
-
   <!-- APPENDIX -->
   <section>
     <div class="sec-head"><div class="sec-tag">Appendix</div><h2>Troubleshooting &amp; glossary</h2></div>
@@ -768,8 +364,8 @@ exec node /ABSOLUTE/PATH/TO/dist/index.js</pre></div></div>
     <p>Confirm your account has <b>API Access</b> permission and your org isn't opted out of AI features. Demo accounts from the proctor already satisfy both. Double-check you copied the full token with no extra spaces.</p>
     <h4>Meraki won't connect</h4>
     <p>Confirm the API key is correct and that your Meraki Organization ID matches an org that key has access to. Re-paste both in <b>⚙️ Credentials</b> and click <b>Test Connection</b>.</p>
-    <h4>Splunk / build-your-own-MCP-server modules (bonus, on your laptop)</h4>
-    <p>These two modules run outside this web app via your own Claude Desktop or Cursor install. If a local server won't start, check the command path in your config is the full absolute path and your <code>.env</code>/config has no quotes or stray spaces.</p>
+    <h4>Splunk module (bonus, on your laptop)</h4>
+    <p>This module runs outside this web app via your own Claude Desktop install. If a local server won't start, check the command path in your config is the full absolute path and your <code>.env</code>/config has no quotes or stray spaces.</p>
     <h4>Quick glossary</h4>
     <ul class="tick">
       <li><b>MCP</b> — Model Context Protocol; the standard that lets Claude use external tools.</li>
@@ -781,7 +377,7 @@ exec node /ABSOLUTE/PATH/TO/dist/index.js</pre></div></div>
 
   <footer>
     AI Assurance — Partner MCP Day · Lab Guide &nbsp;·&nbsp; Cisco &times; Anthropic<br>
-    ThousandEyes &amp; Meraki are required modules; Splunk and Build an MCP server are optional bonus add-ons.
+    ThousandEyes &amp; Meraki are required modules; Splunk is an optional bonus add-on.
   </footer>
 </div>
 
