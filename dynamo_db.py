@@ -7,12 +7,12 @@ import os
 import json
 import logging
 import time
-import requests
 from typing import Dict, Optional, Tuple
 import boto3
 from botocore.exceptions import ClientError
 
 from crypto import encrypt_token, decrypt_token, EncryptionError
+from mcp_client import list_mcp_tools, MCPClientError, THOUSANDEYES_MCP_URL, MERAKI_MCP_URL
 
 logger = logging.getLogger(__name__)
 
@@ -187,13 +187,16 @@ def get_user_credentials(email: str) -> Dict:
 
 def test_te_connectivity(email: str) -> Dict:
     """
-    Test ThousandEyes API connectivity with user's token.
+    Test ThousandEyes connectivity by listing tools on the real ThousandEyes
+    MCP server (https://api.thousandeyes.com/mcp) with the user's token.
+    This matches exactly what the chat feature uses, so a passing test here
+    guarantees the chat's tool-calling will work.
     
     Args:
         email: User's email address
         
     Returns:
-        Dict with keys: valid (bool), error (str, optional), account_info (dict, optional)
+        Dict with keys: valid (bool), error (str, optional), tool_count (int, optional)
         
     Raises:
         DynamoDBError: If credential retrieval fails
@@ -205,39 +208,20 @@ def test_te_connectivity(email: str) -> Dict:
         if not token:
             return {"valid": False, "error": "ThousandEyes token not configured"}
         
-        # Test API call: Get account information
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        }
-        
-        url = "https://api.thousandeyes.com/v6/account"
-        
         try:
-            response = requests.get(url, headers=headers, timeout=10)
-            
-            if response.status_code == 200:
-                logger.info(f"ThousandEyes connectivity test passed for {email}")
-                return {
-                    "valid": True,
-                    "account_info": response.json()
-                }
-            elif response.status_code == 401:
+            tools = list_mcp_tools(THOUSANDEYES_MCP_URL, token)
+            logger.info(f"ThousandEyes MCP connectivity test passed for {email} ({len(tools)} tools)")
+            return {"valid": True, "tool_count": len(tools)}
+        except MCPClientError as e:
+            error_str = str(e)
+            if "401" in error_str:
                 logger.warning(f"ThousandEyes token invalid for {email}")
                 return {"valid": False, "error": "Invalid or expired ThousandEyes token"}
-            elif response.status_code == 403:
-                return {"valid": False, "error": "ThousandEyes token lacks required permissions"}
+            elif "403" in error_str:
+                return {"valid": False, "error": "ThousandEyes token lacks the API Access permission required for the MCP server"}
             else:
-                return {"valid": False, "error": f"ThousandEyes API returned {response.status_code}"}
-        
-        except requests.exceptions.Timeout:
-            return {"valid": False, "error": "ThousandEyes API request timed out"}
-        except requests.exceptions.ConnectionError:
-            return {"valid": False, "error": "Unable to connect to ThousandEyes API"}
-        except Exception as e:
-            logger.error(f"ThousandEyes connectivity test error for {email}: {e}")
-            return {"valid": False, "error": f"Test failed: {type(e).__name__}"}
+                logger.error(f"ThousandEyes MCP connectivity test error for {email}: {e}")
+                return {"valid": False, "error": f"ThousandEyes MCP server error: {error_str}"}
     
     except DynamoDBError as e:
         raise DynamoDBError(f"Failed to retrieve credentials: {str(e)}")
@@ -245,13 +229,16 @@ def test_te_connectivity(email: str) -> Dict:
 
 def test_meraki_connectivity(email: str) -> Dict:
     """
-    Test Meraki API connectivity with user's token.
+    Test Meraki connectivity by listing tools on the real Meraki MCP server
+    (https://mcp.meraki.com/mcp) with the user's Dashboard API key.
+    This matches exactly what the chat feature uses, so a passing test here
+    guarantees the chat's tool-calling will work.
     
     Args:
         email: User's email address
         
     Returns:
-        Dict with keys: valid (bool), error (str, optional), organizations (list, optional)
+        Dict with keys: valid (bool), error (str, optional), tool_count (int, optional)
         
     Raises:
         DynamoDBError: If credential retrieval fails
@@ -263,40 +250,20 @@ def test_meraki_connectivity(email: str) -> Dict:
         if not token:
             return {"valid": False, "error": "Meraki token not configured"}
         
-        # Test API call: Get organizations
-        headers = {
-            "X-Cisco-Meraki-API-Key": token,
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        }
-        
-        url = "https://api.meraki.com/api/v1/organizations"
-        
         try:
-            response = requests.get(url, headers=headers, timeout=10)
-            
-            if response.status_code == 200:
-                orgs = response.json()
-                logger.info(f"Meraki connectivity test passed for {email}")
-                return {
-                    "valid": True,
-                    "organizations": orgs if isinstance(orgs, list) else []
-                }
-            elif response.status_code == 401:
+            tools = list_mcp_tools(MERAKI_MCP_URL, token)
+            logger.info(f"Meraki MCP connectivity test passed for {email} ({len(tools)} tools)")
+            return {"valid": True, "tool_count": len(tools)}
+        except MCPClientError as e:
+            error_str = str(e)
+            if "401" in error_str:
                 logger.warning(f"Meraki token invalid for {email}")
-                return {"valid": False, "error": "Invalid or expired Meraki token"}
-            elif response.status_code == 403:
-                return {"valid": False, "error": "Meraki token lacks required permissions"}
+                return {"valid": False, "error": "Invalid or expired Meraki Dashboard API key"}
+            elif "403" in error_str:
+                return {"valid": False, "error": "Meraki API key lacks required permissions"}
             else:
-                return {"valid": False, "error": f"Meraki API returned {response.status_code}"}
-        
-        except requests.exceptions.Timeout:
-            return {"valid": False, "error": "Meraki API request timed out"}
-        except requests.exceptions.ConnectionError:
-            return {"valid": False, "error": "Unable to connect to Meraki API"}
-        except Exception as e:
-            logger.error(f"Meraki connectivity test error for {email}: {e}")
-            return {"valid": False, "error": f"Test failed: {type(e).__name__}"}
+                logger.error(f"Meraki MCP connectivity test error for {email}: {e}")
+                return {"valid": False, "error": f"Meraki MCP server error: {error_str}"}
     
     except DynamoDBError as e:
         raise DynamoDBError(f"Failed to retrieve credentials: {str(e)}")
