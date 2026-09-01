@@ -185,23 +185,24 @@
     <p>The <b>Model Context Protocol (MCP)</b> is an open standard — think of it as a <em>USB-C port for AI</em>. It lets Claude plug into external tools and data (like ThousandEyes or Meraki) through a standard interface. You ask Claude a question in plain English; Claude decides which tools to call, calls them, and weaves the results into its answer. You never touch an API or write a script.</p>
 
     <div class="card">
-      <h4>Two ways to run Claude — pick based on which labs you're doing</h4>
+      <h4>Everything runs in one place — this web app</h4>
       <ul class="tick">
-        <li><b>Claude Desktop app (recommended)</b> — handles everything: the <b>ThousandEyes</b> OAuth connector <i>plus</i> the local <b>Meraki</b> and <b>Splunk</b> servers (a browser can't reach those). If you're doing more than ThousandEyes today, use Desktop so it's all in one place.</li>
-        <li><b>Claude in your browser (claude.ai)</b> — fine if you're <i>only</i> doing the ThousandEyes labs. Nothing to install; add the connector and sign in.</li>
+        <li><b>No installs, no config files, no Claude Desktop.</b> You're already in the lab platform. The chat on the right talks to Claude on AWS Bedrock, which calls ThousandEyes and Meraki through their official hosted MCP servers on your behalf.</li>
+        <li><b>One-time setup per service:</b> open <b>⚙️ Credentials</b> in the header, paste in your ThousandEyes and Meraki API tokens, and click <b>Test Connection</b>. That's it — no OAuth pop-ups, no local Python servers, no JSON config to edit.</li>
+        <li>Once a service shows <b>Connected ✓</b>, just ask Claude questions in the chat — it automatically knows which tools it has available and uses them for you.</li>
       </ul>
     </div>
 
     <div class="toc">
       <b>What's in this guide</b>
       <ul>
-        <li><a href="#sec-te" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-te"></span><b>1 · ThousandEyes</b> — connect (browser + OAuth) &amp; 4 labs <span class="badge b-req">Required</span></a></li>
-        <li><a href="#sec-meraki" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-mk"></span><b>2 · Meraki Magic</b> — local setup &amp; lab prompts <span class="badge b-req">Required</span></a></li>
-        <li><a href="#sec-splunk" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-sp"></span><b>3 · Splunk</b> — 3 investigation labs <span class="badge b-opt">Featured</span></a></li>
-        <li><a href="#sec-n8n" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-n8"></span><b>4 · MCP Tool-Building</b> — build your own MCP server with Cursor <span class="badge b-opt">Featured</span></a></li>
-        <li><a href="#sec-gabi" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-gb"></span><b>5 · Gabi's Repo</b> — Meraki API Explorer &amp; Catalyst Centre <span class="badge b-opt">Featured</span></a></li>
+        <li><a href="#sec-te" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-te"></span><b>1 · ThousandEyes</b> — connect via Credentials &amp; 4 labs <span class="badge b-req">Required</span></a></li>
+        <li><a href="#sec-meraki" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-mk"></span><b>2 · Meraki</b> — connect via Credentials &amp; lab prompts <span class="badge b-req">Required</span></a></li>
+        <li><a href="#sec-splunk" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-sp"></span><b>3 · Splunk</b> — 3 investigation labs (bonus, needs Claude Desktop) <span class="badge b-opt">Optional</span></a></li>
+        <li><a href="#sec-n8n" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-n8"></span><b>4 · MCP Tool-Building</b> — build your own MCP server with Cursor (bonus) <span class="badge b-opt">Optional</span></a></li>
+        <li><a href="#sec-gabi" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-gb"></span><b>5 · Gabi's Repo</b> — Meraki API Explorer &amp; Catalyst Centre <span class="badge b-opt">Optional</span></a></li>
       </ul>
-      <p style="margin:8px 0 0;font-size:14px;color:var(--muted)">Use the <b>Print / Save PDF</b> button at the top of the page to save a copy of this guide for your event.</p>
+      <p style="margin:8px 0 0;font-size:14px;color:var(--muted)">Modules 1 &amp; 2 run entirely inside this web app. Modules 3–5 are bonus material for anyone who wants to go further using their own Claude Desktop or Cursor install — see each section for details. Use the <b>Print / Save PDF</b> button at the top of the page to save a copy of this guide for your event.</p>
     </div>
   </section>
 
@@ -209,30 +210,25 @@
   <section id="sec-te">
     <div class="sec-head te"><div class="sec-tag">Module 1 · Required<a href="#">↑ back to top</a></div>
       <h2>ThousandEyes MCP</h2>
-      <div class="sec-desc">Connect Claude to Cisco's official ThousandEyes MCP server straight from your browser — no install, no config files.</div></div>
+      <div class="sec-desc">Connect this web app to Cisco's official ThousandEyes MCP server — one API token, pasted once, no install.</div></div>
 
-    <div class="tip"><span class="i">🎟️</span><div><b>No ThousandEyes account?</b> See the lab proctor — demo licenses are provided for today. You'll use those credentials when you sign in below.</div></div>
+    <div class="tip"><span class="i">🎟️</span><div><b>No ThousandEyes account?</b> See the lab proctor — demo licenses and an API token are provided for today.</div></div>
 
-    <h3>Connect ThousandEyes (OAuth — browser or Desktop)</h3>
-    <p class="lead">The ThousandEyes MCP server is cloud-hosted by Cisco, so you connect to it directly as a custom connector — no install, no config files.</p>
-    <div class="tip"><span class="i">⭐</span><div><b>Browser or Desktop — your choice, same steps.</b> You can add this OAuth connector in Claude in your browser (claude.ai) <i>or</i> the Claude Desktop app. <b>Desktop is preferred for today</b>: the Meraki and Splunk labs run local servers that only Claude Desktop can reach, so doing ThousandEyes in Desktop too keeps everything in one place — no app switching.</div></div>
+    <h3>Connect ThousandEyes (2 minutes, in this app)</h3>
+    <p class="lead">The ThousandEyes MCP server is cloud-hosted by Cisco. This lab platform talks to it on your behalf using your own personal API token — nothing to install, nothing to configure locally.</p>
     <div class="te">
     <ol class="steps">
-      <li><div><div class="st-t">Open Claude and go to Connectors</div><div class="st-d">In Claude (claude.ai in your browser, or the Claude Desktop app), open <b>Settings → Connectors</b>.</div></div></li>
-      <li><div><div class="st-t">Add a custom connector</div><div class="st-d">Click <b>Add custom connector</b>.</div></div></li>
-      <li><div><div class="st-t">Enter the name and URL</div>
-        <div class="st-d">Name: <code>ThousandEyes MCP Server</code> &nbsp;·&nbsp; Remote MCP server URL:</div>
-        <pre>https://api.thousandeyes.com/mcp</pre>
-        <div class="st-d">Click <b>Add</b>.</div></div></li>
-      <li><div><div class="st-t">Sign in when the browser window opens</div><div class="st-d">A window opens asking you to sign in with your <b>ThousandEyes credentials</b> (use the demo account from the proctor if you don't have your own) and to <b>agree to share your token</b> with Claude.</div></div></li>
-      <li><div><div class="st-t">Turn on the tools</div><div class="st-d">Back in Claude, click <b>Configure</b> on the ThousandEyes connector and switch on <b>auto-allow</b> so tools run without prompting each time. Tools come in two groups — <b>Read-only</b> and <b>Write/delete</b>. Enable <b>Write/delete</b> too, because Lab 1 creates real tests.</div></div></li>
+      <li><div><div class="st-t">Get your ThousandEyes API token</div><div class="st-d">In the ThousandEyes UI, go to <b>Account Settings → Users and Roles → API Tokens</b> (or ask your proctor for the demo account's token). Copy it — you'll paste it once.</div></div></li>
+      <li><div><div class="st-t">Open Credentials in this app</div><div class="st-d">Click <b>⚙️ Credentials</b> in the header of the chat page.</div></div></li>
+      <li><div><div class="st-t">Paste your token and save</div><div class="st-d">Paste the token into the <b>ThousandEyes</b> field and click <b>Save Token</b>.</div></div></li>
+      <li><div><div class="st-t">Test the connection</div><div class="st-d">Click <b>Test Connection</b>. You should see <b>Connected ✓</b> — that's it, you're done. The header status dot next to "ThousandEyes" will also turn green.</div></div></li>
     </ol>
     </div>
 
     <h4>Verify it's connected</h4>
     <div class="te"><div class="prompt">What ThousandEyes MCP tools are available to you? List them all.</div></div>
-    <p>You should see tools like <code>list_alerts</code>, <code>get_anomalies</code>, <code>create_synthetic_test</code>, <code>search_outages</code> and many more. If Claude says it has no tools, re-check the sign-in step and that the connector is enabled.</p>
-    <div class="note"><span class="i">ℹ️</span><div>A single custom connector works on a free Claude account. Your org must not be opted out of ThousandEyes AI features, and your sign-in must have the <b>API Access</b> permission (the demo accounts already do).</div></div>
+    <p>You should see tools like <code>list_alerts</code>, <code>get_anomalies</code>, <code>create_synthetic_test</code>, <code>search_outages</code> and many more. If Claude says it has no tools, go back to <b>Credentials</b> and re-check the token and Test Connection result.</p>
+    <div class="note"><span class="i">ℹ️</span><div>Your token is encrypted before it's stored and is never shown back to you or exposed to the browser in plaintext. Your sign-in must have the ThousandEyes <b>API Access</b> permission (the demo accounts already do).</div></div>
 
     <!-- TE LABS -->
     <h3 style="color:var(--te)">ThousandEyes Labs</h3>
@@ -301,54 +297,25 @@ For each test:
   <!-- 2. MERAKI -->
   <section id="sec-meraki">
     <div class="sec-head mk"><div class="sec-tag">Module 2 · Required<a href="#">↑ back to top</a></div>
-      <h2>Meraki Magic MCP</h2>
-      <div class="sec-desc">A local MCP server that talks to your Meraki Dashboard. Hands-on for anyone with a Meraki API key; everyone else follows the live demo.</div></div>
+      <h2>Meraki MCP</h2>
+      <div class="sec-desc">Connect this web app to Cisco's official Meraki MCP server — one API key, pasted once, no install.</div></div>
 
-    <div class="note"><span class="i">🖥️</span><div>Meraki Magic runs <b>on your laptop</b>, so it needs the <b>Claude Desktop app</b> (a browser can't reach a local server). You'll also need <b>Python 3.8+</b>, <b>Git</b>, and a <b>Meraki Dashboard API key + Org ID</b>. No key today? Follow the demo and complete this later.</div></div>
+    <div class="note"><span class="i">🎟️</span><div>You'll need a <b>Meraki Dashboard API key</b> and your <b>Organization ID</b>. No key today? See the proctor for a demo key, or follow along with the live demo.</div></div>
 
-    <h3>Set up Meraki Magic (one-time, ~10 minutes)</h3>
+    <h3>Connect Meraki (2 minutes, in this app)</h3>
+    <p class="lead">The Meraki MCP server is cloud-hosted by Cisco. This lab platform talks to it on your behalf using your own personal API key — nothing to install, nothing to configure locally, no Claude Desktop needed.</p>
     <div class="mk">
     <ol class="steps">
-      <li><div><div class="st-t">Clone the repository</div>
-        <pre>git clone https://github.com/CiscoDevNet/meraki-magic-mcp-community.git
-cd meraki-magic-mcp-community</pre></div></li>
-      <li><div><div class="st-t">Create &amp; activate a Python virtual environment</div>
-        <pre><span class="c"># macOS</span>
-python3 -m venv .venv
-source .venv/bin/activate
-
-<span class="c"># Windows</span>
-python -m venv .venv
-.venv\Scripts\activate</pre>
-        <div class="st-d">Your prompt now shows <code>(.venv)</code>. Re-run the activate line each time you open a new terminal.</div></div></li>
-      <li><div><div class="st-t">Install dependencies</div><pre>pip install -r requirements.txt</pre></div></li>
-      <li><div><div class="st-t">Create your credentials file</div>
-        <pre><span class="c"># macOS</span>  cp .env-example .env  &amp;&amp;  open -e .env
-<span class="c"># Windows</span>  copy .env-example .env   (then open .env in Notepad)</pre>
-        <div class="st-d">Fill in — no quotes, no spaces around <code>=</code>:</div>
-        <pre>MERAKI_API_KEY=your_actual_api_key_here
-MERAKI_ORG_ID=your_actual_org_id_here
-ENABLE_CACHING=true
-CACHE_TTL_SECONDS=300
-READ_ONLY_MODE=false</pre></div></li>
-      <li><div><div class="st-t">Add it to Claude Desktop's config</div>
-        <div class="st-d">Open <code>claude_desktop_config.json</code> — Windows: <code>%APPDATA%\Claude</code> · macOS: <code>~/Library/Application Support/Claude/</code>. Add the Meraki block inside <code>"mcpServers"</code> (use your real path to <code>fastmcp</code>):</div>
-        <pre>"Meraki_Magic_MCP": {
-  "command": "<span class="c">/full/path/to/</span>meraki-magic-mcp-community/.venv/bin/fastmcp",
-  "args": ["run","-t","stdio",
-           "<span class="c">/full/path/to/</span>meraki-magic-mcp-community/meraki-mcp-dynamic.py"],
-  "env": {
-    "MERAKI_API_KEY": "your_key",
-    "MERAKI_ORG_ID": "your_org_id",
-    "READ_ONLY_MODE": "false"
-  }
-}</pre>
-        <div class="st-d">On Windows the command path ends in <code>\.venv\Scripts\fastmcp.exe</code> — use forward slashes or double back-slashes.</div></div></li>
-      <li><div><div class="st-t">Restart Claude Desktop and verify</div>
-        <div class="prompt">What MCP servers and tools are available to you right now?</div>
-        <div class="st-d">You should see the Meraki Magic tools listed.</div></div></li>
+      <li><div><div class="st-t">Get your Meraki API key</div><div class="st-d">In the Meraki Dashboard, go to <b>Organization → Settings → Dashboard API access</b> and generate an API key (or ask your proctor for the demo key).</div></div></li>
+      <li><div><div class="st-t">Open Credentials in this app</div><div class="st-d">Click <b>⚙️ Credentials</b> in the header of the chat page.</div></div></li>
+      <li><div><div class="st-t">Paste your key and save</div><div class="st-d">Paste the key into the <b>Meraki</b> field and click <b>Save Token</b>.</div></div></li>
+      <li><div><div class="st-t">Test the connection</div><div class="st-d">Click <b>Test Connection</b>. You should see <b>Connected ✓</b> — that's it, you're done. The header status dot next to "Meraki" will also turn green.</div></div></li>
     </ol>
     </div>
+
+    <h4>Verify it's connected</h4>
+    <div class="mk"><div class="prompt">What Meraki MCP tools are available to you? List them all.</div></div>
+    <p>If Claude says it has no Meraki tools, go back to <b>Credentials</b> and re-check the key and Test Connection result.</p>
 
     <h3 style="color:var(--meraki)">Meraki Labs</h3>
     <div class="mk">
@@ -383,10 +350,10 @@ READ_ONLY_MODE=false</pre></div></li>
 
   <!-- 3. SPLUNK (optional) -->
   <section id="sec-splunk">
-    <div class="sec-head sp"><div class="sec-tag">Module 3 · Featured<a href="#">↑ back to top</a></div>
-      <h2>Splunk MCP <span class="badge b-opt">Featured</span></h2>
+    <div class="sec-head sp"><div class="sec-tag">Module 3 · Optional / Bonus<a href="#">↑ back to top</a></div>
+      <h2>Splunk MCP <span class="badge b-opt">Optional</span></h2>
       <div class="sec-desc">Investigate your Splunk data in plain English — no SPL required.</div></div>
-    <div class="note"><span class="i">🖥️</span><div>The Splunk MCP server runs locally (via Claude Desktop), pointed at your Splunk host. Your facilitator will provide the exact connection details (host, port 8089, and credentials) on the day.</div></div>
+    <div class="note"><span class="i">🖥️</span><div><b>This module runs outside the lab web app.</b> The Splunk MCP server runs locally on your own laptop via the <b>Claude Desktop app</b> (a browser-based tool like this platform can't reach a local server), pointed at your Splunk host. It's optional bonus content — if you'd like to try it, install <a href="https://claude.ai/download" target="_blank" rel="noopener">Claude Desktop</a> and your facilitator will provide the exact connection details (host, port 8089, and credentials) on the day.</div></div>
     <div class="sp">
     <div class="lab"><div class="lab-h"><span class="n">LAB 1</span> Natural-language threat hunt</div><div class="lab-b">
       <div class="sub">Investigate suspicious activity without writing SPL.</div>
@@ -411,9 +378,11 @@ READ_ONLY_MODE=false</pre></div></li>
 
   <!-- 4. BUILD YOUR OWN MCP SERVER -->
   <section id="sec-n8n">
-    <div class="sec-head n8"><div class="sec-tag">Module 4 · Featured<a href="#">↑ back to top</a></div>
-      <h2>MCP Tool-Building — Build Your Own MCP Server <span class="badge b-opt">Featured</span></h2>
+    <div class="sec-head n8"><div class="sec-tag">Module 4 · Optional / Bonus<a href="#">↑ back to top</a></div>
+      <h2>MCP Tool-Building — Build Your Own MCP Server <span class="badge b-opt">Optional</span></h2>
       <div class="sec-desc">Go beyond <i>using</i> MCP servers — build one. Use Cursor's AI to scaffold a working MCP server with little or no coding, then connect it to Cursor, Claude Desktop or Claude Code.</div></div>
+
+    <div class="note"><span class="i">🖥️</span><div><b>This module runs outside the lab web app</b>, on your own laptop with your own Cursor / Claude Desktop install. It's optional bonus content for anyone who wants to go deeper after finishing Modules 1–2.</div></div>
 
     <div class="tip"><span class="i">🎯</span><div><b>Lab outcome.</b> By the end you'll have a working <b>stdio MCP server</b>, connected in <b>Cursor → Settings → MCP</b> (green status), and you can ask the AI in plain English to call your tools — list alerts, check utilisation, query an API. You do <i>not</i> need to write TypeScript by hand if you follow the Cursor path.</div></div>
 
@@ -818,11 +787,13 @@ exec node /ABSOLUTE/PATH/TO/dist/index.js</pre></div></div>
   <section>
     <div class="sec-head"><div class="sec-tag">Appendix</div><h2>Troubleshooting &amp; glossary</h2></div>
     <h4>Claude says it has no tools</h4>
-    <p>Re-open <b>Settings → Connectors</b> and confirm the connector is enabled. For ThousandEyes, re-run the browser sign-in. For Meraki/Splunk, fully quit and reopen Claude Desktop and check your config paths.</p>
-    <h4>ThousandEyes connector won't sign in</h4>
-    <p>Confirm your account has <b>API Access</b> permission and your org isn't opted out of AI features. Demo accounts from the proctor already satisfy both.</p>
-    <h4>Meraki server won't start</h4>
-    <p>Check the <code>fastmcp</code> path in your config is the full absolute path, the <code>.venv</code> was activated when you ran <code>pip install</code>, and your <code>.env</code> has no quotes or stray spaces.</p>
+    <p>Open <b>⚙️ Credentials</b> and check the status for that service. If it doesn't say <b>Connected ✓</b>, re-paste the token/key and click <b>Test Connection</b> again. Then start a new chat message — tool availability is refreshed per request.</p>
+    <h4>ThousandEyes won't connect</h4>
+    <p>Confirm your account has <b>API Access</b> permission and your org isn't opted out of AI features. Demo accounts from the proctor already satisfy both. Double-check you copied the full token with no extra spaces.</p>
+    <h4>Meraki won't connect</h4>
+    <p>Confirm the API key is correct and that your Meraki Organization ID matches an org that key has access to. Re-paste both in <b>⚙️ Credentials</b> and click <b>Test Connection</b>.</p>
+    <h4>Splunk / build-your-own-MCP-server modules (bonus, on your laptop)</h4>
+    <p>These two modules run outside this web app via your own Claude Desktop or Cursor install. If a local server won't start, check the command path in your config is the full absolute path and your <code>.env</code>/config has no quotes or stray spaces.</p>
     <h4>Quick glossary</h4>
     <ul class="tick">
       <li><b>MCP</b> — Model Context Protocol; the standard that lets Claude use external tools.</li>
