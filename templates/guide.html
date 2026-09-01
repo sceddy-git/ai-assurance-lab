@@ -179,9 +179,9 @@
       <ul>
         <li><a href="#sec-te" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-te"></span><b>1 · ThousandEyes</b> — connect via Credentials &amp; 4 labs <span class="badge b-req">Required</span></a></li>
         <li><a href="#sec-meraki" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-mk"></span><b>2 · Meraki</b> — connect via Credentials &amp; lab prompts <span class="badge b-req">Required</span></a></li>
-        <li><a href="#sec-splunk" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-sp"></span><b>3 · Splunk</b> — 3 investigation labs (bonus, needs Claude Desktop) <span class="badge b-opt">Optional</span></a></li>
+        <li><a href="#sec-splunk" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-sp"></span><b>3 · Splunk</b> — connect via Credentials &amp; 3 investigation labs (bonus) <span class="badge b-opt">Optional</span></a></li>
       </ul>
-      <p style="margin:8px 0 0;font-size:14px;color:var(--muted)">Modules 1 &amp; 2 run entirely inside this web app. Modules 3–5 are bonus material for anyone who wants to go further using their own Claude Desktop or Cursor install — see each section for details. Use the <b>Print / Save PDF</b> button at the top of the page to save a copy of this guide for your event.</p>
+      <p style="margin:8px 0 0;font-size:14px;color:var(--muted)">Modules 1 &amp; 2 (and connecting Module 3) all run inside this web app — nothing to install. Module 3's labs need a running Splunk MCP server (yours or the facilitator's) as bonus content. Use the <b>Print / Save PDF</b> button at the top of the page to save a copy of this guide for your event.</p>
     </div>
   </section>
 
@@ -332,8 +332,19 @@ For each test:
     <div class="sec-head sp"><div class="sec-tag">Module 3 · Optional / Bonus<a href="#">↑ back to top</a></div>
       <h2>Splunk MCP <span class="badge b-opt">Optional</span></h2>
       <div class="sec-desc">Investigate your Splunk data in plain English — no SPL required.</div></div>
-    <div class="note"><span class="i">🖥️</span><div><b>This module runs outside the lab web app.</b> The Splunk MCP server runs locally on your own laptop via the <b>Claude Desktop app</b> (a browser-based tool like this platform can't reach a local server), pointed at your Splunk host. It's optional bonus content — if you'd like to try it, install <a href="https://claude.ai/download" target="_blank" rel="noopener">Claude Desktop</a> and your facilitator will provide the exact connection details (host, port 8089, and credentials) on the day.</div></div>
+
+    <div class="note"><span class="i">🖥️</span><div>Unlike ThousandEyes and Meraki, there's no single Cisco-hosted Splunk MCP server — the server has to run <i>somewhere</i> that can talk to a Splunk instance (port 8089), and that "somewhere" is different for each student: your own laptop, a shared facilitator-hosted server, etc. So instead of a fixed connector, this app lets you plug in <b>your own MCP server URL</b>.</div></div>
+
+    <h3>Connect Splunk (in this app)</h3>
+    <p class="lead">Ask your facilitator whether they're providing a shared Splunk MCP server URL for today, or whether you're expected to run your own locally (in which case you'll need a tunnel like <a href="https://ngrok.com" target="_blank" rel="noopener">ngrok</a> so this web app — running in the cloud — can reach a server on your laptop).</p>
     <div class="sp">
+    <ol class="steps">
+      <li><div><div class="st-t">Get your MCP server URL (and credentials, if running your own)</div><div class="st-d">Either the URL your facilitator gives you, or — if running locally — start your local Splunk MCP server, expose it with a tunnel (e.g. <code>ngrok http 8000</code>), and use the public <code>https://…ngrok.io/mcp</code> URL it gives you. Your facilitator will also give you the Splunk host/port 8089 and credentials your local server itself needs to reach Splunk (that part is configured on the server, not in this app).</div></div></li>
+      <li><div><div class="st-t">Open Credentials in this app</div><div class="st-d">Click <b>⚙️ Credentials</b> in the header, then find the <b>Splunk</b> card.</div></div></li>
+      <li><div><div class="st-t">Paste the MCP Server URL</div><div class="st-d">Paste the URL into the <b>MCP Server URL</b> field. If your server also enforces its own auth token/API key, paste that into <b>Auth Token / API Key</b> too — otherwise leave it blank.</div></div></li>
+      <li><div><div class="st-t">Save and test</div><div class="st-d">Click <b>Save</b>, then <b>Test Connection</b>. You should see <b>Connected ✓</b>. A "Splunk" status dot will also appear in the chat header once configured.</div></div></li>
+    </ol>
+    </div>
     <div class="lab"><div class="lab-h"><span class="n">LAB 1</span> Natural-language threat hunt</div><div class="lab-b">
       <div class="sub">Investigate suspicious activity without writing SPL.</div>
       <div class="prompt">Search Splunk for failed login attempts (Windows Event ID 4625) in the last 2 hours. Show the top 10 source IPs by failure count and flag any with more than 50 — likely brute force.</div>
@@ -364,8 +375,8 @@ For each test:
     <p>Confirm your account has <b>API Access</b> permission and your org isn't opted out of AI features. Demo accounts from the proctor already satisfy both. Double-check you copied the full token with no extra spaces.</p>
     <h4>Meraki won't connect</h4>
     <p>Confirm the API key is correct and that your Meraki Organization ID matches an org that key has access to. Re-paste both in <b>⚙️ Credentials</b> and click <b>Test Connection</b>.</p>
-    <h4>Splunk module (bonus, on your laptop)</h4>
-    <p>This module runs outside this web app via your own Claude Desktop install. If a local server won't start, check the command path in your config is the full absolute path and your <code>.env</code>/config has no quotes or stray spaces.</p>
+    <h4>Splunk won't connect (bonus module)</h4>
+    <p>Confirm the MCP Server URL is reachable from the internet (this app runs in the cloud, so <code>localhost</code> URLs won't work — you need a tunnel like ngrok, or the facilitator's shared URL). If your server enforces an auth token, make sure it's entered in <b>⚙️ Credentials</b> too. If you're running your own local server, check its own Splunk host/port/credentials configuration separately — that's set up on the server side, not in this app.</p>
     <h4>Quick glossary</h4>
     <ul class="tick">
       <li><b>MCP</b> — Model Context Protocol; the standard that lets Claude use external tools.</li>

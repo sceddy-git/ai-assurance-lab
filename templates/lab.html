@@ -698,6 +698,10 @@
                             <span class="status-dot loading" id="meraki-status-dot"></span>
                             <span>Meraki</span>
                         </div>
+                        <div class="service-item" id="splunk-status-item" style="display:none;">
+                            <span class="status-dot loading" id="splunk-status-dot"></span>
+                            <span>Splunk</span>
+                        </div>
                     </div>
                     <div class="header-links">
                         <a href="#" id="guideToggle" onclick="toggleGuide(event)">📘 Lab Guide</a>
@@ -788,6 +792,7 @@
         const sendButton = document.getElementById('send-button');
         const teStatusDot = document.getElementById('te-status-dot');
         const merakiStatusDot = document.getElementById('meraki-status-dot');
+        const splunkStatusDot = document.getElementById('splunk-status-dot');
         const availabilityStatus = document.getElementById('availability-status');
 
         let conversationHistory = [];
@@ -872,10 +877,17 @@
                 updateStatusDot(teStatusDot, data.te_configured && data.te_connected);
                 updateStatusDot(merakiStatusDot, data.meraki_configured && data.meraki_connected);
 
+                // Splunk is optional/bonus - only show its status dot once configured
+                if (data.splunk_configured) {
+                    document.getElementById('splunk-status-item').style.display = 'flex';
+                    updateStatusDot(splunkStatusDot, data.splunk_connected);
+                }
+
                 // Update availability status
                 let status = [];
                 if (data.te_configured && data.te_connected) status.push('✓ ThousandEyes');
                 if (data.meraki_configured && data.meraki_connected) status.push('✓ Meraki');
+                if (data.splunk_configured && data.splunk_connected) status.push('✓ Splunk');
                 
                 availabilityStatus.textContent = status.length > 0 
                     ? status.join(' • ') 

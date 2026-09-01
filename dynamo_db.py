@@ -38,7 +38,9 @@ class DynamoDBError(Exception):
 def save_user_credentials(
     email: str,
     te_token: Optional[str] = None,
-    meraki_token: Optional[str] = None
+    meraki_token: Optional[str] = None,
+    splunk_url: Optional[str] = None,
+    splunk_token: Optional[str] = None
 ) -> bool:
     """
     Save or update a user's encrypted MCP credentials.
@@ -47,6 +49,8 @@ def save_user_credentials(
         email: User's email address (partition key)
         te_token: ThousandEyes API token (optional, only update if provided)
         meraki_token: Meraki API token (optional, only update if provided)
+        splunk_url: Splunk MCP server URL - varies per student/facilitator (optional)
+        splunk_token: Splunk MCP server auth token/API key, if the server requires one (optional)
         
     Returns:
         bool: True if successful
@@ -83,6 +87,23 @@ def save_user_credentials(
             except EncryptionError as e:
                 logger.error(f"Failed to encrypt Meraki token for {email}: {e}")
                 raise DynamoDBError(f"Failed to encrypt Meraki token: {str(e)}")
+        
+        # Splunk's MCP server URL differs per student (local laptop, tunnel, or
+        # facilitator-hosted), so unlike ThousandEyes/Meraki it's part of what
+        # each user configures. The URL isn't a secret, so store it in plain
+        # text; the token/API key (if the server requires one) is encrypted.
+        if splunk_url:
+            set_clauses.append("splunk_mcp_url = :splunk_url")
+            expr_values[":splunk_url"] = splunk_url
+        
+        if splunk_token:
+            try:
+                encrypted_splunk = encrypt_token(splunk_token, email)
+                set_clauses.append("splunk_token = :splunk_token")
+                expr_values[":splunk_token"] = encrypted_splunk
+            except EncryptionError as e:
+                logger.error(f"Failed to encrypt Splunk token for {email}: {e}")
+                raise DynamoDBError(f"Failed to encrypt Splunk token: {str(e)}")
         
         # Set created_at if this is the first save
         set_clauses.insert(0, "#created = if_not_exists(#created, :created_at)")
@@ -139,8 +160,11 @@ def get_user_credentials(email: str) -> Dict:
             return {
                 "te_token": None,
                 "meraki_token": None,
+                "splunk_url": None,
+                "splunk_token": None,
                 "te_connected": False,
                 "meraki_connected": False,
+                "splunk_connected": False,
                 "created_at": None,
                 "updated_at": None
             }
@@ -149,6 +173,8 @@ def get_user_credentials(email: str) -> Dict:
         result = {
             "te_connected": item.get("te_connected", False),
             "meraki_connected": item.get("meraki_connected", False),
+            "splunk_connected": item.get("splunk_connected", False),
+            "splunk_url": item.get("splunk_mcp_url"),
             "created_at": item.get("created_at"),
             "updated_at": item.get("updated_at")
         }
@@ -171,6 +197,15 @@ def get_user_credentials(email: str) -> Dict:
         except EncryptionError as e:
             logger.warning(f"Failed to decrypt Meraki token for {email}: {e}")
             result["meraki_token"] = None
+        
+        try:
+            if "splunk_token" in item and item["splunk_token"]:
+                result["splunk_token"] = decrypt_token(item["splunk_token"], email)
+            else:
+                result["splunk_token"] = None
+        except EncryptionError as e:
+            logger.warning(f"Failed to decrypt Splunk token for {email}: {e}")
+            result["splunk_token"] = None
         
         return result
     
@@ -269,13 +304,54 @@ def test_meraki_connectivity(email: str) -> Dict:
         raise DynamoDBError(f"Failed to retrieve credentials: {str(e)}")
 
 
+def test_splunk_connectivity(email: str) -> Dict:
+    """
+    Test connectivity to the user's own Splunk MCP server. Unlike ThousandEyes
+    and Meraki (fixed, Cisco-hosted URLs), each student's Splunk MCP server
+    lives at a different URL - their own laptop (via a tunnel), or a shared
+    host the facilitator provides. The auth token/API key is optional since
+    some self-hosted servers don't require one.
+    
+    Args:
+        email: User's email address
+        
+    Returns:
+        Dict with keys: valid (bool), error (str, optional), tool_count (int, optional)
+        
+    Raises:
+        DynamoDBError: If credential retrieval fails
+    """
+    try:
+        credentials = get_user_credentials(email)
+        url = credentials.get("splunk_url")
+        token = credentials.get("splunk_token")
+        
+        if not url:
+            return {"valid": False, "error": "Splunk MCP server URL not configured"}
+        
+        try:
+            tools = list_mcp_tools(url, token, require_token=False)
+            logger.info(f"Splunk MCP connectivity test passed for {email} ({len(tools)} tools)")
+            return {"valid": True, "tool_count": len(tools)}
+        except MCPClientError as e:
+            error_str = str(e)
+            if "401" in error_str or "403" in error_str:
+                return {"valid": False, "error": "Splunk MCP server rejected the auth token/API key"}
+            else:
+                logger.error(f"Splunk MCP connectivity test error for {email}: {e}")
+                return {"valid": False, "error": f"Could not reach Splunk MCP server: {error_str}"}
+    
+    except DynamoDBError as e:
+        raise DynamoDBError(f"Failed to retrieve credentials: {str(e)}")
+
+
 def update_connection_status(email: str, service: str, connected: bool) -> bool:
     """
     Update the connection status for a service.
     
     Args:
         email: User's email address
-        service: Service name ('thousandeyes' or 'meraki')
+        service: Service name ('thousandeyes', 'meraki', or 'splunk')
         connected: True if connected, False if disconnected
         
     Returns:
@@ -284,7 +360,7 @@ def update_connection_status(email: str, service: str, connected: bool) -> bool:
     Raises:
         DynamoDBError: If update fails
     """
-    if service not in ["thousandeyes", "meraki"]:
+    if service not in ["thousandeyes", "meraki", "splunk"]:
         raise DynamoDBError(f"Unknown service: {service}")
     
     if not email:
@@ -293,10 +369,11 @@ def update_connection_status(email: str, service: str, connected: bool) -> bool:
     try:
         table = get_table()
         
-        if service == "thousandeyes":
-            attr_name = "te_connected"
-        else:
-            attr_name = "meraki_connected"
+        attr_name = {
+            "thousandeyes": "te_connected",
+            "meraki": "meraki_connected",
+            "splunk": "splunk_connected"
+        }[service]
         
         table.update_item(
             Key={"email": email},
@@ -325,7 +402,7 @@ def delete_user_credentials(email: str, service: str) -> bool:
     
     Args:
         email: User's email address
-        service: Service name ('thousandeyes' or 'meraki')
+        service: Service name ('thousandeyes', 'meraki', or 'splunk')
         
     Returns:
         bool: True if successful
@@ -333,7 +410,7 @@ def delete_user_credentials(email: str, service: str) -> bool:
     Raises:
         DynamoDBError: If delete fails
     """
-    if service not in ["thousandeyes", "meraki"]:
+    if service not in ["thousandeyes", "meraki", "splunk"]:
         raise DynamoDBError(f"Unknown service: {service}")
     
     if not email:
@@ -343,15 +420,20 @@ def delete_user_credentials(email: str, service: str) -> bool:
         table = get_table()
         
         if service == "thousandeyes":
-            attr_name = "thousandeyes_token"
+            remove_attrs = ["thousandeyes_token"]
             status_attr = "te_connected"
-        else:
-            attr_name = "meraki_token"
+        elif service == "meraki":
+            remove_attrs = ["meraki_token"]
             status_attr = "meraki_connected"
+        else:
+            remove_attrs = ["splunk_token", "splunk_mcp_url"]
+            status_attr = "splunk_connected"
+        
+        remove_expr = "REMOVE " + ", ".join(remove_attrs)
         
         table.update_item(
             Key={"email": email},
-            UpdateExpression=f"REMOVE {attr_name} SET {status_attr} = :false, updated_at = :updated_at",
+            UpdateExpression=f"{remove_expr} SET {status_attr} = :false, updated_at = :updated_at",
             ExpressionAttributeValues={
                 ":false": False,
                 ":updated_at": int(time.time())

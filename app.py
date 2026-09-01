@@ -21,6 +21,7 @@ from dynamo_db import (
     get_user_credentials,
     test_te_connectivity,
     test_meraki_connectivity,
+    test_splunk_connectivity,
     update_connection_status,
     delete_user_credentials,
     DynamoDBError
@@ -203,6 +204,9 @@ def get_credentials_status():
             "te_connected": credentials.get('te_connected', False),
             "meraki_configured": bool(credentials.get('meraki_token')),
             "meraki_connected": credentials.get('meraki_connected', False),
+            "splunk_configured": bool(credentials.get('splunk_url')),
+            "splunk_connected": credentials.get('splunk_connected', False),
+            "splunk_url": credentials.get('splunk_url'),
             "last_updated": credentials.get('updated_at')
         })
     
@@ -225,13 +229,26 @@ def add_credential():
         email = session.get('user_email')
         data = request.json
         service = data.get('service', '').lower()
-        token = data.get('token', '').strip()
+        token = (data.get('token') or '').strip()
+        url = (data.get('url') or '').strip()
         
-        if not service or not token:
-            return jsonify({'error': 'service and token are required'}), 400
-        
-        if service not in ['thousandeyes', 'meraki']:
+        if service not in ['thousandeyes', 'meraki', 'splunk']:
             return jsonify({'error': 'Unknown service'}), 400
+        
+        if service == 'splunk':
+            # Splunk's MCP server URL varies per student (local laptop via a
+            # tunnel, or a facilitator-hosted shared server). The token/API
+            # key is optional - some self-hosted servers don't require one.
+            if not url:
+                return jsonify({'error': 'Splunk MCP server URL is required'}), 400
+            if not url.startswith('http://') and not url.startswith('https://'):
+                return jsonify({'error': 'Splunk MCP server URL must start with http:// or https://'}), 400
+            save_user_credentials(email, splunk_url=url, splunk_token=token or None)
+            logger.info(f"Saved splunk credential for {email}")
+            return jsonify({'status': 'success', 'message': 'Splunk credential saved'})
+        
+        if not token:
+            return jsonify({'error': 'token is required'}), 400
         
         # Validate token format
         if service == 'thousandeyes':
@@ -280,14 +297,16 @@ def test_credential():
         data = request.json
         service = data.get('service', '').lower()
         
-        if service not in ['thousandeyes', 'meraki']:
+        if service not in ['thousandeyes', 'meraki', 'splunk']:
             return jsonify({'error': 'Unknown service'}), 400
         
         # Test connectivity
         if service == 'thousandeyes':
             result = test_te_connectivity(email)
-        else:
+        elif service == 'meraki':
             result = test_meraki_connectivity(email)
+        else:
+            result = test_splunk_connectivity(email)
         
         # Update connection status
         is_valid = result.get('valid', False)
@@ -328,7 +347,7 @@ def delete_credential():
         data = request.json
         service = data.get('service', '').lower()
         
-        if service not in ['thousandeyes', 'meraki']:
+        if service not in ['thousandeyes', 'meraki', 'splunk']:
             return jsonify({'error': 'Unknown service'}), 400
         
         delete_user_credentials(email, service)
@@ -412,19 +431,21 @@ def chat():
         
         te_token = credentials.get('te_token')
         meraki_token = credentials.get('meraki_token')
+        splunk_url = credentials.get('splunk_url')
+        splunk_token = credentials.get('splunk_token')
         
         # Discover live tools from the user's own MCP servers (ThousandEyes and
         # Meraki host their own MCP servers; we call them with the user's token
         # rather than proxying REST calls ourselves).
         available_tools = []
-        tool_routing = {}  # tool_name -> (mcp_url, token)
+        tool_routing = {}  # tool_name -> (mcp_url, token, require_token)
         
         if te_token:
             try:
                 te_tools = list_mcp_tools(THOUSANDEYES_MCP_URL, te_token)
                 for tool in te_tools:
                     available_tools.append(tool)
-                    tool_routing[tool['name']] = (THOUSANDEYES_MCP_URL, te_token)
+                    tool_routing[tool['name']] = (THOUSANDEYES_MCP_URL, te_token, True)
             except MCPClientError as e:
                 logger.warning(f"Failed to list ThousandEyes MCP tools for {email}: {e}")
         
@@ -433,9 +454,21 @@ def chat():
                 meraki_tools = list_mcp_tools(MERAKI_MCP_URL, meraki_token)
                 for tool in meraki_tools:
                     available_tools.append(tool)
-                    tool_routing[tool['name']] = (MERAKI_MCP_URL, meraki_token)
+                    tool_routing[tool['name']] = (MERAKI_MCP_URL, meraki_token, True)
             except MCPClientError as e:
                 logger.warning(f"Failed to list Meraki MCP tools for {email}: {e}")
+        
+        # Splunk's MCP server URL is student-configured (their own laptop via
+        # a tunnel, or a facilitator-hosted shared server), and some setups
+        # don't require an auth token, so we don't gate on one being present.
+        if splunk_url:
+            try:
+                splunk_tools = list_mcp_tools(splunk_url, splunk_token, require_token=False)
+                for tool in splunk_tools:
+                    available_tools.append(tool)
+                    tool_routing[tool['name']] = (splunk_url, splunk_token, False)
+            except MCPClientError as e:
+                logger.warning(f"Failed to list Splunk MCP tools for {email}: {e}")
         
         # Build messages for Claude. If there are attachments, the user turn
         # becomes a list of content blocks (images/extracted text + the
@@ -501,8 +534,8 @@ def chat():
                     if not routing:
                         tool_result = {"error": f"Unknown tool: {tool_name}"}
                     else:
-                        mcp_url, mcp_token = routing
-                        tool_result = call_mcp_tool(mcp_url, mcp_token, tool_name, tool_input)
+                        mcp_url, mcp_token, require_token = routing
+                        tool_result = call_mcp_tool(mcp_url, mcp_token, tool_name, tool_input, require_token=require_token)
                 except MCPClientError as e:
                     logger.error(f"Tool execution error for {tool_name}: {e}")
                     tool_result = {"error": f"Tool execution failed: {str(e)}"}
@@ -531,7 +564,8 @@ def chat():
             "response": assistant_message,
             "tools_used": total_tools_used,
             "te_available": bool(te_token),
-            "meraki_available": bool(meraki_token)
+            "meraki_available": bool(meraki_token),
+            "splunk_available": bool(splunk_url)
         })
     
     except Exception as e:
