@@ -149,18 +149,21 @@
         }
 
         .main.guide-open {
-            max-width: 1560px;
+            max-width: 1900px;
         }
 
         /* Lab Guide Sidebar (left) */
         .guide-sidebar {
-            width: 380px;
+            width: clamp(420px, 40vw, 760px);
             background: var(--bg-panel);
             border-right: 1px solid var(--border-subtle);
             display: none;
             flex-direction: column;
             overflow: hidden;
             flex-shrink: 0;
+            resize: horizontal;
+            min-width: 340px;
+            max-width: 90vw;
         }
 
         .main.guide-open .guide-sidebar {
@@ -197,7 +200,7 @@
 
         @media (max-width: 1300px) {
             .guide-sidebar {
-                width: 320px;
+                width: clamp(340px, 46vw, 560px);
             }
         }
 
@@ -686,7 +689,10 @@
             <div class="guide-sidebar" id="guideSidebar">
                 <div class="sidebar-title">
                     <span>📘 Lab Guide</span>
-                    <button class="guide-close" onclick="toggleGuide(event)" title="Hide guide">✕</button>
+                    <div style="display:flex;gap:4px;align-items:center">
+                        <button class="guide-close" onclick="popOutGuide(event)" title="Open guide in new tab">⤢</button>
+                        <button class="guide-close" onclick="toggleGuide(event)" title="Hide guide">✕</button>
+                    </div>
                 </div>
                 <iframe class="guide-frame" id="guideFrame" title="AI Assurance Lab Guide"></iframe>
             </div>
@@ -770,6 +776,11 @@
             if (isOpen && !frame.getAttribute('src')) {
                 frame.src = '/guide';
             }
+        }
+
+        function popOutGuide(event) {
+            if (event) event.preventDefault();
+            window.open('/guide', '_blank', 'noopener,noreferrer');
         }
 
         // Restore guide visibility from a previous session.
