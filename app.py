@@ -1235,26 +1235,41 @@ def restart_flask():
 @app.route('/api/admin/system/logs', methods=['GET'])
 @login_required
 def get_logs():
-    """Get recent Flask logs."""
+    """Get recent Flask logs, optionally filtered to lines mentioning a
+    given user (email). Filtering is a simple case-insensitive substring
+    match over the raw log line, so it also matches partial addresses.
+    """
     user_email = session.get('user_email', '')
     if not _is_proctor(user_email):
         return jsonify({'error': 'Access denied'}), 403
-    
+
+    user_filter = (request.args.get('user') or '').strip()
+    # Pull a much bigger window when filtering, since a substring match
+    # over just the last 100 lines could easily miss the user's activity.
+    tail_lines = '2000' if user_filter else '100'
+
     try:
         import subprocess
         
         result = subprocess.run(
-            ['/usr/bin/sudo', '/usr/bin/journalctl', '-u', 'flask-app', '-n', '100', '--no-pager'],
+            ['/usr/bin/sudo', '/usr/bin/journalctl', '-u', 'flask-app', '-n', tail_lines, '--no-pager'],
             capture_output=True,
             text=True,
             timeout=5
         )
         
         logs = result.stdout.split('\n')
-        
+
+        if user_filter:
+            needle = user_filter.lower()
+            logs = [line for line in logs if needle in line.lower()]
+            # Keep the response light even if the filter matches a lot.
+            logs = logs[-200:]
+
         return jsonify({
             'status': 'success',
-            'logs': logs
+            'logs': logs,
+            'filtered_by': user_filter or None
         })
     
     except Exception as e:
