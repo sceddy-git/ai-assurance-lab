@@ -152,9 +152,9 @@
             max-width: 1900px;
         }
 
-        /* Lab Guide Sidebar (left) */
+        /* Lab Guide Sidebar (left) — docked, compact by default, user-resizable */
         .guide-sidebar {
-            width: clamp(420px, 40vw, 760px);
+            width: clamp(300px, 26vw, 420px);
             background: var(--bg-panel);
             border-right: 1px solid var(--border-subtle);
             display: none;
@@ -162,12 +162,21 @@
             overflow: hidden;
             flex-shrink: 0;
             resize: horizontal;
-            min-width: 340px;
-            max-width: 90vw;
+            min-width: 260px;
+            max-width: 60vw;
         }
 
         .main.guide-open .guide-sidebar {
             display: flex;
+        }
+
+        /* When the session-info sidebar is collapsed, give the guide/chat more room */
+        .main.info-collapsed {
+            max-width: 1500px;
+        }
+
+        .main.guide-open.info-collapsed {
+            max-width: 1700px;
         }
 
         .guide-sidebar .sidebar-title {
@@ -200,7 +209,7 @@
 
         @media (max-width: 1300px) {
             .guide-sidebar {
-                width: clamp(340px, 46vw, 560px);
+                width: clamp(280px, 40vw, 400px);
             }
         }
 
@@ -547,7 +556,7 @@
             cursor: not-allowed;
         }
 
-        /* Sidebar */
+        /* Sidebar (Session Info) — collapsible */
         .sidebar {
             width: 280px;
             background: var(--bg-panel);
@@ -555,6 +564,19 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            flex-shrink: 0;
+            transition: width 0.15s ease;
+        }
+
+        .main.info-collapsed .sidebar {
+            width: 0;
+            min-width: 0;
+            border-left: none;
+        }
+
+        .main.info-collapsed .sidebar .sidebar-title,
+        .main.info-collapsed .sidebar .sidebar-content {
+            display: none;
         }
 
         .sidebar-title {
@@ -565,6 +587,10 @@
             text-transform: uppercase;
             letter-spacing: 0.03em;
             color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
         }
 
         .sidebar-content {
@@ -621,7 +647,8 @@
 
         /* Responsive */
         @media (max-width: 1024px) {
-            .sidebar {
+            .sidebar,
+            .main.info-collapsed .sidebar {
                 display: none;
             }
 
@@ -674,6 +701,7 @@
                     </div>
                     <div class="header-links">
                         <a href="#" id="guideToggle" onclick="toggleGuide(event)">📘 Lab Guide</a>
+                        <a href="#" id="infoToggle" onclick="toggleInfoSidebar(event)">ℹ️ Session Info</a>
                         <a href="/credentials">⚙️ Credentials</a>
                         <a href="/admin/students" id="adminLink" style="display: none;">👥 Students</a>
                         <a href="/admin/settings" id="settingsLink" style="display: none;">⚙️ Settings</a>
@@ -729,8 +757,11 @@
             </div>
 
             <!-- Sidebar -->
-            <div class="sidebar">
-                <div class="sidebar-title">ℹ️ Session Info</div>
+            <div class="sidebar" id="infoSidebar">
+                <div class="sidebar-title">
+                    <span>ℹ️ Session Info</span>
+                    <button class="guide-close" onclick="toggleInfoSidebar(event)" title="Hide session info">✕</button>
+                </div>
                 <div class="sidebar-content">
                     <div class="info-section">
                         <div class="info-title">Email</div>
@@ -787,6 +818,21 @@
         (function restoreGuideState() {
             if (localStorage.getItem('labGuideOpen') === '1') {
                 toggleGuide();
+            }
+        })();
+
+        // ---- Session Info sidebar (collapsible to make room for chat) ----
+        function toggleInfoSidebar(event) {
+            if (event) event.preventDefault();
+            const mainArea = document.getElementById('mainArea');
+            const isCollapsed = mainArea.classList.toggle('info-collapsed');
+            localStorage.setItem('sessionInfoCollapsed', isCollapsed ? '1' : '0');
+        }
+
+        // Restore session-info visibility from a previous session.
+        (function restoreInfoSidebarState() {
+            if (localStorage.getItem('sessionInfoCollapsed') === '1') {
+                document.getElementById('mainArea').classList.add('info-collapsed');
             }
         })();
 
