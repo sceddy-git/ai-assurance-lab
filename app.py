@@ -62,7 +62,7 @@ HTML_OUTPUT_SYSTEM_PROMPT = (
 )
 
 
-def _build_system_prompt():
+def _build_system_prompt(meraki_org_id=None):
     """Build the system prompt, including the real current date/time.
 
     Without this, the model has no way to know "now" and will guess a date from
@@ -71,13 +71,20 @@ def _build_system_prompt():
     calls and mislead users in the response text.
     """
     now_utc = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
-    return (
+    prompt = (
         f"The current date and time is {now_utc}. Use this as \"now\" whenever you "
         "need to reason about or compute relative time windows (e.g. \"the last 2 "
         "hours\", \"today\", \"this week\") for tool calls or in your response. "
         "Do not guess or infer the date from any other source.\n\n"
         + HTML_OUTPUT_SYSTEM_PROMPT
     )
+    if meraki_org_id:
+        prompt += (
+            f"\n\nThe user's Meraki Organization ID is {meraki_org_id}. Use it "
+            "automatically for any Meraki tool call that requires an organization "
+            "ID (e.g. via execute_api parameters) - never ask the user for it."
+        )
+    return prompt
 
 # AWS and Cognito configuration
 COGNITO_DOMAIN = os.getenv('COGNITO_DOMAIN')
@@ -222,6 +229,7 @@ def get_credentials_status():
             "te_connected": credentials.get('te_connected', False),
             "meraki_configured": bool(credentials.get('meraki_token')),
             "meraki_connected": credentials.get('meraki_connected', False),
+            "meraki_org_id": credentials.get('meraki_org_id'),
             "splunk_configured": bool(credentials.get('splunk_url')),
             "splunk_connected": credentials.get('splunk_connected', False),
             "splunk_url": credentials.get('splunk_url'),
@@ -249,6 +257,7 @@ def add_credential():
         service = data.get('service', '').lower()
         token = (data.get('token') or '').strip()
         url = (data.get('url') or '').strip()
+        org_id = (data.get('org_id') or '').strip()
         
         if service not in ['thousandeyes', 'meraki', 'splunk']:
             return jsonify({'error': 'Unknown service'}), 400
@@ -264,6 +273,15 @@ def add_credential():
             save_user_credentials(email, splunk_url=url, splunk_token=token or None)
             logger.info(f"Saved splunk credential for {email}")
             return jsonify({'status': 'success', 'message': 'Splunk credential saved'})
+        
+        # Meraki also takes an Organization ID (not a secret), which the
+        # Meraki MCP server's tools require for almost every call - there's
+        # no reliable "list my organizations" step, so we store it once here
+        # instead of asking the student to paste it into every chat message.
+        if service == 'meraki' and org_id and not token:
+            save_user_credentials(email, meraki_org_id=org_id)
+            logger.info(f"Saved meraki org_id for {email}")
+            return jsonify({'status': 'success', 'message': 'Meraki organization ID saved'})
         
         if not token:
             return jsonify({'error': 'token is required'}), 400
@@ -283,7 +301,7 @@ def add_credential():
         if service == 'thousandeyes':
             save_user_credentials(email, te_token=token)
         else:
-            save_user_credentials(email, meraki_token=token)
+            save_user_credentials(email, meraki_token=token, meraki_org_id=org_id or None)
         
         logger.info(f"Saved {service} credential for {email}")
         
@@ -449,6 +467,7 @@ def chat():
         
         te_token = credentials.get('te_token')
         meraki_token = credentials.get('meraki_token')
+        meraki_org_id = credentials.get('meraki_org_id')
         splunk_url = credentials.get('splunk_url')
         splunk_token = credentials.get('splunk_token')
         
@@ -510,7 +529,7 @@ def chat():
         MAX_TOOL_ITERATIONS = 6
         total_tools_used = 0
         content = []
-        system_prompt = _build_system_prompt()
+        system_prompt = _build_system_prompt(meraki_org_id)
 
         for iteration in range(MAX_TOOL_ITERATIONS):
             request_body = {

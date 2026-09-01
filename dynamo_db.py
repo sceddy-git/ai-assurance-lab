@@ -39,6 +39,7 @@ def save_user_credentials(
     email: str,
     te_token: Optional[str] = None,
     meraki_token: Optional[str] = None,
+    meraki_org_id: Optional[str] = None,
     splunk_url: Optional[str] = None,
     splunk_token: Optional[str] = None
 ) -> bool:
@@ -49,6 +50,11 @@ def save_user_credentials(
         email: User's email address (partition key)
         te_token: ThousandEyes API token (optional, only update if provided)
         meraki_token: Meraki API token (optional, only update if provided)
+        meraki_org_id: Meraki Organization ID (optional). The Meraki MCP server's tools
+            require an org ID for almost every call, and there's no "list my
+            organizations" shortcut in its semantic_search/execute_api pair, so we
+            store this once and inject it into the chat system prompt instead of
+            making the student paste it into every message.
         splunk_url: Splunk MCP server URL - varies per student/facilitator (optional)
         splunk_token: Splunk MCP server auth token/API key, if the server requires one (optional)
         
@@ -87,6 +93,11 @@ def save_user_credentials(
             except EncryptionError as e:
                 logger.error(f"Failed to encrypt Meraki token for {email}: {e}")
                 raise DynamoDBError(f"Failed to encrypt Meraki token: {str(e)}")
+        
+        # Org ID isn't a secret, so store it in plain text alongside the encrypted token.
+        if meraki_org_id:
+            set_clauses.append("meraki_org_id = :meraki_org_id")
+            expr_values[":meraki_org_id"] = meraki_org_id
         
         # Splunk's MCP server URL differs per student (local laptop, tunnel, or
         # facilitator-hosted), so unlike ThousandEyes/Meraki it's part of what
@@ -160,6 +171,7 @@ def get_user_credentials(email: str) -> Dict:
             return {
                 "te_token": None,
                 "meraki_token": None,
+                "meraki_org_id": None,
                 "splunk_url": None,
                 "splunk_token": None,
                 "te_connected": False,
@@ -173,6 +185,7 @@ def get_user_credentials(email: str) -> Dict:
         result = {
             "te_connected": item.get("te_connected", False),
             "meraki_connected": item.get("meraki_connected", False),
+            "meraki_org_id": item.get("meraki_org_id"),
             "splunk_connected": item.get("splunk_connected", False),
             "splunk_url": item.get("splunk_mcp_url"),
             "created_at": item.get("created_at"),
@@ -423,7 +436,7 @@ def delete_user_credentials(email: str, service: str) -> bool:
             remove_attrs = ["thousandeyes_token"]
             status_attr = "te_connected"
         elif service == "meraki":
-            remove_attrs = ["meraki_token"]
+            remove_attrs = ["meraki_token", "meraki_org_id"]
             status_attr = "meraki_connected"
         else:
             remove_attrs = ["splunk_token", "splunk_mcp_url"]

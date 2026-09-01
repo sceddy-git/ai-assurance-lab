@@ -285,16 +285,16 @@ For each test:
     <p class="lead">The Meraki MCP server is cloud-hosted by Cisco. This lab platform talks to it on your behalf using your own personal API key — nothing to install, nothing to configure locally, no Claude Desktop needed.</p>
     <div class="mk">
     <ol class="steps">
-      <li><div><div class="st-t">Get your Meraki API key</div><div class="st-d">In the Meraki Dashboard, go to <b>Organization → Settings → Dashboard API access</b> and generate an API key (or ask your proctor for the demo key).</div></div></li>
+      <li><div><div class="st-t">Get your Meraki API key and Organization ID</div><div class="st-d">In the Meraki Dashboard, go to <b>Organization → Settings → Dashboard API access</b> and generate an API key (or ask your proctor for the demo key). Your <b>Organization ID</b> is the numeric value in the dashboard URL, or ask your proctor.</div></div></li>
       <li><div><div class="st-t">Open Credentials in this app</div><div class="st-d">Click <b>⚙️ Credentials</b> in the header of the chat page.</div></div></li>
-      <li><div><div class="st-t">Paste your key and save</div><div class="st-d">Paste the key into the <b>Meraki</b> field and click <b>Save Token</b>.</div></div></li>
+      <li><div><div class="st-t">Paste your key and Organization ID, then save</div><div class="st-d">Paste the key into the <b>Meraki</b> field, paste your <b>Organization ID</b> into the field below it, and click <b>Save Token</b>. Almost every Meraki tool call needs the Organization ID — saving it here means Claude will use it automatically instead of asking you for it in every message.</div></div></li>
       <li><div><div class="st-t">Test the connection</div><div class="st-d">Click <b>Test Connection</b>. You should see <b>Connected ✓</b> — that's it, you're done. The header status dot next to "Meraki" will also turn green.</div></div></li>
     </ol>
     </div>
 
     <h4>Verify it's connected</h4>
     <div class="mk"><div class="prompt">What Meraki MCP tools are available to you? List them all.</div></div>
-    <p>If Claude says it has no Meraki tools, go back to <b>Credentials</b> and re-check the key and Test Connection result.</p>
+    <p>If Claude says it has no Meraki tools, go back to <b>Credentials</b> and re-check the key and Test Connection result. If Claude asks you for an Organization ID when running a lab prompt, go back to <b>Credentials</b> and make sure it's saved in the Meraki card.</p>
 
     <h3 style="color:var(--meraki)">Meraki Labs</h3>
     <div class="mk">
