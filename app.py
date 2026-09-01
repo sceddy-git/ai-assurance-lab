@@ -6,7 +6,7 @@ Each student manages their own encrypted API credentials for ThousandEyes and Me
 import os
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from urllib.parse import urlencode, parse_qs
 from urllib.request import urlopen
@@ -60,6 +60,24 @@ HTML_OUTPUT_SYSTEM_PROMPT = (
     "whenever the user wants something they can save or share, rather than only "
     "describing it in prose."
 )
+
+
+def _build_system_prompt():
+    """Build the system prompt, including the real current date/time.
+
+    Without this, the model has no way to know "now" and will guess a date from
+    its training data when reasoning about relative time windows (e.g. "the last
+    2 hours"), which can silently produce the wrong absolute timestamps for tool
+    calls and mislead users in the response text.
+    """
+    now_utc = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+    return (
+        f"The current date and time is {now_utc}. Use this as \"now\" whenever you "
+        "need to reason about or compute relative time windows (e.g. \"the last 2 "
+        "hours\", \"today\", \"this week\") for tool calls or in your response. "
+        "Do not guess or infer the date from any other source.\n\n"
+        + HTML_OUTPUT_SYSTEM_PROMPT
+    )
 
 # AWS and Cognito configuration
 COGNITO_DOMAIN = os.getenv('COGNITO_DOMAIN')
@@ -492,12 +510,13 @@ def chat():
         MAX_TOOL_ITERATIONS = 6
         total_tools_used = 0
         content = []
+        system_prompt = _build_system_prompt()
 
         for iteration in range(MAX_TOOL_ITERATIONS):
             request_body = {
                 "anthropic_version": "bedrock-2023-05-31",
                 "max_tokens": 4096,
-                "system": HTML_OUTPUT_SYSTEM_PROMPT,
+                "system": system_prompt,
                 "messages": messages
             }
             if available_tools:
