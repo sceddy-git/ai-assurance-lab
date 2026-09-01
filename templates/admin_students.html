@@ -455,6 +455,7 @@
                                 <th>Last Name</th>
                                 <th>Created</th>
                                 <th>Status</th>
+                                <th>API Tokens</th>
                             </tr>
                         </thead>
                         <tbody id="studentsBody">
@@ -624,6 +625,26 @@
             });
         }
 
+        function tokenBadges(student) {
+            const items = [
+                ['TE', student.te_connected],
+                ['Meraki', student.meraki_connected],
+                ['Splunk', student.splunk_connected]
+            ];
+            return items.map(([label, connected]) => `
+                <span style="
+                    display: inline-block;
+                    margin-right: 6px;
+                    padding: 2px 8px;
+                    border-radius: 10px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    background: ${connected ? '#10b98122' : '#94a3b822'};
+                    color: ${connected ? '#10b981' : '#94a3b8'};
+                ">${connected ? '✓' : '—'} ${label}</span>
+            `).join('');
+        }
+
         function loadStudents() {
             const studentsList = document.getElementById('studentsList');
             const loadingStudents = document.getElementById('loadingStudents');
@@ -657,6 +678,7 @@
                                 <td>${student.last_name}</td>
                                 <td>${new Date(student.created).toLocaleDateString()}</td>
                                 <td><span style="color: #10b981; font-weight: 600;">${student.status}</span></td>
+                                <td>${tokenBadges(student)}</td>
                             `;
                         });
                     }

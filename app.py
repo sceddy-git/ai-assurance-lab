@@ -871,13 +871,24 @@ def list_students():
             email = next((attr['Value'] for attr in user['Attributes'] if attr['Name'] == 'email'), '')
             first_name = next((attr['Value'] for attr in user['Attributes'] if attr['Name'] == 'given_name'), '')
             last_name = next((attr['Value'] for attr in user['Attributes'] if attr['Name'] == 'family_name'), '')
-            
+
+            # Best-effort: a missing/broken credentials row shouldn't break the
+            # whole list, just show everything as not-connected for that row.
+            try:
+                creds = get_user_credentials(email) if email else {}
+            except Exception as e:
+                logger.warning(f"Could not load credential status for {email}: {e}")
+                creds = {}
+
             students.append({
                 'email': email,
                 'first_name': first_name,
                 'last_name': last_name,
                 'created': str(user['UserCreateDate']),
-                'status': user['UserStatus']
+                'status': user['UserStatus'],
+                'te_connected': bool(creds.get('te_connected')),
+                'meraki_connected': bool(creds.get('meraki_connected')),
+                'splunk_connected': bool(creds.get('splunk_connected'))
             })
         
         return jsonify({
