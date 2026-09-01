@@ -688,7 +688,7 @@
                     <span>📘 Lab Guide</span>
                     <button class="guide-close" onclick="toggleGuide(event)" title="Hide guide">✕</button>
                 </div>
-                <iframe class="guide-frame" id="guideFrame" src="" title="AI Assurance Lab Guide"></iframe>
+                <iframe class="guide-frame" id="guideFrame" title="AI Assurance Lab Guide"></iframe>
             </div>
 
             <!-- Chat Area -->
@@ -763,8 +763,11 @@
             localStorage.setItem('labGuideOpen', isOpen ? '1' : '0');
 
             // Lazy-load the guide iframe only the first time it's opened.
+            // (Check the raw attribute, not the .src property: an unset
+            // iframe's .src property resolves to the current page's URL,
+            // which is always truthy and would defeat this check.)
             const frame = document.getElementById('guideFrame');
-            if (isOpen && !frame.src) {
+            if (isOpen && !frame.getAttribute('src')) {
                 frame.src = '/guide';
             }
         }
