@@ -5,7 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Assurance Lab</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" integrity="sha384-/TQbtLCAerC3jgaim+N78RZSDYV7ryeoBCVqTuzRrFec2akfBkHS7ACQ3PQhvMVi" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" integrity="sha384-+VfUPEb0PdtChMwmBcBmykRMDd+v6D/oFmB3rZM/puCMDYcIvF968OimRh4KQY9a" crossorigin="anonymous"></script>
     <style>
+        :root {
+            /* Claude-esque warm, neutral palette */
+            --bg-page: #F5F4EE;
+            --bg-panel: #FAF9F6;
+            --bg-user-bubble: #ECEAE3;
+            --text-primary: #2D2A26;
+            --text-secondary: #71695F;
+            --border-subtle: #E5E2D9;
+            --accent: #C15F3C;
+            --accent-hover: #A94E2E;
+            --accent-soft: #F3E5DD;
+            --danger: #B3432B;
+            --success: #3C7A4F;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -14,8 +31,9 @@
 
         html, body {
             height: 100%;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background-color: #f5f7fa;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-page);
+            color: var(--text-primary);
         }
 
         .container {
@@ -26,10 +44,9 @@
 
         /* Header */
         .header {
-            background: white;
-            border-bottom: 1px solid #e0e0e0;
-            padding: 15px 20px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            background: var(--bg-page);
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 14px 24px;
         }
 
         .header-content {
@@ -41,11 +58,12 @@
         }
 
         .header h1 {
-            font-size: 20px;
-            color: #333;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
         }
 
         .header-right {
@@ -56,8 +74,9 @@
 
         .service-status {
             display: flex;
-            gap: 20px;
-            font-size: 13px;
+            gap: 18px;
+            font-size: 12px;
+            color: var(--text-secondary);
         }
 
         .service-item {
@@ -67,21 +86,21 @@
         }
 
         .status-dot {
-            width: 8px;
-            height: 8px;
+            width: 7px;
+            height: 7px;
             border-radius: 50%;
         }
 
         .status-dot.connected {
-            background-color: #28a745;
+            background-color: var(--success);
         }
 
         .status-dot.disconnected {
-            background-color: #dc3545;
+            background-color: var(--danger);
         }
 
         .status-dot.loading {
-            background-color: #ffc107;
+            background-color: #C9A227;
             animation: pulse 1.5s infinite;
         }
 
@@ -92,30 +111,30 @@
 
         .header-links {
             display: flex;
-            gap: 15px;
+            gap: 6px;
         }
 
         .header-links a {
             text-decoration: none;
-            color: #667eea;
-            font-weight: 600;
-            font-size: 13px;
-            padding: 8px 12px;
-            border-radius: 4px;
-            transition: all 0.3s;
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 12px;
+            padding: 6px 10px;
+            border-radius: 6px;
+            transition: all 0.2s;
         }
 
         .header-links a:hover {
-            background-color: #f0f1ff;
-            color: #5568d3;
+            background-color: var(--accent-soft);
+            color: var(--accent);
         }
 
         .header-links .logout {
-            color: #dc3545;
+            color: var(--danger);
         }
 
         .header-links .logout:hover {
-            background-color: #fff5f5;
+            background-color: #F5E3DE;
         }
 
         /* Main Content */
@@ -133,30 +152,39 @@
             flex: 1;
             display: flex;
             flex-direction: column;
-            background: white;
-            border-right: 1px solid #e0e0e0;
+            background: var(--bg-page);
             overflow: hidden;
         }
 
         .messages {
             flex: 1;
             overflow-y: auto;
-            padding: 20px;
+            padding: 32px 24px 12px;
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 24px;
+        }
+
+        .messages-inner {
+            max-width: 700px;
+            width: 100%;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
         }
 
         .message {
             display: flex;
             gap: 12px;
-            animation: slideIn 0.3s ease-out;
+            animation: slideIn 0.25s ease-out;
+            align-items: flex-start;
         }
 
         @keyframes slideIn {
             from {
                 opacity: 0;
-                transform: translateY(10px);
+                transform: translateY(6px);
             }
             to {
                 opacity: 1;
@@ -169,57 +197,154 @@
         }
 
         .message-content {
-            max-width: 70%;
-            padding: 12px 16px;
-            border-radius: 8px;
             word-wrap: break-word;
-            line-height: 1.4;
-            font-size: 14px;
+            line-height: 1.6;
+            font-size: 15px;
         }
 
         .message.assistant .message-content {
-            background-color: #f0f1ff;
-            color: #333;
-            border: 1px solid #e0e2ff;
+            background: transparent;
+            color: var(--text-primary);
+            max-width: 100%;
+            padding: 2px 0;
         }
 
         .message.user .message-content {
-            background-color: #667eea;
-            color: white;
+            background-color: var(--bg-user-bubble);
+            color: var(--text-primary);
+            max-width: 75%;
+            padding: 10px 16px;
+            border-radius: 18px;
         }
 
         .message-avatar {
-            width: 32px;
-            height: 32px;
+            width: 28px;
+            height: 28px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
             font-weight: 600;
-            font-size: 14px;
+            font-size: 12px;
+            margin-top: 2px;
         }
 
         .message.assistant .message-avatar {
-            background-color: #667eea;
+            background-color: var(--accent);
             color: white;
         }
 
+        .message.user {
+            /* user rows don't show an avatar, mirroring Claude's layout */
+        }
+
         .message.user .message-avatar {
-            background-color: #e0e0e0;
-            color: #666;
+            display: none;
+        }
+
+        /* Markdown content styling (rendered assistant responses) */
+        .markdown-body p {
+            margin: 0 0 12px 0;
+        }
+        .markdown-body p:last-child {
+            margin-bottom: 0;
+        }
+        .markdown-body h1,
+        .markdown-body h2,
+        .markdown-body h3,
+        .markdown-body h4 {
+            margin: 20px 0 10px 0;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+        .markdown-body h1:first-child,
+        .markdown-body h2:first-child,
+        .markdown-body h3:first-child {
+            margin-top: 0;
+        }
+        .markdown-body h1 { font-size: 20px; }
+        .markdown-body h2 { font-size: 17px; }
+        .markdown-body h3 { font-size: 15px; }
+        .markdown-body ul,
+        .markdown-body ol {
+            margin: 0 0 12px 0;
+            padding-left: 22px;
+        }
+        .markdown-body li {
+            margin-bottom: 6px;
+        }
+        .markdown-body li:last-child {
+            margin-bottom: 0;
+        }
+        .markdown-body strong {
+            font-weight: 600;
+        }
+        .markdown-body a {
+            color: var(--accent);
+            text-decoration: underline;
+        }
+        .markdown-body code {
+            font-family: "SF Mono", Consolas, Monaco, monospace;
+            font-size: 13px;
+            background-color: var(--accent-soft);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #7A3B22;
+        }
+        .markdown-body pre {
+            background-color: #2B2925;
+            color: #F2EFE9;
+            padding: 14px 16px;
+            border-radius: 10px;
+            overflow-x: auto;
+            margin: 0 0 12px 0;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .markdown-body pre code {
+            background: transparent;
+            padding: 0;
+            color: inherit;
+        }
+        .markdown-body blockquote {
+            border-left: 3px solid var(--border-subtle);
+            padding-left: 14px;
+            margin: 0 0 12px 0;
+            color: var(--text-secondary);
+        }
+        .markdown-body table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 0 0 14px 0;
+            font-size: 14px;
+        }
+        .markdown-body th,
+        .markdown-body td {
+            border: 1px solid var(--border-subtle);
+            padding: 8px 10px;
+            text-align: left;
+        }
+        .markdown-body th {
+            background-color: var(--bg-panel);
+            font-weight: 600;
+        }
+        .markdown-body hr {
+            border: none;
+            border-top: 1px solid var(--border-subtle);
+            margin: 16px 0;
         }
 
         .loading-indicator {
             display: flex;
             gap: 4px;
-            padding: 12px 16px;
+            padding: 6px 0;
         }
 
         .loading-dot {
-            width: 8px;
-            height: 8px;
-            background-color: #667eea;
+            width: 6px;
+            height: 6px;
+            background-color: var(--accent);
             border-radius: 50%;
             animation: bounce 1.4s infinite;
         }
@@ -239,76 +364,84 @@
 
         /* Input Area */
         .input-area {
-            padding: 15px 20px;
-            border-top: 1px solid #e0e0e0;
-            background: white;
+            padding: 12px 24px 24px;
+            background: var(--bg-page);
         }
 
         .input-group {
+            max-width: 700px;
+            margin: 0 auto;
             display: flex;
             gap: 10px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-subtle);
+            border-radius: 26px;
+            padding: 6px 6px 6px 18px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            transition: all 0.2s;
+        }
+
+        .input-group:focus-within {
+            border-color: var(--accent);
+            box-shadow: 0 2px 10px rgba(193, 95, 60, 0.15);
         }
 
         .input-group input {
             flex: 1;
-            padding: 12px 16px;
-            border: 1px solid #ddd;
-            border-radius: 24px;
-            font-size: 14px;
+            padding: 10px 0;
+            border: none;
+            background: transparent;
+            font-size: 15px;
             outline: none;
-            transition: all 0.3s;
-        }
-
-        .input-group input:focus {
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            color: var(--text-primary);
+            font-family: inherit;
         }
 
         .input-group button {
             padding: 10px 20px;
-            background-color: #667eea;
+            background-color: var(--accent);
             color: white;
             border: none;
-            border-radius: 24px;
+            border-radius: 20px;
             cursor: pointer;
             font-weight: 600;
-            transition: all 0.3s;
+            font-size: 14px;
+            transition: all 0.2s;
         }
 
         .input-group button:hover:not(:disabled) {
-            background-color: #5568d3;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+            background-color: var(--accent-hover);
         }
 
         .input-group button:disabled {
-            opacity: 0.6;
+            opacity: 0.5;
             cursor: not-allowed;
         }
 
         /* Sidebar */
         .sidebar {
-            width: 300px;
-            background: white;
-            border-left: 1px solid #e0e0e0;
+            width: 280px;
+            background: var(--bg-panel);
+            border-left: 1px solid var(--border-subtle);
             display: flex;
             flex-direction: column;
             overflow: hidden;
         }
 
         .sidebar-title {
-            padding: 15px;
-            border-bottom: 1px solid #e0e0e0;
+            padding: 16px;
+            border-bottom: 1px solid var(--border-subtle);
             font-weight: 600;
-            font-size: 13px;
+            font-size: 12px;
             text-transform: uppercase;
-            color: #666;
+            letter-spacing: 0.03em;
+            color: var(--text-secondary);
         }
 
         .sidebar-content {
             flex: 1;
             overflow-y: auto;
-            padding: 15px;
+            padding: 16px;
         }
 
         .info-section {
@@ -317,8 +450,8 @@
 
         .info-title {
             font-weight: 600;
-            font-size: 13px;
-            color: #333;
+            font-size: 12px;
+            color: var(--text-primary);
             margin-bottom: 8px;
             display: flex;
             align-items: center;
@@ -327,33 +460,34 @@
 
         .info-value {
             font-size: 13px;
-            color: #666;
+            color: var(--text-secondary);
             word-break: break-all;
-            font-family: monospace;
-            padding: 8px;
-            background-color: #f5f7fa;
-            border-radius: 4px;
+            font-family: "SF Mono", Consolas, monospace;
+            padding: 8px 10px;
+            background-color: var(--bg-page);
+            border: 1px solid var(--border-subtle);
+            border-radius: 6px;
         }
 
         .quick-links {
-            border-top: 1px solid #e0e0e0;
+            border-top: 1px solid var(--border-subtle);
             padding-top: 15px;
         }
 
         .quick-links a {
             display: block;
-            padding: 8px 12px;
-            color: #667eea;
+            padding: 8px 10px;
+            color: var(--accent);
             text-decoration: none;
             font-size: 13px;
-            border-radius: 4px;
-            transition: all 0.3s;
-            margin-bottom: 8px;
+            border-radius: 6px;
+            transition: all 0.2s;
+            margin-bottom: 6px;
         }
 
         .quick-links a:hover {
-            background-color: #f0f1ff;
-            color: #5568d3;
+            background-color: var(--accent-soft);
+            color: var(--accent-hover);
         }
 
         /* Responsive */
@@ -362,7 +496,7 @@
                 display: none;
             }
 
-            .message-content {
+            .message.user .message-content {
                 max-width: 85%;
             }
         }
@@ -374,11 +508,11 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            color: #999;
+            color: var(--text-secondary);
         }
 
         .empty-state-icon {
-            font-size: 48px;
+            font-size: 40px;
             margin-bottom: 10px;
         }
 
@@ -420,11 +554,13 @@
             <!-- Chat Area -->
             <div class="chat-area">
                 <div class="messages" id="messages">
-                    <div class="empty-state">
-                        <div class="empty-state-icon">💬</div>
-                        <div class="empty-state-text">
-                            <p>Welcome to the AI Assurance Lab!</p>
-                            <p style="font-size: 12px; margin-top: 5px;">Start by sending a message. The AI will help you troubleshoot your network with ThousandEyes and Meraki data.</p>
+                    <div class="messages-inner" id="messages-inner">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">💬</div>
+                            <div class="empty-state-text">
+                                <p>Welcome to the AI Assurance Lab!</p>
+                                <p style="font-size: 12px; margin-top: 5px;">Start by sending a message. The AI will help you troubleshoot your network with ThousandEyes and Meraki data.</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -534,54 +670,83 @@
             }
         }
 
+        // Render Markdown safely: marked converts to HTML, DOMPurify strips
+        // anything dangerous (script tags, event handlers, etc.) before we
+        // ever set innerHTML with model-generated content.
+        function renderMarkdown(text) {
+            if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') {
+                // CDN scripts failed to load; fail safe to escaped plain text.
+                const escaped = document.createElement('div');
+                escaped.textContent = text;
+                return escaped.innerHTML;
+            }
+            const rawHtml = marked.parse(text, { breaks: true });
+            return DOMPurify.sanitize(rawHtml, { ADD_ATTR: ['target', 'rel'] });
+        }
+
         function addMessage(text, isUser) {
             const messagesContainer = document.getElementById('messages');
-            
+            const messagesInner = document.getElementById('messages-inner');
+
             // Remove empty state if present
-            if (messagesContainer.querySelector('.empty-state')) {
-                messagesContainer.innerHTML = '';
+            const emptyState = messagesInner.querySelector('.empty-state');
+            if (emptyState) {
+                emptyState.remove();
             }
 
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isUser ? 'user' : 'assistant'}`;
-            
-            const avatar = document.createElement('div');
-            avatar.className = 'message-avatar';
-            avatar.textContent = isUser ? 'You' : 'AI';
-            
+
+            if (!isUser) {
+                const avatar = document.createElement('div');
+                avatar.className = 'message-avatar';
+                avatar.textContent = 'AI';
+                messageDiv.appendChild(avatar);
+            }
+
             const content = document.createElement('div');
             content.className = 'message-content';
-            
-            // Simple markdown-like formatting
-            content.textContent = text;
-            
-            messageDiv.appendChild(avatar);
+
+            if (isUser) {
+                // User input is plain text, never rendered as HTML.
+                content.textContent = text;
+            } else {
+                content.classList.add('markdown-body');
+                content.innerHTML = renderMarkdown(text);
+                // Open any links in a new tab safely.
+                content.querySelectorAll('a').forEach(link => {
+                    link.setAttribute('target', '_blank');
+                    link.setAttribute('rel', 'noopener noreferrer');
+                });
+            }
+
             messageDiv.appendChild(content);
-            messagesContainer.appendChild(messageDiv);
-            
+            messagesInner.appendChild(messageDiv);
+
             // Scroll to bottom
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
 
         function showLoadingIndicator() {
             const messagesContainer = document.getElementById('messages');
-            
+            const messagesInner = document.getElementById('messages-inner');
+
             const messageDiv = document.createElement('div');
             messageDiv.className = 'message assistant';
             messageDiv.id = 'loading-message';
-            
+
             const avatar = document.createElement('div');
             avatar.className = 'message-avatar';
             avatar.textContent = 'AI';
-            
+
             const content = document.createElement('div');
             content.className = 'loading-indicator';
             content.innerHTML = '<div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div>';
-            
+
             messageDiv.appendChild(avatar);
             messageDiv.appendChild(content);
-            messagesContainer.appendChild(messageDiv);
-            
+            messagesInner.appendChild(messageDiv);
+
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
 
