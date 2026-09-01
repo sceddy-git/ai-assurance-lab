@@ -38,7 +38,7 @@ build pipeline, no load balancer — this is intentionally minimal for a
 | IAM instance profile | `EC2-SSM-Profile` (SSM Core + app permissions — Bedrock invoke, DynamoDB CRUD, Cognito admin) |
 | Cognito User Pool | `us-east-1_wUyz157rN` |
 | Cognito App Client | `24ou7s3h56i851ofdjmadbkklm` (`ai-assurance-lab-app`), Hosted UI enabled, callback `https://ai.thousandeyeschannel.com/auth/callback` |
-| Cognito email sending | `COGNITO_DEFAULT` (built-in mailer) — capped at **50 emails/day for the whole pool**. Fine for one ~40-student session; risky if you run multiple sessions same day or students retry "Forgot password" a lot. Switch `EmailConfiguration` to SES (a verified SES domain, `thousandeyeschannel.com`, already exists from an earlier setup attempt) if this becomes a problem. |
+| Cognito email sending | **SES** (`EmailSendingAccount=DEVELOPER`), source `thousandeyeschannel.com` (verified domain, DKIM/SPF green, production access, 50,000/day quota). Sender: `no-reply@thousandeyeschannel.com`, reply-to `sceddy@cisco.com`. Switched from the old `COGNITO_DEFAULT` mailer (50/day cap, unreliable — see "Email delivery" below) on 2026-09-01. |
 | DynamoDB table | `AIAssuranceLab-UserMCPCredentials` (partition key `email`, `PAY_PER_REQUEST`) |
 | Bedrock model | `us.anthropic.claude-sonnet-4-5-20250929-v1:0` |
 | App path on instance | `/home/ubuntu/ai-assurance-lab` |
@@ -47,6 +47,58 @@ build pipeline, no load balancer — this is intentionally minimal for a
 
 No SSH key is usable for login (port 22 closed); all instance access is via
 **AWS SSM** (`aws ssm send-command`) or the web app's built-in admin routes.
+
+### Email delivery (Cognito invite / password reset)
+
+Two things had to be fixed on 2026-09-01 after a proctor got locked out:
+
+1. **User creation no longer suppresses the invite email.** `app.py`'s
+   `_create_cognito_student()` used to call `admin_create_user` with
+   `MessageAction='SUPPRESS'` and a random temp password that was never
+   shown to anyone. New accounts land in Cognito's `FORCE_CHANGE_PASSWORD`
+   state, and **Cognito refuses "Forgot password" for accounts in that
+   state** ("User password cannot be reset in the current state") — so a
+   suppressed invite meant the account was permanently unreachable. Fixed by
+   removing `MessageAction='SUPPRESS'` and adding
+   `DesiredDeliveryMediums=['EMAIL']` so Cognito sends the real invite.
+2. **Cognito's mailer was switched from `COGNITO_DEFAULT` to SES** (see
+   table above) because the default mailer is low-volume/best-effort with no
+   delivery guarantees and a 50/day cap.
+
+Both the invite email and the password-reset code email were also given
+custom templates so they include the login URL (`AdminCreateUserConfig.
+InviteMessageTemplate` and `VerificationMessageTemplate` on the user pool —
+these are **account config, not app code**, so they don't show up in git;
+re-apply via `aws cognito-idp update-user-pool` if they ever need
+recreating, e.g. after a `--email-configuration` update, which can silently
+reset `AdminCreateUserConfig` back to null if it isn't included in that same
+call):
+
+```bash
+aws cognito-idp update-user-pool --region us-east-1 \
+  --user-pool-id us-east-1_wUyz157rN \
+  --admin-create-user-config '{
+    "AllowAdminCreateUserOnly": true,
+    "InviteMessageTemplate": {
+      "EmailSubject": "Your AI Assurance Lab account",
+      "EmailMessage": "Welcome to the AI Assurance Lab!\n\nSign in here: https://ai.thousandeyeschannel.com/\n\nUsername: {username}\nTemporary password: {####}\n\nYou will be asked to set a new password on first login."
+    }
+  }'
+
+aws cognito-idp update-user-pool --region us-east-1 \
+  --user-pool-id us-east-1_wUyz157rN \
+  --verification-message-template '{
+    "DefaultEmailOption": "CONFIRM_WITH_CODE",
+    "EmailSubject": "Your AI Assurance Lab password reset code",
+    "EmailMessage": "Sign in here: https://ai.thousandeyeschannel.com/\n\nYour verification code is: {####}"
+  }'
+```
+
+If a student reports a missing invite/reset email: check spam first (SES
+delivery to `@cisco.com` has been confirmed working, but can be delayed a
+few minutes); if it's truly missing, an admin can bypass email entirely with
+`aws cognito-idp admin-set-user-password --permanent` to set a known
+password directly.
 
 ## File layout (key files)
 
