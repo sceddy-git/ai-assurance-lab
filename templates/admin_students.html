@@ -390,10 +390,46 @@
                 <h2><span class="icon">🔄</span> Reset Students</h2>
                 <p style="color: #666; margin-bottom: 15px; font-size: 14px;">
                     Delete all current students to prepare for a new cohort. This cannot be undone.
+                    Proctors are never deleted by this — they're accounts that persist across cohorts.
                 </p>
                 <button class="button danger" onclick="deleteAllStudents()">
                     Delete All Students
                 </button>
+            </div>
+
+            <!-- Proctor Management Section -->
+            <div class="section">
+                <h2><span class="icon">🛡️</span> Proctors</h2>
+                <div class="help-text">
+                    Proctors can upload/add students, delete students, and manage other proctors.
+                    They are never removed when you "Delete All Students". Only proctors can add
+                    or remove other proctors.
+                </div>
+
+                <div class="single-add-form">
+                    <input type="email" id="proctorEmail" placeholder="proctor@example.com" required>
+                    <input type="text" id="proctorFirstName" placeholder="First name (optional)">
+                    <input type="text" id="proctorLastName" placeholder="Last name (optional)">
+                    <button class="button" onclick="addProctor()" id="addProctorBtn">
+                        Add Proctor
+                    </button>
+                </div>
+
+                <div class="results" id="proctorResults">
+                    <div id="proctorResultsContent"></div>
+                </div>
+
+                <div class="students-list">
+                    <table id="proctorsTable">
+                        <thead>
+                            <tr>
+                                <th>Email</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="proctorsBody"></tbody>
+                    </table>
+                </div>
             </div>
 
             <!-- Current Students Section -->
@@ -655,6 +691,10 @@
                         <div class="result-stat">
                             <span class="stat-number">${data.deleted}</span>
                             <span>Students deleted</span>
+                        </div>
+                        <div class="result-stat">
+                            <span class="stat-number">${data.skipped_proctors || 0}</span>
+                            <span>Proctors kept (not deleted)</span>
                         </div>`;
                     setTimeout(loadStudents, 1500);
                 } else {
@@ -667,8 +707,100 @@
             });
         }
 
-        // Load students on page load
-        window.addEventListener('load', loadStudents);
+        function loadProctors() {
+            fetch('/api/admin/proctors/list')
+                .then(response => response.json())
+                .then(data => {
+                    const tbody = document.getElementById('proctorsBody');
+                    tbody.innerHTML = '';
+                    (data.proctors || []).forEach(proctor => {
+                        const row = tbody.insertRow();
+                        const deleteCell = proctor.is_super_admin
+                            ? '<span style="color:#999;">Permanent super admin</span>'
+                            : `<button class="button danger" style="padding:6px 14px;font-size:12px;" onclick="deleteProctor('${proctor.email}')">Remove</button>`;
+                        row.innerHTML = `<td>${proctor.email}${proctor.is_super_admin ? ' 👑' : ''}</td><td>${deleteCell}</td>`;
+                    });
+                })
+                .catch(error => console.error('Error loading proctors:', error));
+        }
+
+        function addProctor() {
+            const emailInput = document.getElementById('proctorEmail');
+            const firstNameInput = document.getElementById('proctorFirstName');
+            const lastNameInput = document.getElementById('proctorLastName');
+            const addBtn = document.getElementById('addProctorBtn');
+            const results = document.getElementById('proctorResults');
+            const resultsContent = document.getElementById('proctorResultsContent');
+
+            const email = emailInput.value.trim();
+            if (!email || !email.includes('@')) {
+                emailInput.focus();
+                return;
+            }
+
+            addBtn.disabled = true;
+            addBtn.textContent = 'Adding...';
+            results.classList.remove('show', 'success', 'error');
+
+            fetch('/api/admin/proctors/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: email,
+                    first_name: firstNameInput.value.trim(),
+                    last_name: lastNameInput.value.trim()
+                })
+            })
+            .then(response => response.json().then(data => ({ ok: response.ok, data })))
+            .then(({ ok, data }) => {
+                addBtn.disabled = false;
+                addBtn.textContent = 'Add Proctor';
+                results.classList.add('show');
+
+                if (ok && data.status === 'success') {
+                    results.classList.add('success');
+                    resultsContent.innerHTML = `<div class="result-stat"><span style="color:#10b981;">✓ ${data.message}</span></div>`;
+                    emailInput.value = '';
+                    firstNameInput.value = '';
+                    lastNameInput.value = '';
+                    setTimeout(loadProctors, 6000);
+                } else {
+                    results.classList.add('error');
+                    resultsContent.innerHTML = `<div class="result-stat"><span style="color:#ef4444;">✗ ${data.error || 'Unknown error'}</span></div>`;
+                }
+            })
+            .catch(error => {
+                addBtn.disabled = false;
+                addBtn.textContent = 'Add Proctor';
+                results.classList.add('show', 'error');
+                resultsContent.innerHTML = `<div class="result-stat"><span style="color:#ef4444;">✗ Error: ${error.message}</span></div>`;
+            });
+        }
+
+        function deleteProctor(email) {
+            if (!confirm(`Remove ${email} as a proctor and delete their account?`)) return;
+
+            fetch('/api/admin/proctors/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            })
+            .then(response => response.json().then(data => ({ ok: response.ok, data })))
+            .then(({ ok, data }) => {
+                if (ok && data.status === 'success') {
+                    setTimeout(loadProctors, 6000);
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => alert('Error: ' + error.message));
+        }
+
+        // Load students and proctors on page load
+        window.addEventListener('load', () => {
+            loadStudents();
+            loadProctors();
+        });
     </script>
 </body>
 </html>

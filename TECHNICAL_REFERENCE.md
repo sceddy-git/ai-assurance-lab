@@ -104,6 +104,24 @@ so "Connected ✓" means the MCP server genuinely accepted the credential.
    images to vision content blocks and extracts text from PDF/Excel/CSV before
    they're added to the message.
 
+## Proctor accounts
+
+`PROCTOR_EMAILS` (comma-separated, in `.env`) is the authoritative list of
+proctor emails, but the app never reads it raw — always via `_is_proctor()` /
+`_get_proctor_emails()` in `app.py`, which unconditionally add
+`SUPER_ADMIN_EMAIL = 'sceddy@cisco.com'` (hardcoded constant, not
+configurable) so the account owner can never be locked out or deleted even if
+`.env` is misconfigured or emptied.
+
+Routes: `GET /api/admin/proctors/list`, `POST /api/admin/proctors/add`,
+`POST /api/admin/proctors/delete` (all proctor-gated). Add/delete both call
+`_persist_proctor_emails()` (rewrites `.env` + updates `os.environ` for the
+current worker) followed by `_restart_flask_service()` so all Gunicorn
+workers pick up the change immediately, rather than requiring a manual
+restart or waiting for the next deploy. `delete_all_students()` computes
+`_get_proctor_emails()` fresh and skips any Cognito user whose email is in
+that set — proctors are never deleted by "Delete All Students".
+
 ## Deploying a code change
 
 There is **no CI/CD pipeline** — deployment is a manual git pull + restart,

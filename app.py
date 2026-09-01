@@ -621,17 +621,65 @@ def admin_students():
     """Proctor portal for managing students."""
     # Only allow if user is a proctor (hardcoded for now, could use DynamoDB)
     user_email = session.get('user_email', '')
-    proctor_emails = os.getenv('PROCTOR_EMAILS', 'admin@example.com').split(',')
-    
-    if user_email not in proctor_emails:
+    if not _is_proctor(user_email):
         return jsonify({'error': 'Access denied - proctor access required'}), 403
     
     return render_template('admin_students.html', email=user_email)
 
 
+# Hardcoded super-admin — always a proctor, can never be deleted or demoted
+# via the web UI, regardless of what PROCTOR_EMAILS contains. This is a
+# deliberate backstop so a misconfigured/emptied PROCTOR_EMAILS list can't
+# lock everyone (including the account owner) out of admin access.
+SUPER_ADMIN_EMAIL = 'sceddy@cisco.com'
+
+
+def _get_proctor_emails() -> list:
+    """Current proctor emails, always including the super admin."""
+    raw = os.getenv('PROCTOR_EMAILS', '')
+    emails = {e.strip().lower() for e in raw.split(',') if e.strip()}
+    emails.add(SUPER_ADMIN_EMAIL.lower())
+    return sorted(emails)
+
+
 def _is_proctor(user_email: str) -> bool:
-    proctor_emails = os.getenv('PROCTOR_EMAILS', 'admin@example.com').split(',')
-    return user_email in proctor_emails
+    return (user_email or '').strip().lower() in _get_proctor_emails()
+
+
+def _persist_proctor_emails(emails: list) -> None:
+    """Write PROCTOR_EMAILS back to .env and update the current process's
+    environment so this worker sees the change immediately. Other Gunicorn
+    workers won't see it until Flask is restarted, so callers should trigger
+    a restart after calling this (see /api/admin/proctors/add and /delete).
+    """
+    # Never persist the super admin into the file-based list; it's implicit.
+    emails = [e for e in emails if e.lower() != SUPER_ADMIN_EMAIL.lower()]
+    value = ','.join(emails)
+
+    env_file = '.env'
+    env_content = {}
+    if os.path.exists(env_file):
+        with open(env_file, 'r') as f:
+            for line in f:
+                if '=' in line and not line.startswith('#'):
+                    key, val = line.strip().split('=', 1)
+                    env_content[key] = val
+
+    env_content['PROCTOR_EMAILS'] = value
+    with open(env_file, 'w') as f:
+        for key, val in env_content.items():
+            f.write(f"{key}={val}\n")
+
+    os.environ['PROCTOR_EMAILS'] = value
+
+
+def _restart_flask_service() -> None:
+    """Best-effort restart so all Gunicorn workers pick up an env change."""
+    import subprocess
+    try:
+        subprocess.run(['/usr/bin/sudo', '/usr/bin/systemctl', 'restart', 'flask-app'], timeout=10)
+    except Exception as e:
+        logger.warning(f"Could not restart flask-app service: {e}")
 
 
 def _create_cognito_student(email: str, first_name: str = '', last_name: str = '') -> None:
@@ -796,9 +844,7 @@ def add_single_student():
 def list_students():
     """List all students in Cognito."""
     user_email = session.get('user_email', '')
-    proctor_emails = os.getenv('PROCTOR_EMAILS', 'admin@example.com').split(',')
-    
-    if user_email not in proctor_emails:
+    if not _is_proctor(user_email):
         return jsonify({'error': 'Access denied'}), 403
     
     try:
@@ -842,13 +888,14 @@ def list_students():
 @app.route('/api/admin/students/delete-all', methods=['POST'])
 @login_required
 def delete_all_students():
-    """Delete all students from Cognito."""
+    """Delete all students from Cognito. Proctors (and the super admin) are
+    never deleted by this — they're accounts that persist across cohorts."""
     user_email = session.get('user_email', '')
-    proctor_emails = os.getenv('PROCTOR_EMAILS', 'admin@example.com').split(',')
-    
-    if user_email not in proctor_emails:
+    if not _is_proctor(user_email):
         return jsonify({'error': 'Access denied'}), 403
-    
+
+    proctor_emails = set(_get_proctor_emails())
+
     try:
         users = []
         pagination_token = None
@@ -863,7 +910,12 @@ def delete_all_students():
                 break
 
         deleted = 0
+        skipped = 0
         for user in users:
+            email = next((attr['Value'] for attr in user['Attributes'] if attr['Name'] == 'email'), '')
+            if email.strip().lower() in proctor_emails:
+                skipped += 1
+                continue
             try:
                 cognito_client.admin_delete_user(
                     UserPoolId=os.getenv('COGNITO_USER_POOL_ID'),
@@ -875,12 +927,118 @@ def delete_all_students():
         
         return jsonify({
             'status': 'success',
-            'deleted': deleted
+            'deleted': deleted,
+            'skipped_proctors': skipped
         })
     
     except Exception as e:
         logger.error(f"Error deleting students: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
+# Proctor Management Routes (proctors only)
+# ============================================================================
+
+@app.route('/api/admin/proctors/list', methods=['GET'])
+@login_required
+def list_proctors():
+    """List current proctor emails."""
+    user_email = session.get('user_email', '')
+    if not _is_proctor(user_email):
+        return jsonify({'error': 'Access denied'}), 403
+
+    proctors = [
+        {'email': email, 'is_super_admin': email.lower() == SUPER_ADMIN_EMAIL.lower()}
+        for email in _get_proctor_emails()
+    ]
+    return jsonify({'status': 'success', 'proctors': proctors})
+
+
+@app.route('/api/admin/proctors/add', methods=['POST'])
+@login_required
+def add_proctor():
+    """Promote/create a proctor account. Only existing proctors can do this.
+
+    Creates a Cognito login for the new proctor (if one doesn't already
+    exist) and adds their email to the protected PROCTOR_EMAILS list, then
+    restarts Flask so every worker sees the updated proctor list.
+    """
+    user_email = session.get('user_email', '')
+    if not _is_proctor(user_email):
+        return jsonify({'error': 'Access denied'}), 403
+
+    data = request.json or {}
+    new_email = (data.get('email') or '').strip()
+    first_name = (data.get('first_name') or '').strip()
+    last_name = (data.get('last_name') or '').strip()
+
+    if not new_email or '@' not in new_email:
+        return jsonify({'error': 'A valid email address is required'}), 400
+
+    if new_email.strip().lower() == SUPER_ADMIN_EMAIL.lower():
+        return jsonify({'error': f'{SUPER_ADMIN_EMAIL} is already the permanent super admin'}), 400
+
+    # Create their Cognito login if they don't already have one (e.g.
+    # promoting an existing student just needs the PROCTOR_EMAILS update).
+    try:
+        _create_cognito_student(new_email, first_name, last_name)
+    except cognito_client.exceptions.UsernameExistsException:
+        pass
+    except Exception as e:
+        logger.error(f"Error creating proctor account {new_email}: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+    current = set(_get_proctor_emails())
+    current.add(new_email.strip().lower())
+    _persist_proctor_emails(sorted(current))
+
+    logger.info(f"Proctor {new_email} added by {user_email}")
+    _restart_flask_service()
+
+    return jsonify({
+        'status': 'success',
+        'message': f'{new_email} is now a proctor. Flask is restarting to apply it everywhere.'
+    })
+
+
+@app.route('/api/admin/proctors/delete', methods=['POST'])
+@login_required
+def delete_proctor():
+    """Remove proctor status and delete the account. The super admin can
+    never be removed this way."""
+    user_email = session.get('user_email', '')
+    if not _is_proctor(user_email):
+        return jsonify({'error': 'Access denied'}), 403
+
+    data = request.json or {}
+    target_email = (data.get('email') or '').strip()
+
+    if not target_email:
+        return jsonify({'error': 'email is required'}), 400
+
+    if target_email.strip().lower() == SUPER_ADMIN_EMAIL.lower():
+        return jsonify({'error': f'{SUPER_ADMIN_EMAIL} can never be removed'}), 403
+
+    current = set(_get_proctor_emails())
+    current.discard(target_email.strip().lower())
+    _persist_proctor_emails(sorted(current))
+
+    try:
+        cognito_client.admin_delete_user(
+            UserPoolId=os.getenv('COGNITO_USER_POOL_ID'),
+            Username=target_email
+        )
+    except Exception as e:
+        logger.warning(f"Could not delete Cognito user for removed proctor {target_email}: {e}")
+
+    logger.info(f"Proctor {target_email} removed by {user_email}")
+    _restart_flask_service()
+
+    return jsonify({
+        'status': 'success',
+        'message': f'{target_email} is no longer a proctor. Flask is restarting to apply it everywhere.'
+    })
 
 # ============================================================================
 # Settings/Administration Routes
@@ -891,9 +1049,7 @@ def delete_all_students():
 def admin_settings():
     """Settings and administration page for proctors."""
     user_email = session.get('user_email', '')
-    proctor_emails = os.getenv('PROCTOR_EMAILS', 'admin@example.com').split(',')
-    
-    if user_email not in proctor_emails:
+    if not _is_proctor(user_email):
         return jsonify({'error': 'Access denied - proctor access required'}), 403
     
     return render_template('admin_settings.html', email=user_email)
@@ -904,9 +1060,7 @@ def admin_settings():
 def get_settings():
     """Get current configuration (sensitive values redacted)."""
     user_email = session.get('user_email', '')
-    proctor_emails = os.getenv('PROCTOR_EMAILS', 'admin@example.com').split(',')
-    
-    if user_email not in proctor_emails:
+    if not _is_proctor(user_email):
         return jsonify({'error': 'Access denied'}), 403
     
     return jsonify({
@@ -929,9 +1083,7 @@ def get_settings():
 def update_settings():
     """Update configuration settings."""
     user_email = session.get('user_email', '')
-    proctor_emails = os.getenv('PROCTOR_EMAILS', 'admin@example.com').split(',')
-    
-    if user_email not in proctor_emails:
+    if not _is_proctor(user_email):
         return jsonify({'error': 'Access denied'}), 403
     
     data = request.json
@@ -983,9 +1135,7 @@ def update_settings():
 def system_status():
     """Get system status."""
     user_email = session.get('user_email', '')
-    proctor_emails = os.getenv('PROCTOR_EMAILS', 'admin@example.com').split(',')
-    
-    if user_email not in proctor_emails:
+    if not _is_proctor(user_email):
         return jsonify({'error': 'Access denied'}), 403
     
     import psutil
@@ -1036,9 +1186,7 @@ def system_status():
 def restart_flask():
     """Restart Flask application."""
     user_email = session.get('user_email', '')
-    proctor_emails = os.getenv('PROCTOR_EMAILS', 'admin@example.com').split(',')
-    
-    if user_email not in proctor_emails:
+    if not _is_proctor(user_email):
         return jsonify({'error': 'Access denied'}), 403
     
     try:
@@ -1066,9 +1214,7 @@ def restart_flask():
 def get_logs():
     """Get recent Flask logs."""
     user_email = session.get('user_email', '')
-    proctor_emails = os.getenv('PROCTOR_EMAILS', 'admin@example.com').split(',')
-    
-    if user_email not in proctor_emails:
+    if not _is_proctor(user_email):
         return jsonify({'error': 'Access denied'}), 403
     
     try:
@@ -1100,9 +1246,7 @@ def get_logs():
 def git_pull():
     """Pull latest code from git."""
     user_email = session.get('user_email', '')
-    proctor_emails = os.getenv('PROCTOR_EMAILS', 'admin@example.com').split(',')
-    
-    if user_email not in proctor_emails:
+    if not _is_proctor(user_email):
         return jsonify({'error': 'Access denied'}), 403
     
     try:

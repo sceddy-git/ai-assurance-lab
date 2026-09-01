@@ -48,12 +48,35 @@ first — see `PROCTOR_EMAILS` in Section 5 for who counts as a proctor).
 
 If you're running back-to-back sessions with different attendee lists, use
 **Delete All Students** on `/admin/students`, then bulk-upload the new roster.
-This clears Cognito users only — it does **not** touch the EC2 instance, so
-there's no downtime and nothing to redeploy.
+This clears Cognito **student** users only — it does **not** touch the EC2
+instance (no downtime, nothing to redeploy) and it **never deletes proctors**
+(see 2.3) — those accounts are meant to persist across every cohort.
 
 Each deleted student's encrypted API credentials in DynamoDB become orphaned
 (keyed by email) but harmless — a re-added student with the same email will
 just re-enter their credentials on the Credentials page as normal.
+
+### 2.3 Proctors vs. students
+
+Proctors are a protected class of account, managed from the **🛡️ Proctors**
+section on `/admin/students`:
+
+- **Add a proctor**: any existing proctor can promote/create another proctor
+  by email. This creates a Cognito login for them (if they don't already have
+  one) and adds them to the protected list. Only proctors can add other
+  proctors.
+- **Remove a proctor**: any proctor can remove another proctor, which deletes
+  their account and revokes proctor access.
+- **`sceddy@cisco.com` is a permanent super admin** — hardcoded in the app so
+  it can never be deleted or demoted, even if `PROCTOR_EMAILS` is emptied by
+  mistake. This is the account-owner backstop; it never needs to be re-added.
+- **Delete All Students never touches proctors.** Proctors are excluded from
+  that operation automatically — there's nothing extra you need to do to
+  protect them.
+
+Adding/removing a proctor restarts the Flask service (a few seconds of
+downtime for anyone actively chatting) so the change takes effect for every
+worker process immediately, rather than only on the next full redeploy.
 
 ### 2.3 Give students their instructions
 
@@ -118,14 +141,17 @@ to AWS Systems Manager (SSM) from your own machine — see
 
 ## 5. Proctor access
 
-Who counts as a "proctor" (sees the Students/Settings links, can hit the admin
-APIs) is controlled by the `PROCTOR_EMAILS` environment variable on the
-instance — a comma-separated list of emails. To add/remove a proctor, edit it
-via `⚙️ Settings` (Configuration section) or ask the person managing the AWS
-account to update `/home/ubuntu/ai-assurance-lab/.env` and restart Flask.
+Use the **🛡️ Proctors** section on `/admin/students` to add/remove proctors
+(Section 2.3) — this is the normal way to manage proctor access day-to-day.
 
-To create your own proctor login (if you don't already have one), the account
-owner can run, from a machine with AWS CLI access:
+The underlying `PROCTOR_EMAILS` environment variable can also be edited
+directly via `⚙️ Settings` (Configuration section) as a fallback, but prefer
+the Proctors UI since it also creates/deletes the Cognito login for you and
+restarts Flask automatically.
+
+If you're bootstrapping a brand-new deployment and have no proctor login yet
+at all, the account owner can create the very first one directly, from a
+machine with AWS CLI access:
 
 ```bash
 aws cognito-idp admin-create-user \
