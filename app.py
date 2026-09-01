@@ -407,40 +407,50 @@ def chat():
         messages = conversation_history + [
             {"role": "user", "content": user_message}
         ]
-        
-        # Call Bedrock Claude model
-        request_body = {
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 2048,
-            "messages": messages
-        }
-        if available_tools:
-            request_body["tools"] = available_tools
-        
-        try:
-            response = bedrock_client.invoke_model(
-                modelId='us.anthropic.claude-sonnet-4-5-20250929-v1:0',
-                body=json.dumps(request_body)
-            )
-            
-            result = json.loads(response['body'].read())
-            content = result.get('content', [])
-        
-        except Exception as e:
-            logger.error(f"Bedrock invocation failed: {e}")
-            return jsonify({'error': 'Failed to invoke AI model'}), 500
-        
-        # Check if Claude made any tool calls
-        tool_calls = [c for c in content if c.get('type') == 'tool_use']
-        
-        if tool_calls:
+
+        # Agentic loop: Claude may need multiple rounds of tool calls before it
+        # has enough information to answer (e.g. Meraki's MCP server exposes a
+        # generic semantic_search + execute_api pair that often requires a
+        # search call followed by an execute call). Cap iterations to avoid
+        # runaway loops while still allowing multi-step tool use.
+        MAX_TOOL_ITERATIONS = 6
+        total_tools_used = 0
+        content = []
+
+        for iteration in range(MAX_TOOL_ITERATIONS):
+            request_body = {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 2048,
+                "messages": messages
+            }
+            if available_tools:
+                request_body["tools"] = available_tools
+
+            try:
+                response = bedrock_client.invoke_model(
+                    modelId='us.anthropic.claude-sonnet-4-5-20250929-v1:0',
+                    body=json.dumps(request_body)
+                )
+                result = json.loads(response['body'].read())
+                content = result.get('content', [])
+            except Exception as e:
+                logger.error(f"Bedrock invocation failed: {e}")
+                return jsonify({'error': 'Failed to invoke AI model'}), 500
+
+            tool_calls = [c for c in content if c.get('type') == 'tool_use']
+
+            if not tool_calls:
+                # Claude is done calling tools; this is the final answer.
+                break
+
+            total_tools_used += len(tool_calls)
             tool_results = []
-            
+
             for tool_call in tool_calls:
                 tool_name = tool_call.get('name', '')
                 tool_input = tool_call.get('input', {})
                 tool_use_id = tool_call.get('id', '')
-                
+
                 # Route to the MCP server (ThousandEyes or Meraki) that advertised this tool
                 try:
                     routing = tool_routing.get(tool_name)
@@ -449,51 +459,33 @@ def chat():
                     else:
                         mcp_url, mcp_token = routing
                         tool_result = call_mcp_tool(mcp_url, mcp_token, tool_name, tool_input)
-                
                 except MCPClientError as e:
                     logger.error(f"Tool execution error for {tool_name}: {e}")
                     tool_result = {"error": f"Tool execution failed: {str(e)}"}
                 except Exception as e:
                     logger.error(f"Tool execution error for {tool_name}: {e}")
                     tool_result = {"error": f"Tool execution failed: {str(e)}"}
-                
+
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": tool_use_id,
                     "content": json.dumps(tool_result) if not isinstance(tool_result, str) else tool_result
                 })
-            
-            # Continue conversation with tool results
+
+            # Feed the tool results back and let Claude continue (may call more tools)
             messages.append({"role": "assistant", "content": content})
             messages.append({"role": "user", "content": tool_results})
-            
-            try:
-                final_response = bedrock_client.invoke_model(
-                    modelId='us.anthropic.claude-sonnet-4-5-20250929-v1:0',
-                    body=json.dumps({
-                        "anthropic_version": "bedrock-2023-05-31",
-                        "max_tokens": 2048,
-                        "messages": messages
-                    })
-                )
-                
-                final_result = json.loads(final_response['body'].read())
-                assistant_message = final_result['content'][0]['text']
-            
-            except Exception as e:
-                logger.error(f"Final response generation failed: {e}")
-                return jsonify({'error': 'Failed to generate final response'}), 500
-        
         else:
-            # No tool calls, just return the response
-            assistant_message = next(
-                (c.get('text', '') for c in content if c.get('type') == 'text'),
-                'No response generated'
-            )
-        
+            logger.warning(f"Hit max tool iterations ({MAX_TOOL_ITERATIONS}) for {email}")
+
+        assistant_message = next(
+            (c.get('text', '') for c in content if c.get('type') == 'text'),
+            'The assistant used tools but did not return a final text response. Please try rephrasing your question.'
+        )
+
         return jsonify({
             "response": assistant_message,
-            "tools_used": len(tool_calls) if tool_calls else 0,
+            "tools_used": total_tools_used,
             "te_available": bool(te_token),
             "meraki_available": bool(meraki_token)
         })
