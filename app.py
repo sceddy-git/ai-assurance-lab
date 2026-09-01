@@ -260,6 +260,7 @@ def add_credential():
         org_id = (data.get('org_id') or '').strip()
         
         if service not in ['thousandeyes', 'meraki', 'splunk']:
+            logger.warning(f"add_credential rejected for {email}: unknown service '{service}'")
             return jsonify({'error': 'Unknown service'}), 400
         
         if service == 'splunk':
@@ -267,8 +268,10 @@ def add_credential():
             # tunnel, or a facilitator-hosted shared server). The token/API
             # key is optional - some self-hosted servers don't require one.
             if not url:
+                logger.warning(f"add_credential rejected for {email}: splunk url missing")
                 return jsonify({'error': 'Splunk MCP server URL is required'}), 400
             if not url.startswith('http://') and not url.startswith('https://'):
+                logger.warning(f"add_credential rejected for {email}: splunk url '{url}' missing http(s) scheme")
                 return jsonify({'error': 'Splunk MCP server URL must start with http:// or https://'}), 400
             save_user_credentials(email, splunk_url=url, splunk_token=token or None)
             logger.info(f"Saved splunk credential for {email}")
@@ -284,17 +287,20 @@ def add_credential():
             return jsonify({'status': 'success', 'message': 'Meraki organization ID saved'})
         
         if not token:
+            logger.warning(f"add_credential rejected for {email}: {service} token missing")
             return jsonify({'error': 'token is required'}), 400
         
         # Validate token format
         if service == 'thousandeyes':
             # ThousandEyes tokens are typically 32+ chars
             if len(token) < 10:
+                logger.warning(f"add_credential rejected for {email}: thousandeyes token too short (len={len(token)})")
                 return jsonify({'error': 'ThousandEyes token appears too short'}), 400
         
         elif service == 'meraki':
             # Meraki tokens are typically 32+ chars
             if len(token) < 20:
+                logger.warning(f"add_credential rejected for {email}: meraki token too short (len={len(token)})")
                 return jsonify({'error': 'Meraki token appears too short'}), 400
         
         # Save credentials
