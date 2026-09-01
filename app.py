@@ -33,6 +33,7 @@ from mcp_client import (
     THOUSANDEYES_MCP_URL,
     MERAKI_MCP_URL
 )
+from attachments import process_uploaded_files, AttachmentError, MAX_FILES, MAX_FILE_BYTES
 
 # Configure logging
 logging.basicConfig(
@@ -44,7 +45,20 @@ logger = logging.getLogger(__name__)
 # Initialize Flask app
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+# Cap total request size well above MAX_FILES * MAX_FILE_BYTES to leave room
+# for form fields/history, while still bounding worst-case memory/DoS exposure.
+app.config['MAX_CONTENT_LENGTH'] = (MAX_FILES * MAX_FILE_BYTES) + (2 * 1024 * 1024)
 CORS(app)
+
+HTML_OUTPUT_SYSTEM_PROMPT = (
+    "When the user asks you to generate a report, document, dashboard, or any kind of "
+    "downloadable output, produce a complete, valid, self-contained HTML document "
+    "(inline <style>, no external resources or network requests) inside a single "
+    "```html fenced code block. The user's chat interface will automatically offer "
+    "a download button for any ```html code block you return, so prefer this format "
+    "whenever the user wants something they can save or share, rather than only "
+    "describing it in prose."
+)
 
 # AWS and Cognito configuration
 COGNITO_DOMAIN = os.getenv('COGNITO_DOMAIN')
@@ -362,13 +376,33 @@ def chat():
     """
     try:
         email = session.get('user_email')
-        data = request.json
-        user_message = data.get('message', '')
-        conversation_history = data.get('history', [])
-        
-        if not user_message:
+
+        # Support both plain JSON (no attachments) and multipart/form-data
+        # (attachments present) requests from the frontend.
+        if request.content_type and 'multipart/form-data' in request.content_type:
+            user_message = request.form.get('message', '')
+            try:
+                conversation_history = json.loads(request.form.get('history', '[]'))
+            except (TypeError, ValueError):
+                conversation_history = []
+            uploaded_files = request.files.getlist('files')
+        else:
+            data = request.json or {}
+            user_message = data.get('message', '')
+            conversation_history = data.get('history', [])
+            uploaded_files = []
+
+        if not user_message and not uploaded_files:
             return jsonify({'error': 'Message is required'}), 400
-        
+
+        # Process attachments in-memory only; nothing is written to disk.
+        attachment_blocks = []
+        if uploaded_files:
+            try:
+                attachment_blocks = process_uploaded_files(uploaded_files)
+            except AttachmentError as e:
+                return jsonify({'error': str(e)}), 400
+
         # Get user's stored credentials
         try:
             credentials = get_user_credentials(email)
@@ -403,9 +437,18 @@ def chat():
             except MCPClientError as e:
                 logger.warning(f"Failed to list Meraki MCP tools for {email}: {e}")
         
-        # Build messages for Claude
+        # Build messages for Claude. If there are attachments, the user turn
+        # becomes a list of content blocks (images/extracted text + the
+        # user's own text) instead of a plain string.
+        if attachment_blocks:
+            user_content = list(attachment_blocks)
+            if user_message:
+                user_content.append({"type": "text", "text": user_message})
+        else:
+            user_content = user_message
+
         messages = conversation_history + [
-            {"role": "user", "content": user_message}
+            {"role": "user", "content": user_content}
         ]
 
         # Agentic loop: Claude may need multiple rounds of tool calls before it
@@ -420,7 +463,8 @@ def chat():
         for iteration in range(MAX_TOOL_ITERATIONS):
             request_body = {
                 "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 2048,
+                "max_tokens": 4096,
+                "system": HTML_OUTPUT_SYSTEM_PROMPT,
                 "messages": messages
             }
             if available_tools:

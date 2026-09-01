@@ -368,6 +368,78 @@
             background: var(--bg-page);
         }
 
+        .attachments-row {
+            max-width: 700px;
+            margin: 0 auto 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .attachment-chip {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-subtle);
+            border-radius: 14px;
+            padding: 5px 10px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .attachment-chip .chip-remove {
+            cursor: pointer;
+            color: var(--text-secondary);
+            font-weight: 700;
+            padding: 0 2px;
+        }
+
+        .attachment-chip .chip-remove:hover {
+            color: var(--danger);
+        }
+
+        .attach-button {
+            background: transparent;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 8px 4px 8px 8px;
+            color: var(--text-secondary);
+            transition: color 0.2s;
+        }
+
+        .attach-button:hover {
+            color: var(--accent);
+        }
+
+        /* Downloadable HTML output blocks */
+        .html-output-actions {
+            display: flex;
+            gap: 8px;
+            margin: -6px 0 12px 0;
+        }
+
+        .html-download-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--accent-soft);
+            color: var(--accent-hover);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .html-download-btn:hover {
+            background: var(--accent);
+            color: white;
+        }
+
         .input-group {
             max-width: 700px;
             margin: 0 auto;
@@ -567,7 +639,10 @@
 
                 <!-- Input Area -->
                 <div class="input-area">
+                    <div class="attachments-row" id="attachments-row"></div>
                     <div class="input-group">
+                        <button id="attach-button" class="attach-button" title="Attach files (images, PDF, XLS, CSV)" onclick="document.getElementById('file-input').click()">📎</button>
+                        <input type="file" id="file-input" multiple accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.xls,.xlsx,.csv" style="display:none;">
                         <input 
                             type="text" 
                             id="message-input" 
@@ -684,7 +759,7 @@
             return DOMPurify.sanitize(rawHtml, { ADD_ATTR: ['target', 'rel'] });
         }
 
-        function addMessage(text, isUser) {
+        function addMessage(text, isUser, fileNames) {
             const messagesContainer = document.getElementById('messages');
             const messagesInner = document.getElementById('messages-inner');
 
@@ -709,7 +784,19 @@
 
             if (isUser) {
                 // User input is plain text, never rendered as HTML.
-                content.textContent = text;
+                if (fileNames && fileNames.length) {
+                    const fileList = document.createElement('div');
+                    fileList.style.marginBottom = text ? '6px' : '0';
+                    fileList.style.fontSize = '12px';
+                    fileList.style.opacity = '0.75';
+                    fileList.textContent = '📎 ' + fileNames.join(', ');
+                    content.appendChild(fileList);
+                }
+                if (text) {
+                    const textDiv = document.createElement('div');
+                    textDiv.textContent = text;
+                    content.appendChild(textDiv);
+                }
             } else {
                 content.classList.add('markdown-body');
                 content.innerHTML = renderMarkdown(text);
@@ -718,6 +805,7 @@
                     link.setAttribute('target', '_blank');
                     link.setAttribute('rel', 'noopener noreferrer');
                 });
+                addHtmlDownloadButtons(content);
             }
 
             messageDiv.appendChild(content);
@@ -726,6 +814,95 @@
             // Scroll to bottom
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
+
+        // Scan a rendered assistant message for ```html fenced code blocks
+        // (marked renders these as <pre><code class="language-html">) and
+        // inject a Download button so the user can save the generated
+        // report/document as a standalone .html file.
+        function addHtmlDownloadButtons(contentEl) {
+            const htmlBlocks = contentEl.querySelectorAll('pre > code.language-html');
+            htmlBlocks.forEach((codeEl, idx) => {
+                const pre = codeEl.parentElement;
+                const htmlSource = codeEl.textContent;
+
+                const actions = document.createElement('div');
+                actions.className = 'html-output-actions';
+
+                const downloadBtn = document.createElement('button');
+                downloadBtn.className = 'html-download-btn';
+                downloadBtn.textContent = '⬇ Download HTML';
+                downloadBtn.onclick = () => {
+                    const blob = new Blob([htmlSource], { type: 'text/html' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `report-${Date.now()}${idx ? '-' + idx : ''}.html`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                };
+
+                const previewBtn = document.createElement('button');
+                previewBtn.className = 'html-download-btn';
+                previewBtn.textContent = '👁 Preview';
+                previewBtn.onclick = () => {
+                    const blob = new Blob([htmlSource], { type: 'text/html' });
+                    const url = URL.createObjectURL(blob);
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                };
+
+                actions.appendChild(downloadBtn);
+                actions.appendChild(previewBtn);
+                pre.parentNode.insertBefore(actions, pre);
+            });
+        }
+
+        // ---- Attachment handling ----
+        const MAX_ATTACH_FILES = 5;
+        const MAX_ATTACH_BYTES = 10 * 1024 * 1024; // 10 MB, mirrors backend limit
+        let selectedFiles = [];
+
+        function renderAttachmentChips() {
+            const row = document.getElementById('attachments-row');
+            row.innerHTML = '';
+            selectedFiles.forEach((file, idx) => {
+                const chip = document.createElement('div');
+                chip.className = 'attachment-chip';
+
+                const label = document.createElement('span');
+                label.textContent = `📄 ${file.name}`;
+                chip.appendChild(label);
+
+                const remove = document.createElement('span');
+                remove.className = 'chip-remove';
+                remove.textContent = '×';
+                remove.onclick = () => {
+                    selectedFiles.splice(idx, 1);
+                    renderAttachmentChips();
+                };
+                chip.appendChild(remove);
+
+                row.appendChild(chip);
+            });
+        }
+
+        document.getElementById('file-input').addEventListener('change', (e) => {
+            const newFiles = Array.from(e.target.files || []);
+            for (const file of newFiles) {
+                if (selectedFiles.length >= MAX_ATTACH_FILES) {
+                    addMessage(`Error: You can attach at most ${MAX_ATTACH_FILES} files per message.`, false);
+                    break;
+                }
+                if (file.size > MAX_ATTACH_BYTES) {
+                    addMessage(`Error: '${file.name}' is too large (max ${MAX_ATTACH_BYTES / 1024 / 1024} MB).`, false);
+                    continue;
+                }
+                selectedFiles.push(file);
+            }
+            e.target.value = ''; // allow re-selecting the same file later
+            renderAttachmentChips();
+        });
 
         function showLoadingIndicator() {
             const messagesContainer = document.getElementById('messages');
@@ -759,30 +936,48 @@
 
         async function sendMessage() {
             const message = messageInput.value.trim();
-            if (!message) return;
+            const filesToSend = selectedFiles.slice();
+            if (!message && filesToSend.length === 0) return;
 
             // Disable input while processing
             messageInput.disabled = true;
             sendButton.disabled = true;
+            document.getElementById('attach-button').disabled = true;
 
             try {
                 // Add user message to UI
-                addMessage(message, true);
-                conversationHistory.push({ role: 'user', content: message });
+                addMessage(message, true, filesToSend.map(f => f.name));
+                // Attachments aren't replayed on later turns (kept out of the
+                // lightweight text history) to avoid resending large payloads.
+                conversationHistory.push({ role: 'user', content: message || '[Attached file(s)]' });
                 messageInput.value = '';
+                selectedFiles = [];
+                renderAttachmentChips();
 
                 // Show loading indicator
                 showLoadingIndicator();
 
-                // Send to backend
-                const response = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        message: message,
-                        history: conversationHistory
-                    })
-                });
+                let response;
+                if (filesToSend.length > 0) {
+                    const formData = new FormData();
+                    formData.append('message', message);
+                    formData.append('history', JSON.stringify(conversationHistory.slice(0, -1)));
+                    filesToSend.forEach(file => formData.append('files', file));
+
+                    response = await fetch('/api/chat', {
+                        method: 'POST',
+                        body: formData
+                    });
+                } else {
+                    response = await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            message: message,
+                            history: conversationHistory.slice(0, -1)
+                        })
+                    });
+                }
 
                 if (!response.ok) {
                     const error = await response.json();
@@ -807,6 +1002,7 @@
                 addMessage('Error: Could not reach the server', false);
             } finally {
                 messageInput.disabled = false;
+                document.getElementById('attach-button').disabled = false;
                 sendButton.disabled = false;
                 messageInput.focus();
             }
