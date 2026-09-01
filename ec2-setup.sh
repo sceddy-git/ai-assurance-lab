@@ -55,7 +55,7 @@ Type=notify
 User=ubuntu
 WorkingDirectory=/home/ubuntu/ai-assurance-lab
 Environment="PATH=/home/ubuntu/ai-assurance-lab/venv/bin"
-ExecStart=/home/ubuntu/ai-assurance-lab/venv/bin/gunicorn --workers 3 --bind 0.0.0.0:5000 --timeout 120 app:app
+ExecStart=/home/ubuntu/ai-assurance-lab/venv/bin/gunicorn --workers 3 --bind 0.0.0.0:5000 --timeout 180 app:app
 Restart=always
 RestartSec=10
 
