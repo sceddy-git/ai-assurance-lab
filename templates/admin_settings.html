@@ -389,7 +389,7 @@
                 <div class="tab-content" id="logs">
                     <div class="section">
                         <h2>Application Logs</h2>
-                        <p class="help-text" id="logsHelpText">Last 100 lines from systemd journal</p>
+                        <p class="help-text" id="logsHelpText">Last 100 lines from systemd journal, newest first</p>
 
                         <div class="form-group" style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap;">
                             <input
@@ -654,8 +654,8 @@
                     if (f.since_minutes) activeParts.push(`within last ${f.since_minutes} min`);
 
                     helpEl.textContent = activeParts.length
-                        ? `Filtered: ${activeParts.join(', ')} (showing up to 300 matches)`
-                        : 'Last 100 lines from systemd journal';
+                        ? `Filtered: ${activeParts.join(', ')} (showing up to 300 matches, newest first)`
+                        : 'Last 100 lines from systemd journal, newest first';
 
                     if (!data.logs || data.logs.length === 0 || (data.logs.length === 1 && !data.logs[0])) {
                         el.innerHTML = '<p class="help-text">No matching log lines found.</p>';

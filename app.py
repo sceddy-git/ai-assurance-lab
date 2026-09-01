@@ -1269,7 +1269,11 @@ def get_logs():
 
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
 
+        # journalctl's output always ends with a trailing newline, which
+        # would become a leading blank line once we reverse the order below.
         logs = result.stdout.split('\n')
+        while logs and logs[-1] == '':
+            logs.pop()
 
         if user_filter:
             needle = user_filter.lower()
@@ -1288,6 +1292,10 @@ def get_logs():
         if any_filter:
             # Keep the response light even if filters match a lot.
             logs = logs[-300:]
+
+        # journalctl returns oldest-first; flip so the newest entry is
+        # always at the top of the list (and therefore the top of the page).
+        logs = list(reversed(logs))
 
         return jsonify({
             'status': 'success',
