@@ -78,12 +78,31 @@ Adding/removing a proctor restarts the Flask service (a few seconds of
 downtime for anyone actively chatting) so the change takes effect for every
 worker process immediately, rather than only on the next full redeploy.
 
-### 2.3 Give students their instructions
+### 2.4 Give students their instructions
 
 Send students only:
 1. The URL: **https://ai.thousandeyeschannel.com**
-2. Their email (as added above) — first login triggers Cognito's "set new
-   password" flow.
+2. Their email (as added above).
+
+**There is no default/shared password.** Each account is created with a
+random one-time password that is never emailed or shown to anyone. On first
+visit, students should:
+
+1. Go to the URL above → click through to the sign-in page.
+2. Click **"Forgot your password?"** (right under the password field).
+3. Enter their email → Cognito emails them a verification code.
+4. Enter the code + choose their own password → they're logged in.
+
+Tell students to check spam/junk if the code doesn't arrive within a minute —
+these come from Cognito's own mailer, which occasionally lands there.
+
+**Capacity note:** Cognito's built-in email service is capped at **50
+emails/day for the whole pool** (not per student). A single ~40-student
+session fits, but running two sessions the same day, or students needing
+multiple reset attempts, can hit that cap. If a student says they never
+received their code and it's not in spam, check `⚙️ Settings` → Logs, or ask
+whoever manages the AWS account whether the daily email cap was hit (see
+`TECHNICAL_REFERENCE.md` for the fix — switching to SES removes the cap).
 
 The in-app **📘 Lab Guide** sidebar (and a "pop out to new tab" button) contains
 everything else: how to connect ThousandEyes/Meraki/Splunk, and all lab prompts.

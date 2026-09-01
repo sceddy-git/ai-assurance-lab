@@ -36,8 +36,9 @@ build pipeline, no load balancer — this is intentionally minimal for a
 | Domain | `ai.thousandeyeschannel.com` (Route 53 A record → EIP) |
 | Security group | `sg-07f716a418f2fb83d` (`ai-assurance-lab-sg`) — inbound 80, 443 only. No port 22. |
 | IAM instance profile | `EC2-SSM-Profile` (SSM Core + app permissions — Bedrock invoke, DynamoDB CRUD, Cognito admin) |
-| Cognito User Pool | `us-east-1_3aL2Ylduc` |
-| Cognito App Client | `5h572dpvu1dt4s2gstg5elulnl` (`te-platform-prod-web-client`), Hosted UI enabled, callback `https://ai.thousandeyeschannel.com/auth/callback` |
+| Cognito User Pool | `us-east-1_wUyz157rN` |
+| Cognito App Client | `24ou7s3h56i851ofdjmadbkklm` (`ai-assurance-lab-app`), Hosted UI enabled, callback `https://ai.thousandeyeschannel.com/auth/callback` |
+| Cognito email sending | `COGNITO_DEFAULT` (built-in mailer) — capped at **50 emails/day for the whole pool**. Fine for one ~40-student session; risky if you run multiple sessions same day or students retry "Forgot password" a lot. Switch `EmailConfiguration` to SES (a verified SES domain, `thousandeyeschannel.com`, already exists from an earlier setup attempt) if this becomes a problem. |
 | DynamoDB table | `AIAssuranceLab-UserMCPCredentials` (partition key `email`, `PAY_PER_REQUEST`) |
 | Bedrock model | `us.anthropic.claude-sonnet-4-5-20250929-v1:0` |
 | App path on instance | `/home/ubuntu/ai-assurance-lab` |
