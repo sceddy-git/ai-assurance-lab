@@ -166,7 +166,7 @@
   <div class="sub">Lab Guide — turning plain English into real network action with Claude &amp; MCP</div>
   <div class="pills">
     <a href="#sec-te" class="pill" style="border-color:var(--te)">ThousandEyes</a><a href="#sec-meraki" class="pill" style="border-color:var(--meraki)">Meraki Magic</a>
-    <a href="#sec-splunk" class="pill" style="border-color:var(--splunk)">Splunk</a><a href="#sec-n8n" class="pill" style="border-color:var(--n8n)">Build an MCP server</a><a href="#sec-gabi" class="pill" style="border-color:var(--gabi)">Catalyst Centre</a>
+    <a href="#sec-splunk" class="pill" style="border-color:var(--splunk)">Splunk</a><a href="#sec-n8n" class="pill" style="border-color:var(--n8n)">Build an MCP server</a>
   </div>
 </div>
 
@@ -200,7 +200,6 @@
         <li><a href="#sec-meraki" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-mk"></span><b>2 · Meraki</b> — connect via Credentials &amp; lab prompts <span class="badge b-req">Required</span></a></li>
         <li><a href="#sec-splunk" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-sp"></span><b>3 · Splunk</b> — 3 investigation labs (bonus, needs Claude Desktop) <span class="badge b-opt">Optional</span></a></li>
         <li><a href="#sec-n8n" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-n8"></span><b>4 · MCP Tool-Building</b> — build your own MCP server with Cursor (bonus) <span class="badge b-opt">Optional</span></a></li>
-        <li><a href="#sec-gabi" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-gb"></span><b>5 · Gabi's Repo</b> — Meraki API Explorer &amp; Catalyst Centre <span class="badge b-opt">Optional</span></a></li>
       </ul>
       <p style="margin:8px 0 0;font-size:14px;color:var(--muted)">Modules 1 &amp; 2 run entirely inside this web app. Modules 3–5 are bonus material for anyone who wants to go further using their own Claude Desktop or Cursor install — see each section for details. Use the <b>Print / Save PDF</b> button at the top of the page to save a copy of this guide for your event.</p>
     </div>
@@ -760,29 +759,6 @@ exec node /ABSOLUTE/PATH/TO/dist/index.js</pre></div></div>
     </div>
   </section>
 
-  <!-- 5. GABI (optional) -->
-  <section id="sec-gabi">
-    <div class="sec-head gb"><div class="sec-tag">Module 5 · Featured<a href="#">↑ back to top</a></div>
-      <h2>Gabi's Repo — Meraki &amp; Catalyst Centre <span class="badge b-opt">Featured</span></h2>
-      <div class="sec-desc">A community MCP that adds a Meraki API Explorer and Catalyst Centre tools. Repo link provided by your facilitator.</div></div>
-    <div class="gb">
-    <div class="lab"><div class="lab-h"><span class="n">LAB 1</span> Meraki API Explorer</div><div class="lab-b">
-      <div class="sub">Anything the pre-built tools can't answer gets routed through the API spec search.</div>
-      <div class="prompt">What Meraki organisations do I have access to? List their names, IDs, and licence status.</div>
-      <div class="prompt">Show all networks in my organisation and which product types (MX, MS, MR, MV) are deployed in each.</div>
-      <div class="prompt">Which devices haven't been seen online in the last 7 days? Include model, serial, and last-seen timestamp.</div>
-      <div class="prompt">Are there any devices running firmware more than 2 major versions behind the current release?</div>
-    </div></div>
-    <div class="lab"><div class="lab-h"><span class="n">LAB 2</span> Catalyst Centre</div><div class="lab-b">
-      <div class="sub">Inventory, assurance, issues, compliance — all in plain English.</div>
-      <div class="prompt">Give me a full device inventory from Catalyst Centre — how many devices, what models, and their health-score distribution.</div>
-      <div class="prompt">Are there any active P1 or P2 issues right now? For each, give the affected device, issue type, and when it was first detected.</div>
-      <div class="prompt">Show client health for the last 24 hours, wired vs wireless. Any sites below a health score of 7?</div>
-      <div class="prompt">List all devices out of compliance — what the check failed on and which sites are affected.</div>
-    </div></div>
-    </div>
-  </section>
-
   <!-- APPENDIX -->
   <section>
     <div class="sec-head"><div class="sec-tag">Appendix</div><h2>Troubleshooting &amp; glossary</h2></div>
@@ -799,13 +775,13 @@ exec node /ABSOLUTE/PATH/TO/dist/index.js</pre></div></div>
       <li><b>MCP</b> — Model Context Protocol; the standard that lets Claude use external tools.</li>
       <li><b>Connector</b> — how you add an MCP server to Claude (remote URL + OAuth, or a local command).</li>
       <li><b>Enterprise Agent</b> — a ThousandEyes vantage point that runs your tests.</li>
-      <li><b>Org ID / API key</b> — your Meraki Dashboard credentials the local server uses.</li>
+      <li><b>Org ID / API key</b> — your Meraki Dashboard credentials, entered once in <b>⚙️ Credentials</b>.</li>
     </ul>
   </section>
 
   <footer>
     AI Assurance — Partner MCP Day · Lab Guide &nbsp;·&nbsp; Cisco &times; Anthropic<br>
-    ThousandEyes &amp; Meraki are required modules; Splunk, Build an MCP server and Gabi's Repo are featured add-ons.
+    ThousandEyes &amp; Meraki are required modules; Splunk and Build an MCP server are optional bonus add-ons.
   </footer>
 </div>
 
