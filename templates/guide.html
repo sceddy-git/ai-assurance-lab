@@ -169,7 +169,7 @@
       <h4>Everything runs in one place — this web app</h4>
       <ul class="tick">
         <li><b>No installs, no config files, no Claude Desktop.</b> You're already in the lab platform. The chat on the right talks to Claude on AWS Bedrock, which calls ThousandEyes and Meraki through their official hosted MCP servers on your behalf.</li>
-        <li><b>One-time setup per service:</b> open <b>⚙️ Credentials</b> in the header, paste in your ThousandEyes and Meraki API tokens, and click <b>Test Connection</b>. That's it — no OAuth pop-ups, no local Python servers, no JSON config to edit.</li>
+        <li><b>One-time setup per service:</b> open <b>⚙️ Credentials</b> in the header, paste in your ThousandEyes OAuth Bearer token and Meraki API token, and click <b>Test Connection</b>. That's it — no OAuth pop-ups to click through, no local Python servers, no JSON config to edit.</li>
         <li>Once a service shows <b>Connected ✓</b>, just ask Claude questions in the chat — it automatically knows which tools it has available and uses them for you.</li>
       </ul>
     </div>
@@ -189,17 +189,17 @@
   <section id="sec-te">
     <div class="sec-head te"><div class="sec-tag">Module 1 · Required<a href="#">↑ back to top</a></div>
       <h2>ThousandEyes MCP</h2>
-      <div class="sec-desc">Connect this web app to Cisco's official ThousandEyes MCP server — one API token, pasted once, no install.</div></div>
+      <div class="sec-desc">Connect this web app to Cisco's official ThousandEyes MCP server — one OAuth Bearer token, pasted once, no install.</div></div>
 
-    <div class="tip"><span class="i">🎟️</span><div><b>No ThousandEyes account?</b> See the lab proctor — demo licenses and an API token are provided for today.</div></div>
+    <div class="tip"><span class="i">🎟️</span><div><b>No ThousandEyes account?</b> See the lab proctor — demo licenses and an OAuth Bearer token are provided for today.</div></div>
 
     <h3>Connect ThousandEyes (2 minutes, in this app)</h3>
-    <p class="lead">The ThousandEyes MCP server is cloud-hosted by Cisco. This lab platform talks to it on your behalf using your own personal API token — nothing to install, nothing to configure locally.</p>
+    <p class="lead">The ThousandEyes MCP server is cloud-hosted by Cisco. This lab platform talks to it on your behalf using your own personal OAuth Bearer token — nothing to install, nothing to configure locally.</p>
     <div class="te">
     <ol class="steps">
-      <li><div><div class="st-t">Get your ThousandEyes API token</div><div class="st-d">In the ThousandEyes UI, go to <b>Account Settings → Users and Roles → API Tokens</b> (or ask your proctor for the demo account's token). Copy it — you'll paste it once.</div></div></li>
+      <li><div><div class="st-t">Get your ThousandEyes OAuth Bearer token</div><div class="st-d">In the ThousandEyes UI, go to <b>Account Settings → Users and Roles → User API Tokens</b> (or ask your proctor for the demo account's token). Copy the <b>OAuth Bearer Token</b> — you'll paste it once.</div></div></li>
       <li><div><div class="st-t">Open Credentials in this app</div><div class="st-d">Click <b>⚙️ Credentials</b> in the header of the chat page.</div></div></li>
-      <li><div><div class="st-t">Paste your token and save</div><div class="st-d">Paste the token into the <b>ThousandEyes</b> field and click <b>Save Token</b>.</div></div></li>
+      <li><div><div class="st-t">Paste your token and save</div><div class="st-d">Paste the token into the <b>ThousandEyes</b> field (labeled <b>OAuth Bearer Token</b>) and click <b>Save Token</b>.</div></div></li>
       <li><div><div class="st-t">Test the connection</div><div class="st-d">Click <b>Test Connection</b>. You should see <b>Connected ✓</b> — that's it, you're done. The header status dot next to "ThousandEyes" will also turn green.</div></div></li>
     </ol>
     </div>

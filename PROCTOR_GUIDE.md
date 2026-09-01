@@ -114,7 +114,7 @@ You don't need to distribute a separate PDF/HTML file.
 
 | Service | What they need | Where it's entered |
 |---|---|---|
-| ThousandEyes | Personal API token (Account Settings → Users and Roles → API Tokens, or your org's shared demo token) | Credentials page → ThousandEyes card |
+| ThousandEyes | Personal OAuth Bearer token (Account Settings → Users and Roles → User API Tokens, or your org's shared demo token) | Credentials page → ThousandEyes card |
 | Meraki | Dashboard API key **and** Organization ID | Credentials page → Meraki card (**both** fields — see note below) |
 | Splunk (optional module) | MCP server URL (yours, or one you host for the class) + optional auth token | Credentials page → Splunk card |
 
