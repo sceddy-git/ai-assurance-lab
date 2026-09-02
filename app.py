@@ -6,6 +6,7 @@ Each student manages their own encrypted API credentials for ThousandEyes and Me
 import os
 import json
 import logging
+import secrets
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from urllib.parse import urlencode, parse_qs
@@ -15,6 +16,8 @@ from flask import Flask, render_template, session, request, redirect, url_for, j
 from flask_cors import CORS
 import requests
 import boto3
+import jwt
+from jwt import PyJWKClient
 
 from dynamo_db import (
     save_user_credentials,
@@ -45,11 +48,34 @@ logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+
+_secret_key = os.getenv('SECRET_KEY')
+if not _secret_key:
+    # Failing fast here is deliberate: a silent hardcoded fallback would let
+    # anyone who reads the (public) source code forge session cookies for
+    # any account, including proctors, if SECRET_KEY were ever unset.
+    raise RuntimeError(
+        "SECRET_KEY environment variable is required and must not be empty. "
+        "Refusing to start with an insecure default."
+    )
+app.secret_key = _secret_key
+
 # Cap total request size well above MAX_FILES * MAX_FILE_BYTES to leave room
 # for form fields/history, while still bounding worst-case memory/DoS exposure.
 app.config['MAX_CONTENT_LENGTH'] = (MAX_FILES * MAX_FILE_BYTES) + (2 * 1024 * 1024)
-CORS(app)
+
+# Session cookie hardening: the app is HTTPS-only (Nginx redirects http->https),
+# cookies never need to leave this origin, and no page needs JS access to the
+# cookie - so lock all three flags down explicitly rather than relying on
+# framework defaults, which vary by Flask version and aren't guaranteed Secure.
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
+# This app isn't a public cross-origin API - every request comes from this
+# app's own pages. Restrict CORS to the app's own origin instead of the
+# flask_cors default of allowing any origin.
+CORS(app, origins=[os.getenv('APP_URL', '')], supports_credentials=True)
 
 HTML_OUTPUT_SYSTEM_PROMPT = (
     "When the user asks you to generate a report, document, dashboard, or any kind of "
@@ -91,6 +117,7 @@ COGNITO_DOMAIN = os.getenv('COGNITO_DOMAIN')
 COGNITO_CLIENT_ID = os.getenv('COGNITO_CLIENT_ID')
 COGNITO_CLIENT_SECRET = os.getenv('COGNITO_CLIENT_SECRET')
 COGNITO_REGION = os.getenv('COGNITO_REGION', 'us-east-1')
+COGNITO_USER_POOL_ID = os.getenv('COGNITO_USER_POOL_ID')
 APP_URL = os.getenv('APP_URL', 'http://localhost:5000')
 BEDROCK_REGION = os.getenv('BEDROCK_REGION', 'us-east-1')
 
@@ -111,6 +138,13 @@ def login_required(f):
 # Initialize Cognito client for user management
 cognito_client = boto3.client('cognito-idp', region_name=COGNITO_REGION)
 
+COGNITO_ISSUER = f'https://cognito-idp.{COGNITO_REGION}.amazonaws.com/{COGNITO_USER_POOL_ID}'
+# PyJWKClient fetches and caches Cognito's public signing keys (JWKS) and
+# picks the right one per token's `kid` header - this is what lets us verify
+# the ID token's RS256 signature instead of trusting it blindly.
+_jwks_client = PyJWKClient(f'{COGNITO_ISSUER}/.well-known/jwks.json')
+
+
 # ============================================================================
 # Authentication Routes
 # ============================================================================
@@ -118,12 +152,21 @@ cognito_client = boto3.client('cognito-idp', region_name=COGNITO_REGION)
 @app.route('/login')
 def login():
     """Redirect to Cognito login."""
+    # CSRF protection for the OAuth flow itself ("login CSRF"): without a
+    # state value tied to this browser's session, an attacker could get
+    # their own valid `code` from Cognito and trick a victim into visiting
+    # /auth/callback?code=<attacker's code>, silently signing the victim in
+    # as the attacker's identity. Binding a random state to the session and
+    # checking it on callback prevents that.
+    state = secrets.token_urlsafe(24)
+    session['oauth_state'] = state
     return redirect(
         f'https://{COGNITO_DOMAIN}/oauth2/authorize?'
         f'client_id={COGNITO_CLIENT_ID}&'
         f'response_type=code&'
         f'redirect_uri={APP_URL}/auth/callback&'
-        f'scope=email+openid+profile'
+        f'scope=email+openid+profile&'
+        f'state={state}'
     )
 
 
@@ -131,11 +174,20 @@ def login():
 def auth_callback():
     """Handle Cognito callback after login."""
     code = request.args.get('code')
-    
+    returned_state = request.args.get('state')
+    expected_state = session.pop('oauth_state', None)
+
     if not code:
         logger.warning("Auth callback received without code")
         return jsonify({'error': 'No authorization code received'}), 400
-    
+
+    # Reject if there's no state to check against, or it doesn't match what
+    # this browser's session was given in /login. See the comment in
+    # login() for why this matters (CSRF / login fixation protection).
+    if not expected_state or not returned_state or returned_state != expected_state:
+        logger.warning("Auth callback rejected: missing or mismatched OAuth state")
+        return jsonify({'error': 'Invalid or expired login attempt. Please try logging in again.'}), 400
+
     try:
         # Exchange code for tokens
         token_url = f'https://{COGNITO_DOMAIN}/oauth2/token'
@@ -157,14 +209,21 @@ def auth_callback():
             logger.error("No ID token in Cognito response")
             return jsonify({'error': 'Failed to obtain ID token'}), 400
         
-        # Decode ID token to get user info
-        # Note: In production, validate the token signature
-        import jwt
+        # Verify the ID token properly: signature (via Cognito's published
+        # JWKS), issuer, audience, and expiry. Even though this token came
+        # from a direct server-to-server call to Cognito above (not
+        # something a client could inject), verifying it fully is cheap
+        # defense-in-depth and is what every Cognito integration guide
+        # requires - a previous version of this code skipped signature
+        # verification entirely, which is not something to carry forward.
         try:
+            signing_key = _jwks_client.get_signing_key_from_jwt(id_token)
             decoded = jwt.decode(
                 id_token,
-                options={"verify_signature": False},
-                algorithms=["RS256"]
+                signing_key.key,
+                algorithms=["RS256"],
+                audience=COGNITO_CLIENT_ID,
+                issuer=COGNITO_ISSUER,
             )
             user_email = decoded.get('email')
             
@@ -182,9 +241,9 @@ def auth_callback():
             
             return redirect(url_for('lab'))
         
-        except jwt.DecodeError as e:
-            logger.error(f"Failed to decode ID token: {e}")
-            return jsonify({'error': 'Failed to decode token'}), 400
+        except jwt.InvalidTokenError as e:
+            logger.error(f"ID token failed verification: {e}")
+            return jsonify({'error': 'Failed to verify identity token'}), 400
     
     except requests.RequestException as e:
         logger.error(f"Cognito token exchange failed: {e}")
