@@ -706,6 +706,7 @@
                     <div class="header-links">
                         <a href="#" id="guideToggle" onclick="toggleGuide(event)">📘 Lab Guide</a>
                         <a href="#" id="infoToggle" onclick="toggleInfoSidebar(event)">ℹ️ Session Info</a>
+                        <a href="#" id="newChatLink" onclick="clearChatHistory(event)" title="Clear this conversation and start fresh">🗑️ New Chat</a>
                         <a href="/credentials">⚙️ Credentials</a>
                         <a href="/admin/students" id="adminLink" style="display: none;">👥 Students</a>
                         <a href="/admin/progress" id="progressLink" style="display: none;">📊 Progress</a>
@@ -797,6 +798,64 @@
         const availabilityStatus = document.getElementById('availability-status');
 
         let conversationHistory = [];
+
+        // ---- Chat persistence (survive navigating away / reloading) ----
+        // Keyed per-user so a shared machine doesn't mix conversations. Only
+        // plain text role/content pairs are ever stored here (attachments
+        // are never added to conversationHistory - see sendMessage()), so
+        // this stays well within localStorage's ~5MB per-origin quota.
+        const CHAT_HISTORY_KEY = 'chatHistory_' + {{ email | tojson }};
+        const CHAT_HISTORY_MAX_MESSAGES = 60;
+
+        function saveChatHistory() {
+            try {
+                const trimmed = conversationHistory.slice(-CHAT_HISTORY_MAX_MESSAGES);
+                localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(trimmed));
+            } catch (e) {
+                // Quota exceeded or storage disabled (private browsing) -
+                // chat still works for this session, it just won't persist.
+                console.warn('Could not save chat history:', e);
+            }
+        }
+
+        function restoreChatHistory() {
+            let saved = null;
+            try {
+                saved = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || 'null');
+            } catch (e) {
+                saved = null;
+            }
+            if (!Array.isArray(saved) || saved.length === 0) return;
+
+            conversationHistory = saved;
+            for (const turn of saved) {
+                if (typeof turn.content === 'string') {
+                    addMessage(turn.content, turn.role === 'user');
+                }
+            }
+        }
+
+        function clearChatHistory(event) {
+            if (event) event.preventDefault();
+            if (conversationHistory.length && !confirm('Start a new conversation? This clears the current chat history.')) {
+                return;
+            }
+            conversationHistory = [];
+            localStorage.removeItem(CHAT_HISTORY_KEY);
+            document.getElementById('messages-inner').innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">💬</div>
+                    <div class="empty-state-text">
+                        <p>Welcome to the AI Assurance Lab!</p>
+                        <p style="font-size: 12px; margin-top: 5px;">Start by sending a message. The AI will help you troubleshoot your network with ThousandEyes and Meraki data.</p>
+                    </div>
+                </div>`;
+        }
+
+        // Restore any previous conversation for this user. Must run after
+        // addMessage/renderMarkdown are defined below, but function
+        // declarations are hoisted, so this call site is safe.
+        restoreChatHistory();
 
         // ---- Lab Guide sidebar ----
         function toggleGuide(event) {
@@ -1113,6 +1172,7 @@
                 // Attachments aren't replayed on later turns (kept out of the
                 // lightweight text history) to avoid resending large payloads.
                 conversationHistory.push({ role: 'user', content: message || '[Attached file(s)]' });
+                saveChatHistory();
                 messageInput.value = '';
                 selectedFiles = [];
                 renderAttachmentChips();
@@ -1155,6 +1215,7 @@
                 // Add assistant response
                 addMessage(data.response, false);
                 conversationHistory.push({ role: 'assistant', content: data.response });
+                saveChatHistory();
 
                 // Reload credential status (may have changed)
                 loadCredentialStatus();
