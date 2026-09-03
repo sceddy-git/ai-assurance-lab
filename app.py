@@ -6,9 +6,11 @@ Each student manages their own encrypted API credentials for ThousandEyes and Me
 import os
 import json
 import logging
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from functools import wraps
+from typing import Optional
 from urllib.parse import urlencode, parse_qs
 from urllib.request import urlopen
 
@@ -29,6 +31,8 @@ from dynamo_db import (
     delete_user_credentials,
     record_lab_activity,
     get_progress_summary,
+    record_prospect,
+    get_all_prospects,
     DynamoDBError
 )
 from crypto import EncryptionError
@@ -168,6 +172,49 @@ def _detect_lab_checkpoints(user_message: str) -> set:
         if any(phrase in normalized for phrase in checkpoint['phrases']):
             matched.add(checkpoint_id)
     return matched
+
+
+# Matches the guide's LAB 1 "Prospect Demo" prompt: "...for a prospect called
+# [PROSPECT]." — students paste this verbatim, replacing only the bracketed
+# name, so this reliably pulls out the real company/prospect name they
+# researched on ServiceFinder. Proctors want this list for sales follow-up
+# and to see what real-world domains people are practicing on.
+_PROSPECT_NAME_RE = re.compile(r'prospect (?:called|named)\s+([^\n.,]{2,80})', re.IGNORECASE)
+# Loose URL/domain matcher for the block of URLs students paste under the
+# same prompt (one per line, may or may not include a scheme).
+_URL_RE = re.compile(r'\b(?:https?://)?(?:www\.)?[a-zA-Z0-9][a-zA-Z0-9-]*(?:\.[a-zA-Z0-9-]+)+(?:/[^\s,]*)?\b')
+
+
+def _extract_prospect_info(user_message: str) -> Optional[dict]:
+    """If this message is (or contains) the LAB 1 ServiceFinder prompt, pull
+    out the prospect/company name and the list of URLs the student pasted.
+    Returns None if no prospect name is found."""
+    if not user_message:
+        return None
+    name_match = _PROSPECT_NAME_RE.search(user_message)
+    if not name_match:
+        return None
+    name = name_match.group(1).strip().strip('*_"\'')
+    if not name:
+        return None
+
+    _URL_STOPWORDS = {'e.g', 'i.e', 'etc', 'vs', 'a.m', 'p.m'}
+    urls = []
+    for m in _URL_RE.finditer(user_message):
+        candidate = m.group(0).strip().rstrip('.')
+        # Skip obvious false positives: abbreviations like "e.g.", the
+        # prospect name itself if it happens to look domain-like, and
+        # anything too short to plausibly be a real domain.
+        if len(candidate) < 5 or candidate.lower() in _URL_STOPWORDS:
+            continue
+        if candidate.lower() == name.lower():
+            continue
+        if candidate not in urls:
+            urls.append(candidate)
+        if len(urls) >= 15:
+            break
+
+    return {"name": name[:120], "urls": urls}
 
 
 def _build_system_prompt(meraki_org_id=None):
@@ -673,6 +720,12 @@ def chat():
         labs_matched = _detect_lab_checkpoints(user_message)
         modules_used = set()
 
+        # Lab-progress signal #2: the LAB 1 "Prospect Demo" prompt includes a
+        # real company/prospect name and a list of URLs - proctors want this
+        # for sales follow-up, so capture it separately from the pass/fail
+        # checkpoint above.
+        prospect_info = _extract_prospect_info(user_message)
+
         # Agentic loop: Claude may need multiple rounds of tool calls before it
         # has enough information to answer (e.g. Meraki's MCP server exposes a
         # generic semantic_search + execute_api pair that often requires a
@@ -762,6 +815,12 @@ def chat():
             record_lab_activity(email, labs_matched, modules_used)
         except Exception as e:
             logger.warning(f"Failed to record lab activity for {email}: {e}")
+
+        if prospect_info:
+            try:
+                record_prospect(email, prospect_info['name'], prospect_info['urls'])
+            except Exception as e:
+                logger.warning(f"Failed to record prospect info for {email}: {e}")
 
         return jsonify({
             "response": assistant_message,
@@ -858,6 +917,7 @@ def api_admin_progress():
                 'labs_completed': labs_completed,
                 'chat_message_count': p.get('chat_message_count', 0),
                 'last_active_at': p.get('last_active_at'),
+                'prospect_count': p.get('prospect_count', 0),
                 'percent_complete': percent
             })
 
@@ -874,6 +934,24 @@ def api_admin_progress():
 
     except Exception as e:
         logger.error(f"Error building progress dashboard: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/prospects', methods=['GET'])
+@login_required
+def api_admin_prospects():
+    """Sales-lead register: every prospect/company name students researched
+    during the ThousandEyes LAB 1 ServiceFinder exercise, with the URLs they
+    tested and which student ran it, newest first."""
+    user_email = session.get('user_email', '')
+    if not _is_proctor(user_email):
+        return jsonify({'error': 'Access denied'}), 403
+
+    try:
+        prospects = get_all_prospects()
+        return jsonify({'status': 'success', 'count': len(prospects), 'prospects': prospects})
+    except Exception as e:
+        logger.error(f"Error listing prospects: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 

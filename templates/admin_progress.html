@@ -248,6 +248,28 @@
             <div id="emptyState" style="display:none; text-align:center; padding:40px; color:#999;">
                 No students found yet.
             </div>
+
+            <h2 style="margin:36px 0 12px; font-size:18px; color:#333;">🎯 Prospects Researched (LAB 1 — ServiceFinder)</h2>
+            <p class="muted" style="margin-bottom:14px;">
+                Company/prospect names and URLs students entered into the ThousandEyes "Prospect Demo" lab — useful as a
+                sales-lead register and to see which real-world domains people practiced on.
+            </p>
+            <div id="prospectsWrap" style="overflow-x:auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Prospect</th>
+                            <th>URLs tested</th>
+                            <th>Student</th>
+                            <th>When</th>
+                        </tr>
+                    </thead>
+                    <tbody id="prospectsBody"></tbody>
+                </table>
+            </div>
+            <div id="prospectsEmpty" style="display:none; text-align:center; padding:20px; color:#999;">
+                No prospects recorded yet — this fills in as students run LAB 1.
+            </div>
         </div>
     </div>
 
@@ -363,9 +385,28 @@
         document.getElementById('searchBox').addEventListener('input', applyFiltersAndRender);
         document.getElementById('sortBy').addEventListener('change', applyFiltersAndRender);
 
+        function loadProspects() {
+            fetch('/api/admin/prospects')
+                .then(r => r.json())
+                .then(data => {
+                    const prospects = data.prospects || [];
+                    document.getElementById('prospectsWrap').style.display = prospects.length ? 'block' : 'none';
+                    document.getElementById('prospectsEmpty').style.display = prospects.length ? 'none' : 'block';
+                    document.getElementById('prospectsBody').innerHTML = prospects.map(p => `
+                        <tr>
+                            <td><b>${p.name}</b></td>
+                            <td>${(p.urls || []).length ? (p.urls || []).slice(0, 6).map(u => `<div class="muted">${u}</div>`).join('') + (p.urls.length > 6 ? `<div class="muted">+${p.urls.length - 6} more</div>` : '') : '<span class="muted">None captured</span>'}</td>
+                            <td>${p.email}</td>
+                            <td>${fmtTime(p.recorded_at)}</td>
+                        </tr>`).join('');
+                })
+                .catch(err => console.error('Failed to load prospects', err));
+        }
+
         loadProgress();
+        loadProspects();
         // Auto-refresh every 30s so proctors can watch it live during the lab.
-        setInterval(loadProgress, 30000);
+        setInterval(() => { loadProgress(); loadProspects(); }, 30000);
     </script>
 </body>
 </html>

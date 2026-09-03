@@ -428,6 +428,7 @@ def get_progress_summary() -> Dict[str, Dict]:
                 "te_connected": bool(item.get("te_connected", False)),
                 "meraki_connected": bool(item.get("meraki_connected", False)),
                 "splunk_connected": bool(item.get("splunk_connected", False)),
+                "prospect_count": len(item.get("prospects") or []),
             }
         last_key = response.get('LastEvaluatedKey')
         if not last_key:
@@ -435,6 +436,74 @@ def get_progress_summary() -> Dict[str, Dict]:
         scan_kwargs['ExclusiveStartKey'] = last_key
 
     return result
+
+
+def record_prospect(email: str, name: str, urls: list) -> None:
+    """
+    Record a prospect/company name a student researched during the
+    ThousandEyes "Prospect Demo" lab (LAB 1), extracted from their chat
+    message. Best-effort - callers should wrap this in a try/except so a
+    DynamoDB hiccup never breaks the chat response.
+
+    Appends to a list attribute rather than a set, since we want to keep the
+    URLs and timestamp alongside each name (and a student may legitimately
+    research the same prospect twice at different times).
+
+    Args:
+        email: User's email address
+        name: Prospect/company name extracted from the message
+        urls: List of URLs the student pasted alongside the prospect name
+    """
+    if not email or not name:
+        return
+
+    table = get_table()
+    entry = {
+        "name": name,
+        "urls": urls or [],
+        "recorded_at": int(time.time())
+    }
+
+    table.update_item(
+        Key={"email": email},
+        UpdateExpression="SET prospects = list_append(if_not_exists(prospects, :empty), :entry)",
+        ExpressionAttributeValues={
+            ":empty": [],
+            ":entry": [entry]
+        }
+    )
+
+
+def get_all_prospects() -> list:
+    """
+    Scan the credentials table for every recorded prospect across all
+    students, for the proctor-facing sales-lead register. Returns a flat
+    list sorted newest-first.
+
+    Returns:
+        List of {email, name, urls, recorded_at} dicts.
+    """
+    table = get_table()
+    results = []
+    scan_kwargs = {"ProjectionExpression": "email, prospects"}
+    while True:
+        response = table.scan(**scan_kwargs)
+        for item in response.get('Items', []):
+            email = item.get('email')
+            for p in (item.get('prospects') or []):
+                results.append({
+                    "email": email,
+                    "name": p.get("name"),
+                    "urls": list(p.get("urls") or []),
+                    "recorded_at": p.get("recorded_at")
+                })
+        last_key = response.get('LastEvaluatedKey')
+        if not last_key:
+            break
+        scan_kwargs['ExclusiveStartKey'] = last_key
+
+    results.sort(key=lambda r: r.get('recorded_at') or 0, reverse=True)
+    return results
 
 
 def update_connection_status(email: str, service: str, connected: bool) -> bool:
