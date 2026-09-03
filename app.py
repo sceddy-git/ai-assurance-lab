@@ -27,6 +27,8 @@ from dynamo_db import (
     test_splunk_connectivity,
     update_connection_status,
     delete_user_credentials,
+    record_lab_activity,
+    get_progress_summary,
     DynamoDBError
 )
 from crypto import EncryptionError
@@ -86,6 +88,86 @@ HTML_OUTPUT_SYSTEM_PROMPT = (
     "whenever the user wants something they can save or share, rather than only "
     "describing it in prose."
 )
+
+
+# ============================================================================
+# Lab Progress Tracking
+#
+# There's no explicit "mark step complete" button in the guide - students just
+# copy/paste prompts into chat. So progress is inferred from two signals per
+# chat message: (1) which MCP module(s) actually had a tool called this turn,
+# and (2) whether the message text contains one of the guide's fixed
+# instructional prompts (students may edit bracketed placeholders like
+# [PROSPECT] but the surrounding instructional text is otherwise unchanged).
+# This is best-effort signal for proctors, not a strict completion gate.
+# ============================================================================
+LAB_CHECKPOINTS = {
+    'te_verify': {'module': 'te', 'label': 'Verify connection', 'phrases': [
+        'what thousandeyes mcp tools are available',
+    ]},
+    'te_lab1': {'module': 'te', 'label': 'Lab 1: Prospect Demo', 'phrases': [
+        'please create a thousandeyes page load test for each of these urls',
+        'retrieve the latest metrics for every test you created',
+        'write a professional customer-facing performance report',
+    ]},
+    'te_lab2': {'module': 'te', 'label': 'Lab 2: Outage triage', 'phrases': [
+        'list all active thousandeyes alerts right now',
+        'troubleshoot the most critical alert',
+    ]},
+    'te_lab3': {'module': 'te', 'label': 'Lab 3: Historical deep-dive', 'phrases': [
+        'show me uptime and time-to-first-byte for the customer portal',
+        'which regions showed elevated page-load time between',
+    ]},
+    'te_lab4': {'module': 'te', 'label': 'Lab 4: Anomaly detection', 'phrases': [
+        'analyse all thousandeyes tests for metric anomalies',
+        'run an agent-to-server instant test from our sydney enterprise agent',
+    ]},
+    'meraki_verify': {'module': 'meraki', 'label': 'Verify connection', 'phrases': [
+        'what meraki mcp tools are available',
+    ]},
+    'meraki_lab1': {'module': 'meraki', 'label': 'Lab 1: Overview & device health', 'phrases': [
+        'give me a health snapshot of my meraki organisation',
+        'draw me a physical diagram of my',
+    ]},
+    'meraki_lab2': {'module': 'meraki', 'label': 'Lab 2: Security & visibility', 'phrases': [
+        'flag any that allow unrestricted inbound traffic from 0.0.0.0/0',
+        'conduct a full security audit of my meraki organisation',
+    ]},
+    'meraki_lab3': {'module': 'meraki', 'label': 'Lab 3: Performance & usage', 'phrases': [
+        'draw a performance dashboard for my network',
+        'show the top 10 bandwidth consumers this week',
+    ]},
+    'meraki_lab4': {'module': 'meraki', 'label': 'Lab 4: Config & optimisation', 'phrases': [
+        'is 802.11r fast roaming enabled on my aps',
+        'generate a full configuration audit of my',
+    ]},
+    'splunk_lab1': {'module': 'splunk', 'label': 'Lab 1: Threat hunt', 'phrases': [
+        'search splunk for failed login attempts',
+    ]},
+    'splunk_lab2': {'module': 'splunk', 'label': 'Lab 2: Operational health', 'phrases': [
+        'list all splunk indexes and tell me which',
+    ]},
+    'splunk_lab3': {'module': 'splunk', 'label': 'Lab 3: Correlation', 'phrases': [
+        'search the meraki syslog index for 802.11 disassociation events',
+    ]},
+}
+
+# The checkpoints proctors care about for an overall completion percentage -
+# Splunk is bonus/optional content and deliberately excluded from this.
+REQUIRED_CHECKPOINTS = [cid for cid, c in LAB_CHECKPOINTS.items() if c['module'] in ('te', 'meraki')]
+
+
+def _detect_lab_checkpoints(user_message: str) -> set:
+    """Return the set of lab checkpoint IDs whose distinctive phrase(s)
+    appear in this chat message (case-insensitive, whitespace-normalized)."""
+    if not user_message:
+        return set()
+    normalized = ' '.join(user_message.lower().split())
+    matched = set()
+    for checkpoint_id, checkpoint in LAB_CHECKPOINTS.items():
+        if any(phrase in normalized for phrase in checkpoint['phrases']):
+            matched.add(checkpoint_id)
+    return matched
 
 
 def _build_system_prompt(meraki_org_id=None):
@@ -586,6 +668,11 @@ def chat():
             {"role": "user", "content": user_content}
         ]
 
+        # Lab-progress signal #1: does this message's text match one of the
+        # guide's fixed instructional prompts? (see LAB_CHECKPOINTS above)
+        labs_matched = _detect_lab_checkpoints(user_message)
+        modules_used = set()
+
         # Agentic loop: Claude may need multiple rounds of tool calls before it
         # has enough information to answer (e.g. Meraki's MCP server exposes a
         # generic semantic_search + execute_api pair that often requires a
@@ -638,6 +725,12 @@ def chat():
                         tool_result = {"error": f"Unknown tool: {tool_name}"}
                     else:
                         mcp_url, mcp_token, require_token = routing
+                        if mcp_url == THOUSANDEYES_MCP_URL:
+                            modules_used.add('te')
+                        elif mcp_url == MERAKI_MCP_URL:
+                            modules_used.add('meraki')
+                        elif splunk_url and mcp_url == splunk_url:
+                            modules_used.add('splunk')
                         tool_result = call_mcp_tool(mcp_url, mcp_token, tool_name, tool_input, require_token=require_token)
                 except MCPClientError as e:
                     logger.error(f"Tool execution error for {tool_name}: {e}")
@@ -662,6 +755,13 @@ def chat():
             (c.get('text', '') for c in content if c.get('type') == 'text'),
             'The assistant used tools but did not return a final text response. Please try rephrasing your question.'
         )
+
+        # Best-effort progress recording for the proctor dashboard - must
+        # never break the chat response if it fails.
+        try:
+            record_lab_activity(email, labs_matched, modules_used)
+        except Exception as e:
+            logger.warning(f"Failed to record lab activity for {email}: {e}")
 
         return jsonify({
             "response": assistant_message,
@@ -690,6 +790,91 @@ def admin_students():
         return jsonify({'error': 'Access denied - proctor access required'}), 403
     
     return render_template('admin_students.html', email=user_email)
+
+
+@app.route('/admin/progress')
+@login_required
+def admin_progress():
+    """Proctor portal: live lab-progress dashboard across all students."""
+    user_email = session.get('user_email', '')
+    if not _is_proctor(user_email):
+        return jsonify({'error': 'Access denied - proctor access required'}), 403
+
+    return render_template('admin_progress.html', email=user_email)
+
+
+@app.route('/api/admin/progress', methods=['GET'])
+@login_required
+def api_admin_progress():
+    """Live lab-progress data for every student, merging Cognito's user list
+    with the activity signals recorded from the chat endpoint. Students who
+    haven't logged in yet still show up (from Cognito) with zero progress;
+    students who've never sent a chat message but only saved credentials
+    still show their connection status."""
+    user_email = session.get('user_email', '')
+    if not _is_proctor(user_email):
+        return jsonify({'error': 'Access denied'}), 403
+
+    try:
+        progress_by_email = get_progress_summary()
+
+        users = []
+        pagination_token = None
+        while True:
+            kwargs = {'UserPoolId': os.getenv('COGNITO_USER_POOL_ID'), 'Limit': 60}
+            if pagination_token:
+                kwargs['PaginationToken'] = pagination_token
+            response = cognito_client.list_users(**kwargs)
+            users.extend(response.get('Users', []))
+            pagination_token = response.get('PaginationToken')
+            if not pagination_token:
+                break
+
+        proctor_emails = set(_get_proctor_emails())
+        students = []
+        for user in users:
+            email = next((attr['Value'] for attr in user['Attributes'] if attr['Name'] == 'email'), '')
+            if not email:
+                continue
+            email_l = email.lower()
+            if email_l in proctor_emails:
+                continue  # proctors don't have "lab progress" to track
+
+            first_name = next((attr['Value'] for attr in user['Attributes'] if attr['Name'] == 'given_name'), '')
+            last_name = next((attr['Value'] for attr in user['Attributes'] if attr['Name'] == 'family_name'), '')
+
+            p = progress_by_email.get(email_l, {})
+            labs_completed = p.get('labs_completed', [])
+            required_done = [c for c in labs_completed if c in REQUIRED_CHECKPOINTS]
+            percent = round(100 * len(required_done) / len(REQUIRED_CHECKPOINTS)) if REQUIRED_CHECKPOINTS else 0
+
+            students.append({
+                'email': email,
+                'first_name': first_name,
+                'last_name': last_name,
+                'te_connected': p.get('te_connected', False),
+                'meraki_connected': p.get('meraki_connected', False),
+                'splunk_connected': p.get('splunk_connected', False),
+                'labs_completed': labs_completed,
+                'chat_message_count': p.get('chat_message_count', 0),
+                'last_active_at': p.get('last_active_at'),
+                'percent_complete': percent
+            })
+
+        # Least progress first so proctors can immediately see who needs help
+        students.sort(key=lambda s: (s['percent_complete'], -(s['last_active_at'] or 0)))
+
+        return jsonify({
+            'status': 'success',
+            'checkpoints': LAB_CHECKPOINTS,
+            'required_checkpoints': REQUIRED_CHECKPOINTS,
+            'count': len(students),
+            'students': students
+        })
+
+    except Exception as e:
+        logger.error(f"Error building progress dashboard: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 
 # Hardcoded super-admin — always a proctor, can never be deleted or demoted

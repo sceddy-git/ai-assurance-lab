@@ -358,6 +358,85 @@ def test_splunk_connectivity(email: str) -> Dict:
         raise DynamoDBError(f"Failed to retrieve credentials: {str(e)}")
 
 
+def record_lab_activity(email: str, labs_matched: set, modules_used: set) -> None:
+    """
+    Best-effort recording of lab-progress signals for the live progress
+    dashboard. Called from the chat endpoint on every message; failures here
+    must never break the chat itself, so callers should wrap this in a
+    try/except and just log a warning on error.
+
+    Args:
+        email: User's email address
+        labs_matched: Set of lab checkpoint IDs detected in this message
+            (e.g. {"te_lab1"}), may be empty.
+        modules_used: Set of modules ('te', 'meraki', 'splunk') whose tools
+            were actually invoked in this turn, may be empty.
+    """
+    if not email:
+        return
+
+    table = get_table()
+    set_clauses = ["last_active_at = :now"]
+    expr_values = {":now": int(time.time()), ":one": 1}
+    add_clauses = ["chat_message_count :one"]
+
+    if labs_matched:
+        add_clauses.append("labs_completed :labs")
+        expr_values[":labs"] = set(labs_matched)
+
+    if modules_used:
+        add_clauses.append("modules_used :modules")
+        expr_values[":modules"] = set(modules_used)
+
+    update_expr = "SET " + ", ".join(set_clauses) + " ADD " + ", ".join(add_clauses)
+
+    table.update_item(
+        Key={"email": email},
+        UpdateExpression=update_expr,
+        ExpressionAttributeValues=expr_values
+    )
+
+
+def get_progress_summary() -> Dict[str, Dict]:
+    """
+    Scan the credentials table for lab-progress fields for every student who
+    has interacted with the app at least once (saved a credential or sent a
+    chat message). Returns a dict keyed by lowercased email so callers can
+    merge it with the Cognito user list.
+
+    Returns:
+        Dict[email] -> {
+            labs_completed: list[str], modules_used: list[str],
+            chat_message_count: int, last_active_at: int|None,
+            te_connected/meraki_connected/splunk_connected: bool
+        }
+    """
+    table = get_table()
+    result = {}
+    scan_kwargs = {}
+    while True:
+        response = table.scan(**scan_kwargs)
+        for item in response.get('Items', []):
+            email = (item.get('email') or '').lower()
+            if not email:
+                continue
+            result[email] = {
+                "labs_completed": sorted(item.get("labs_completed") or []),
+                "modules_used": sorted(item.get("modules_used") or []),
+                "chat_message_count": int(item.get("chat_message_count") or 0),
+                "last_active_at": item.get("last_active_at"),
+                "te_connected": bool(item.get("te_connected", False)),
+                "meraki_connected": bool(item.get("meraki_connected", False)),
+                "splunk_connected": bool(item.get("splunk_connected", False)),
+            }
+        last_key = response.get('LastEvaluatedKey')
+        if not last_key:
+            break
+        scan_kwargs['ExclusiveStartKey'] = last_key
+
+    return result
+
+
 def update_connection_status(email: str, service: str, connected: bool) -> bool:
     """
     Update the connection status for a service.

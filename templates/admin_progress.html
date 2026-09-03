@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lab Progress - AI Assurance Lab</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1300px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 { font-size: 28px; margin-bottom: 10px; }
+        .header p { opacity: 0.9; font-size: 14px; }
+
+        .nav-links {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            margin-top: 14px;
+        }
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            font-size: 13px;
+            opacity: 0.85;
+            border: 1px solid rgba(255,255,255,0.4);
+            padding: 6px 12px;
+            border-radius: 6px;
+        }
+        .nav-links a:hover { opacity: 1; background: rgba(255,255,255,0.12); }
+
+        .content { padding: 30px; }
+
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .toolbar input[type="text"] {
+            flex: 1;
+            min-width: 200px;
+            padding: 10px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .toolbar input[type="text"]:focus { outline: none; border-color: #667eea; }
+        .btn {
+            padding: 10px 18px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            background: #667eea;
+            color: white;
+        }
+        .btn:hover { background: #5568d3; }
+        .btn-secondary { background: #f0f0f0; color: #333; }
+        .btn-secondary:hover { background: #e0e0e0; }
+
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+        .card {
+            background: #f8f9ff;
+            border: 1px solid #eceafd;
+            border-radius: 10px;
+            padding: 16px;
+            text-align: center;
+        }
+        .card .num { font-size: 26px; font-weight: 700; color: #667eea; }
+        .card .lbl { font-size: 12px; color: #666; margin-top: 4px; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th {
+            text-align: left;
+            padding: 10px 8px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e0e0e0;
+            color: #555;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+        }
+        td { padding: 10px 8px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+        tr:hover td { background: #fafbff; }
+
+        .bar-wrap {
+            width: 110px;
+            background: #eee;
+            border-radius: 6px;
+            overflow: hidden;
+            height: 18px;
+            position: relative;
+        }
+        .bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+        }
+        .bar-label {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 700;
+            color: #333;
+            mix-blend-mode: difference;
+            filter: invert(1) grayscale(1) contrast(9);
+        }
+
+        .lab-dots { display: flex; gap: 3px; }
+        .dot {
+            width: 16px; height: 16px;
+            border-radius: 4px;
+            font-size: 9px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: white;
+            background: #ddd;
+        }
+        .dot.done.te { background: #2e8b57; }
+        .dot.done.mk { background: #2e6bb5; }
+        .dot.done.sp { background: #b56a2e; }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .badge.on { background: #d4edda; color: #155724; }
+        .badge.off { background: #f0f0f0; color: #999; }
+
+        .muted { color: #999; font-size: 12px; }
+
+        .loading { text-align: center; padding: 60px 20px; }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 4px solid #f0f0f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 16px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .help-text {
+            background: #fff9e6;
+            border: 1px solid #f0e0a0;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 13px;
+            color: #665500;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Live Lab Progress</h1>
+            <p>Real-time view of which modules and labs each student has reached</p>
+            <div class="nav-links">
+                <a href="/lab">💬 Chat</a>
+                <a href="/admin/students">👥 Students</a>
+                <a href="/admin/settings">⚙️ Settings</a>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="help-text">
+                Progress is inferred, not a strict checklist: it's based on which MCP tools a student's messages actually
+                triggered, and whether their message text matches one of the guide's fixed lab prompts. A student who
+                paraphrases a prompt heavily, or explores in their own words, may show lower progress than they've
+                actually made — use this to spot who's stuck or hasn't started, not as a precise scorecard.
+            </div>
+
+            <div class="summary-cards" id="summaryCards"></div>
+
+            <div class="toolbar">
+                <input type="text" id="searchBox" placeholder="Filter by email or name...">
+                <select id="sortBy" class="btn btn-secondary" style="cursor:pointer;">
+                    <option value="progress_asc">Least progress first</option>
+                    <option value="progress_desc">Most progress first</option>
+                    <option value="recent">Most recently active</option>
+                    <option value="email">Email A–Z</option>
+                </select>
+                <button class="btn" onclick="loadProgress()">🔄 Refresh</button>
+            </div>
+
+            <div class="loading" id="loadingBox">
+                <div class="spinner"></div>
+                <p>Loading progress...</p>
+            </div>
+
+            <div id="tableWrap" style="display:none; overflow-x:auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Overall</th>
+                            <th>ThousandEyes</th>
+                            <th>TE Labs</th>
+                            <th>Meraki</th>
+                            <th>Meraki Labs</th>
+                            <th>Splunk</th>
+                            <th>Messages</th>
+                            <th>Last Active</th>
+                        </tr>
+                    </thead>
+                    <tbody id="progressBody"></tbody>
+                </table>
+            </div>
+
+            <div id="emptyState" style="display:none; text-align:center; padding:40px; color:#999;">
+                No students found yet.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allStudents = [];
+
+        function fmtTime(ts) {
+            if (!ts) return '<span class="muted">Never</span>';
+            const d = new Date(ts * 1000);
+            const diffMin = Math.round((Date.now() - d.getTime()) / 60000);
+            if (diffMin < 1) return 'Just now';
+            if (diffMin < 60) return `${diffMin}m ago`;
+            if (diffMin < 24 * 60) return `${Math.round(diffMin / 60)}h ago`;
+            return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+        }
+
+        function labDots(labsCompleted, prefix, cls) {
+            const nums = ['verify', '1', '2', '3', '4'];
+            const labels = { verify: 'V', '1': '1', '2': '2', '3': '3', '4': '4' };
+            return '<div class="lab-dots">' + nums.map(n => {
+                const id = n === 'verify' ? `${prefix}_verify` : `${prefix}_lab${n}`;
+                const done = labsCompleted.includes(id);
+                return `<div class="dot ${done ? 'done ' + cls : ''}" title="${id}">${labels[n]}</div>`;
+            }).join('') + '</div>';
+        }
+
+        function renderBadge(connected) {
+            return connected
+                ? '<span class="badge on">Connected</span>'
+                : '<span class="badge off">Not set up</span>';
+        }
+
+        function renderTable(students) {
+            const body = document.getElementById('progressBody');
+            body.innerHTML = students.map(s => {
+                const name = (s.first_name || s.last_name) ? `${s.first_name || ''} ${s.last_name || ''}`.trim() : '';
+                return `
+                <tr>
+                    <td><b>${s.email}</b>${name ? `<div class="muted">${name}</div>` : ''}</td>
+                    <td>
+                        <div class="bar-wrap">
+                            <div class="bar-fill" style="width:${s.percent_complete}%"></div>
+                            <div class="bar-label">${s.percent_complete}%</div>
+                        </div>
+                    </td>
+                    <td>${renderBadge(s.te_connected)}</td>
+                    <td>${labDots(s.labs_completed, 'te', 'te')}</td>
+                    <td>${renderBadge(s.meraki_connected)}</td>
+                    <td>${labDots(s.labs_completed, 'meraki', 'mk')}</td>
+                    <td>${renderBadge(s.splunk_connected)}</td>
+                    <td>${s.chat_message_count || 0}</td>
+                    <td>${fmtTime(s.last_active_at)}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        function renderSummary(students) {
+            const total = students.length;
+            const notStarted = students.filter(s => s.percent_complete === 0 && !s.chat_message_count).length;
+            const complete = students.filter(s => s.percent_complete === 100).length;
+            const avg = total ? Math.round(students.reduce((a, s) => a + s.percent_complete, 0) / total) : 0;
+            const activeRecently = students.filter(s => s.last_active_at && (Date.now() / 1000 - s.last_active_at) < 900).length;
+
+            document.getElementById('summaryCards').innerHTML = `
+                <div class="card"><div class="num">${total}</div><div class="lbl">Students</div></div>
+                <div class="card"><div class="num">${avg}%</div><div class="lbl">Average progress</div></div>
+                <div class="card"><div class="num">${complete}</div><div class="lbl">Fully complete</div></div>
+                <div class="card"><div class="num">${notStarted}</div><div class="lbl">Not started</div></div>
+                <div class="card"><div class="num">${activeRecently}</div><div class="lbl">Active last 15 min</div></div>
+            `;
+        }
+
+        function applyFiltersAndRender() {
+            const q = document.getElementById('searchBox').value.trim().toLowerCase();
+            let filtered = allStudents.filter(s =>
+                !q || s.email.toLowerCase().includes(q) ||
+                (s.first_name || '').toLowerCase().includes(q) ||
+                (s.last_name || '').toLowerCase().includes(q)
+            );
+
+            const sortBy = document.getElementById('sortBy').value;
+            if (sortBy === 'progress_asc') filtered.sort((a, b) => a.percent_complete - b.percent_complete);
+            else if (sortBy === 'progress_desc') filtered.sort((a, b) => b.percent_complete - a.percent_complete);
+            else if (sortBy === 'recent') filtered.sort((a, b) => (b.last_active_at || 0) - (a.last_active_at || 0));
+            else if (sortBy === 'email') filtered.sort((a, b) => a.email.localeCompare(b.email));
+
+            document.getElementById('tableWrap').style.display = filtered.length ? 'block' : 'none';
+            document.getElementById('emptyState').style.display = filtered.length ? 'none' : 'block';
+            renderTable(filtered);
+            renderSummary(allStudents);
+        }
+
+        function loadProgress() {
+            document.getElementById('loadingBox').style.display = 'block';
+            document.getElementById('tableWrap').style.display = 'none';
+            fetch('/api/admin/progress')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('loadingBox').style.display = 'none';
+                    if (data.error) {
+                        alert('Error loading progress: ' + data.error);
+                        return;
+                    }
+                    allStudents = data.students || [];
+                    applyFiltersAndRender();
+                })
+                .catch(err => {
+                    document.getElementById('loadingBox').style.display = 'none';
+                    alert('Failed to load progress: ' + err);
+                });
+        }
+
+        document.getElementById('searchBox').addEventListener('input', applyFiltersAndRender);
+        document.getElementById('sortBy').addEventListener('change', applyFiltersAndRender);
+
+        loadProgress();
+        // Auto-refresh every 30s so proctors can watch it live during the lab.
+        setInterval(loadProgress, 30000);
+    </script>
+</body>
+</html>

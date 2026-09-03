@@ -708,6 +708,7 @@
                         <a href="#" id="infoToggle" onclick="toggleInfoSidebar(event)">ℹ️ Session Info</a>
                         <a href="/credentials">⚙️ Credentials</a>
                         <a href="/admin/students" id="adminLink" style="display: none;">👥 Students</a>
+                        <a href="/admin/progress" id="progressLink" style="display: none;">📊 Progress</a>
                         <a href="/admin/settings" id="settingsLink" style="display: none;">⚙️ Settings</a>
                         <a href="/logout" class="logout">Logout</a>
                     </div>
@@ -859,6 +860,7 @@
                 const response = await fetch('/api/admin/students/list');
                 if (response.ok) {
                     document.getElementById('adminLink').style.display = 'block';
+                    document.getElementById('progressLink').style.display = 'block';
                     document.getElementById('settingsLink').style.display = 'block';
                 }
             } catch (error) {
