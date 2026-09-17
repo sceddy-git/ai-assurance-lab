@@ -345,6 +345,7 @@ For each test:
       <li><div><div class="st-t">Save and test</div><div class="st-d">Click <b>Save</b>, then <b>Test Connection</b>. You should see <b>Connected ✓</b>. A "Splunk" status dot will also appear in the chat header once configured.</div></div></li>
     </ol>
     </div>
+    <div class="note"><span class="i">🔒</span><div><b>Using a Splunk "Show" training instance?</b> Those use a self-signed certificate, which will fail the connection test with a TLS/certificate error. Check the <b>Skip TLS certificate verification</b> box on the Splunk card and test again. Only enable this for a server you trust with a self-signed cert (like Splunk Show) — never for anything else.</div></div>
     <div class="lab"><div class="lab-h"><span class="n">LAB 1</span> Natural-language threat hunt</div><div class="lab-b">
       <div class="sub">Investigate suspicious activity without writing SPL.</div>
       <div class="prompt">Search Splunk for failed login attempts (Windows Event ID 4625) in the last 2 hours. Show the top 10 source IPs by failure count and flag any with more than 50 — likely brute force.</div>

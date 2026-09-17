@@ -421,6 +421,7 @@ def get_credentials_status():
             "splunk_configured": bool(credentials.get('splunk_url')),
             "splunk_connected": credentials.get('splunk_connected', False),
             "splunk_url": credentials.get('splunk_url'),
+            "splunk_skip_tls_verify": credentials.get('splunk_skip_tls_verify', False),
             "last_updated": credentials.get('updated_at')
         })
     
@@ -446,6 +447,7 @@ def add_credential():
         token = (data.get('token') or '').strip()
         url = (data.get('url') or '').strip()
         org_id = (data.get('org_id') or '').strip()
+        skip_tls_verify = bool(data.get('skip_tls_verify', False))
         
         if service not in ['thousandeyes', 'meraki', 'splunk']:
             logger.warning(f"add_credential rejected for {email}: unknown service '{service}'")
@@ -455,14 +457,17 @@ def add_credential():
             # Splunk's MCP server URL varies per student (local laptop via a
             # tunnel, or a facilitator-hosted shared server). The token/API
             # key is optional - some self-hosted servers don't require one.
+            # skip_tls_verify is an explicit per-user opt-in for self-hosted
+            # servers with a self-signed cert (e.g. Splunk "Show" training
+            # instances) - never applies to ThousandEyes/Meraki.
             if not url:
                 logger.warning(f"add_credential rejected for {email}: splunk url missing")
                 return jsonify({'error': 'Splunk MCP server URL is required'}), 400
             if not url.startswith('http://') and not url.startswith('https://'):
                 logger.warning(f"add_credential rejected for {email}: splunk url '{url}' missing http(s) scheme")
                 return jsonify({'error': 'Splunk MCP server URL must start with http:// or https://'}), 400
-            save_user_credentials(email, splunk_url=url, splunk_token=token or None)
-            logger.info(f"Saved splunk credential for {email}")
+            save_user_credentials(email, splunk_url=url, splunk_token=token or None, splunk_skip_tls_verify=skip_tls_verify)
+            logger.info(f"Saved splunk credential for {email} (skip_tls_verify={skip_tls_verify})")
             return jsonify({'status': 'success', 'message': 'Splunk credential saved'})
         
         # Meraki also takes an Organization ID (not a secret), which the
@@ -664,19 +669,20 @@ def chat():
         meraki_org_id = credentials.get('meraki_org_id')
         splunk_url = credentials.get('splunk_url')
         splunk_token = credentials.get('splunk_token')
+        splunk_skip_tls_verify = credentials.get('splunk_skip_tls_verify', False)
         
         # Discover live tools from the user's own MCP servers (ThousandEyes and
         # Meraki host their own MCP servers; we call them with the user's token
         # rather than proxying REST calls ourselves).
         available_tools = []
-        tool_routing = {}  # tool_name -> (mcp_url, token, require_token)
+        tool_routing = {}  # tool_name -> (mcp_url, token, require_token, verify_tls)
         
         if te_token:
             try:
                 te_tools = list_mcp_tools(THOUSANDEYES_MCP_URL, te_token)
                 for tool in te_tools:
                     available_tools.append(tool)
-                    tool_routing[tool['name']] = (THOUSANDEYES_MCP_URL, te_token, True)
+                    tool_routing[tool['name']] = (THOUSANDEYES_MCP_URL, te_token, True, True)
             except MCPClientError as e:
                 logger.warning(f"Failed to list ThousandEyes MCP tools for {email}: {e}")
         
@@ -685,19 +691,21 @@ def chat():
                 meraki_tools = list_mcp_tools(MERAKI_MCP_URL, meraki_token)
                 for tool in meraki_tools:
                     available_tools.append(tool)
-                    tool_routing[tool['name']] = (MERAKI_MCP_URL, meraki_token, True)
+                    tool_routing[tool['name']] = (MERAKI_MCP_URL, meraki_token, True, True)
             except MCPClientError as e:
                 logger.warning(f"Failed to list Meraki MCP tools for {email}: {e}")
         
         # Splunk's MCP server URL is student-configured (their own laptop via
         # a tunnel, or a facilitator-hosted shared server), and some setups
         # don't require an auth token, so we don't gate on one being present.
+        # verify_tls is skipped only if the student explicitly opted in on
+        # the Credentials page (self-signed cert servers, e.g. Splunk "Show").
         if splunk_url:
             try:
-                splunk_tools = list_mcp_tools(splunk_url, splunk_token, require_token=False)
+                splunk_tools = list_mcp_tools(splunk_url, splunk_token, require_token=False, verify_tls=not splunk_skip_tls_verify)
                 for tool in splunk_tools:
                     available_tools.append(tool)
-                    tool_routing[tool['name']] = (splunk_url, splunk_token, False)
+                    tool_routing[tool['name']] = (splunk_url, splunk_token, False, not splunk_skip_tls_verify)
             except MCPClientError as e:
                 logger.warning(f"Failed to list Splunk MCP tools for {email}: {e}")
         
@@ -777,14 +785,14 @@ def chat():
                     if not routing:
                         tool_result = {"error": f"Unknown tool: {tool_name}"}
                     else:
-                        mcp_url, mcp_token, require_token = routing
+                        mcp_url, mcp_token, require_token, verify_tls = routing
                         if mcp_url == THOUSANDEYES_MCP_URL:
                             modules_used.add('te')
                         elif mcp_url == MERAKI_MCP_URL:
                             modules_used.add('meraki')
                         elif splunk_url and mcp_url == splunk_url:
                             modules_used.add('splunk')
-                        tool_result = call_mcp_tool(mcp_url, mcp_token, tool_name, tool_input, require_token=require_token)
+                        tool_result = call_mcp_tool(mcp_url, mcp_token, tool_name, tool_input, require_token=require_token, verify_tls=verify_tls)
                 except MCPClientError as e:
                     logger.error(f"Tool execution error for {tool_name}: {e}")
                     tool_result = {"error": f"Tool execution failed: {str(e)}"}

@@ -41,7 +41,8 @@ def save_user_credentials(
     meraki_token: Optional[str] = None,
     meraki_org_id: Optional[str] = None,
     splunk_url: Optional[str] = None,
-    splunk_token: Optional[str] = None
+    splunk_token: Optional[str] = None,
+    splunk_skip_tls_verify: Optional[bool] = None
 ) -> bool:
     """
     Save or update a user's encrypted MCP credentials.
@@ -57,6 +58,10 @@ def save_user_credentials(
             making the student paste it into every message.
         splunk_url: Splunk MCP server URL - varies per student/facilitator (optional)
         splunk_token: Splunk MCP server auth token/API key, if the server requires one (optional)
+        splunk_skip_tls_verify: If True, skip TLS certificate verification when connecting to
+            the Splunk MCP server (optional). Only meant for self-hosted servers with a
+            self-signed cert (e.g. Splunk "Show" training instances) - an explicit per-user
+            opt-in, never a default, and never applies to ThousandEyes/Meraki.
         
     Returns:
         bool: True if successful
@@ -115,6 +120,13 @@ def save_user_credentials(
             except EncryptionError as e:
                 logger.error(f"Failed to encrypt Splunk token for {email}: {e}")
                 raise DynamoDBError(f"Failed to encrypt Splunk token: {str(e)}")
+        
+        # Not a secret - just a connection setting, so stored in plain text.
+        # Checked with `is not None` (not truthiness) so explicitly saving
+        # False (turning the option back off) actually persists.
+        if splunk_skip_tls_verify is not None:
+            set_clauses.append("splunk_skip_tls_verify = :splunk_skip_tls_verify")
+            expr_values[":splunk_skip_tls_verify"] = splunk_skip_tls_verify
         
         # Set created_at if this is the first save
         set_clauses.insert(0, "#created = if_not_exists(#created, :created_at)")
@@ -177,6 +189,7 @@ def get_user_credentials(email: str) -> Dict:
                 "te_connected": False,
                 "meraki_connected": False,
                 "splunk_connected": False,
+                "splunk_skip_tls_verify": False,
                 "created_at": None,
                 "updated_at": None
             }
@@ -188,6 +201,7 @@ def get_user_credentials(email: str) -> Dict:
             "meraki_org_id": item.get("meraki_org_id"),
             "splunk_connected": item.get("splunk_connected", False),
             "splunk_url": item.get("splunk_mcp_url"),
+            "splunk_skip_tls_verify": bool(item.get("splunk_skip_tls_verify", False)),
             "created_at": item.get("created_at"),
             "updated_at": item.get("updated_at")
         }
@@ -338,18 +352,25 @@ def test_splunk_connectivity(email: str) -> Dict:
         credentials = get_user_credentials(email)
         url = credentials.get("splunk_url")
         token = credentials.get("splunk_token")
+        skip_tls_verify = credentials.get("splunk_skip_tls_verify", False)
         
         if not url:
             return {"valid": False, "error": "Splunk MCP server URL not configured"}
         
         try:
-            tools = list_mcp_tools(url, token, require_token=False)
+            tools = list_mcp_tools(url, token, require_token=False, verify_tls=not skip_tls_verify)
             logger.info(f"Splunk MCP connectivity test passed for {email} ({len(tools)} tools)")
             return {"valid": True, "tool_count": len(tools)}
         except MCPClientError as e:
             error_str = str(e)
             if "401" in error_str or "403" in error_str:
                 return {"valid": False, "error": "Splunk MCP server rejected the auth token/API key"}
+            elif "CERTIFICATE_VERIFY_FAILED" in error_str or "self-signed certificate" in error_str.lower():
+                return {"valid": False, "error": (
+                    "TLS certificate verification failed - this server is using a self-signed "
+                    "certificate (common for Splunk \"Show\" training instances). Enable "
+                    "\"Skip TLS certificate verification\" on the Splunk card and try again."
+                )}
             else:
                 logger.error(f"Splunk MCP connectivity test error for {email}: {e}")
                 return {"valid": False, "error": f"Could not reach Splunk MCP server: {error_str}"}
@@ -587,7 +608,7 @@ def delete_user_credentials(email: str, service: str) -> bool:
             remove_attrs = ["meraki_token", "meraki_org_id"]
             status_attr = "meraki_connected"
         else:
-            remove_attrs = ["splunk_token", "splunk_mcp_url"]
+            remove_attrs = ["splunk_token", "splunk_mcp_url", "splunk_skip_tls_verify"]
             status_attr = "splunk_connected"
         
         remove_expr = "REMOVE " + ", ".join(remove_attrs)
