@@ -59,6 +59,20 @@ def setup_metrics() -> None:
     if not ENABLED:
         return
     try:
+        # enable_metrics() requires the project/log stream to already exist,
+        # but they're normally auto-created lazily on the first real trace.
+        # On a brand new Galileo project, that means enabling metrics at
+        # startup (before any student has chatted) fails with "Project not
+        # found". Bootstrap it here with a throwaway trace so metrics can be
+        # turned on immediately, even before the first real conversation.
+        bootstrap = _GalileoLogger(project=GALILEO_PROJECT, log_stream=GALILEO_LOG_STREAM)
+        bootstrap.start_trace(input="__startup_bootstrap__")
+        bootstrap.conclude(output="ok")
+        bootstrap.flush()
+    except Exception as e:
+        logger.warning(f"Galileo project/log-stream bootstrap failed (metrics may not enable): {e}")
+
+    try:
         _enable_metrics_fn(
             project_name=GALILEO_PROJECT,
             log_stream_name=GALILEO_LOG_STREAM,
