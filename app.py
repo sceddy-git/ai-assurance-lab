@@ -44,6 +44,7 @@ from mcp_client import (
     MERAKI_MCP_URL
 )
 from attachments import process_uploaded_files, AttachmentError, MAX_FILES, MAX_FILE_BYTES
+import galileo_telemetry
 
 # Configure logging
 logging.basicConfig(
@@ -252,6 +253,9 @@ BEDROCK_REGION = os.getenv('BEDROCK_REGION', 'us-east-1')
 
 # Initialize Bedrock client
 bedrock_client = boto3.client('bedrock-runtime', region_name=BEDROCK_REGION)
+
+# Optional Galileo observability - safe no-op if GALILEO_API_KEY isn't set.
+galileo_telemetry.setup_metrics()
 
 
 def login_required(f):
@@ -734,6 +738,12 @@ def chat():
         # checkpoint above.
         prospect_info = _extract_prospect_info(user_message)
 
+        # Optional Galileo observability: one trace per chat request, spans
+        # added around the Bedrock call and each MCP tool call below. Fully
+        # no-op (gl_logger is None) if GALILEO_API_KEY isn't configured.
+        gl_logger = galileo_telemetry.new_logger()
+        galileo_telemetry.start_trace(gl_logger, email, user_message, labs_matched)
+
         # Agentic loop: Claude may need multiple rounds of tool calls before it
         # has enough information to answer (e.g. Meraki's MCP server exposes a
         # generic semantic_search + execute_api pair that often requires a
@@ -761,8 +771,13 @@ def chat():
                 )
                 result = json.loads(response['body'].read())
                 content = result.get('content', [])
+                galileo_telemetry.add_llm_span(
+                    gl_logger, request_body, result,
+                    model_id='us.anthropic.claude-sonnet-4-5-20250929-v1:0'
+                )
             except Exception as e:
                 logger.error(f"Bedrock invocation failed: {e}")
+                galileo_telemetry.conclude_and_flush(gl_logger, f"[error] Bedrock invocation failed: {e}")
                 return jsonify({'error': 'Failed to invoke AI model'}), 500
 
             tool_calls = [c for c in content if c.get('type') == 'tool_use']
@@ -780,6 +795,7 @@ def chat():
                 tool_use_id = tool_call.get('id', '')
 
                 # Route to the MCP server (ThousandEyes or Meraki) that advertised this tool
+                tool_module = None
                 try:
                     routing = tool_routing.get(tool_name)
                     if not routing:
@@ -787,11 +803,13 @@ def chat():
                     else:
                         mcp_url, mcp_token, require_token, verify_tls = routing
                         if mcp_url == THOUSANDEYES_MCP_URL:
-                            modules_used.add('te')
+                            tool_module = 'te'
                         elif mcp_url == MERAKI_MCP_URL:
-                            modules_used.add('meraki')
+                            tool_module = 'meraki'
                         elif splunk_url and mcp_url == splunk_url:
-                            modules_used.add('splunk')
+                            tool_module = 'splunk'
+                        if tool_module:
+                            modules_used.add(tool_module)
                         tool_result = call_mcp_tool(mcp_url, mcp_token, tool_name, tool_input, require_token=require_token, verify_tls=verify_tls)
                 except MCPClientError as e:
                     logger.error(f"Tool execution error for {tool_name}: {e}")
@@ -799,6 +817,11 @@ def chat():
                 except Exception as e:
                     logger.error(f"Tool execution error for {tool_name}: {e}")
                     tool_result = {"error": f"Tool execution failed: {str(e)}"}
+
+                galileo_telemetry.add_tool_span(
+                    gl_logger, tool_name, tool_input, tool_result, tool_use_id,
+                    module=tool_module, had_error=bool(isinstance(tool_result, dict) and tool_result.get('error'))
+                )
 
                 tool_results.append({
                     "type": "tool_result",
@@ -823,6 +846,8 @@ def chat():
             record_lab_activity(email, labs_matched, modules_used)
         except Exception as e:
             logger.warning(f"Failed to record lab activity for {email}: {e}")
+
+        galileo_telemetry.conclude_and_flush(gl_logger, assistant_message)
 
         if prospect_info:
             try:
@@ -856,7 +881,7 @@ def admin_students():
     if not _is_proctor(user_email):
         return jsonify({'error': 'Access denied - proctor access required'}), 403
     
-    return render_template('admin_students.html', email=user_email)
+    return render_template('admin_students.html', email=user_email, galileo_url=galileo_telemetry.get_console_url())
 
 
 @app.route('/admin/progress')
@@ -867,7 +892,7 @@ def admin_progress():
     if not _is_proctor(user_email):
         return jsonify({'error': 'Access denied - proctor access required'}), 403
 
-    return render_template('admin_progress.html', email=user_email)
+    return render_template('admin_progress.html', email=user_email, galileo_url=galileo_telemetry.get_console_url())
 
 
 @app.route('/api/admin/progress', methods=['GET'])
@@ -1405,7 +1430,7 @@ def admin_settings():
     if not _is_proctor(user_email):
         return jsonify({'error': 'Access denied - proctor access required'}), 403
     
-    return render_template('admin_settings.html', email=user_email)
+    return render_template('admin_settings.html', email=user_email, galileo_url=galileo_telemetry.get_console_url())
 
 
 @app.route('/api/admin/settings/config', methods=['GET'])

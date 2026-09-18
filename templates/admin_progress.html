@@ -197,6 +197,9 @@
                 <a href="/lab">💬 Chat</a>
                 <a href="/admin/students">👥 Students</a>
                 <a href="/admin/settings">⚙️ Settings</a>
+                {% if galileo_url %}
+                <a href="{{ galileo_url }}" target="_blank" rel="noopener">🔭 Galileo Traces</a>
+                {% endif %}
             </div>
         </div>
 
