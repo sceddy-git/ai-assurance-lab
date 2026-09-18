@@ -630,6 +630,22 @@ def guide():
     return render_template('guide.html')
 
 
+@app.route('/api/chat/feedback', methods=['POST'])
+@login_required
+def chat_feedback():
+    """Record a student's thumbs up/down on one assistant response as a
+    Galileo annotation rating on that response's trace. No-op (still
+    returns 200) if Galileo telemetry is disabled, so the frontend doesn't
+    need to special-case a misconfigured lab."""
+    data = request.get_json() or {}
+    trace_id = (data.get('trace_id') or '').strip()
+    liked = data.get('liked')
+    if not trace_id or not isinstance(liked, bool):
+        return jsonify({'error': 'trace_id and liked (boolean) are required'}), 400
+    ok = galileo_telemetry.submit_feedback(trace_id, liked)
+    return jsonify({'recorded': ok})
+
+
 @app.route('/api/chat', methods=['POST'])
 @login_required
 def chat():
@@ -747,7 +763,9 @@ def chat():
         # added around the Bedrock call and each MCP tool call below. Fully
         # no-op (gl_logger is None) if GALILEO_API_KEY isn't configured.
         gl_logger = galileo_telemetry.new_logger()
-        galileo_telemetry.start_trace(gl_logger, email, user_message, labs_matched)
+        gl_trace_id = galileo_telemetry.start_trace(
+            gl_logger, email, user_message, labs_matched, is_proctor=_is_proctor(email)
+        )
 
         # Agentic loop: Claude may need multiple rounds of tool calls before it
         # has enough information to answer (e.g. Meraki's MCP server exposes a
@@ -865,7 +883,10 @@ def chat():
             "tools_used": total_tools_used,
             "te_available": bool(te_token),
             "meraki_available": bool(meraki_token),
-            "splunk_available": bool(splunk_url)
+            "splunk_available": bool(splunk_url),
+            # None if Galileo telemetry is disabled/unavailable - frontend
+            # must hide the feedback buttons in that case.
+            "trace_id": gl_trace_id
         })
     
     except Exception as e:

@@ -23,11 +23,20 @@ import logging
 import os
 from typing import Any, Optional
 
+import requests
+
 logger = logging.getLogger(__name__)
 
 GALILEO_API_KEY = os.getenv('GALILEO_API_KEY')
 GALILEO_PROJECT = os.getenv('GALILEO_PROJECT', 'ai-assurance-lab')
 GALILEO_LOG_STREAM = os.getenv('GALILEO_LOG_STREAM', 'production')
+GALILEO_API_BASE = os.getenv('GALILEO_API_BASE', 'https://api.galileo.ai')
+
+# Name of the "like/dislike" annotation template created once via the
+# Galileo API for thumbs up/down student feedback (see submit_feedback()).
+# Looked up lazily and cached, so a fresh Galileo project without this
+# template yet doesn't break chat - feedback submission just no-ops.
+FEEDBACK_TEMPLATE_NAME = os.getenv('GALILEO_FEEDBACK_TEMPLATE_NAME', 'Student Feedback')
 
 ENABLED = bool(GALILEO_API_KEY)
 
@@ -82,6 +91,12 @@ def setup_metrics() -> None:
                 _GalileoMetrics.action_completion,
                 _GalileoMetrics.instruction_adherence,
                 _GalileoMetrics.correctness,
+                # Custom metric (created once via the Galileo API - not a
+                # GalileoMetrics enum member, referenced here by name)
+                # specific to this lab: does the assistant's answer stay
+                # grounded in real TE/Meraki/Splunk tool output instead of
+                # fabricating a plausible-sounding diagnosis?
+                "diagnostic_quality",
             ],
         )
         logger.info(f"Galileo metrics enabled for {GALILEO_PROJECT}/{GALILEO_LOG_STREAM}")
@@ -101,16 +116,27 @@ def new_logger():
         return None
 
 
-def start_trace(gl_logger, email: str, user_message: str, labs_matched: Any) -> None:
+def start_trace(gl_logger, email: str, user_message: str, labs_matched: Any,
+                 is_proctor: bool = False) -> Optional[str]:
+    """Start a trace for one chat request. Returns the trace's UUID (as a
+    string) so the caller can hand it back to the frontend and later attach
+    thumbs up/down feedback to this exact trace via submit_feedback(). Returns
+    None if telemetry is disabled or trace creation fails - callers must
+    treat a None trace_id as "feedback isn't available for this message"."""
     if gl_logger is None:
-        return
+        return None
     try:
-        gl_logger.start_trace(
+        trace = gl_logger.start_trace(
             input=user_message or "",
-            tags=[f"user:{hash_user(email)}"] + [f"lab:{lab}" for lab in (labs_matched or [])],
+            tags=[
+                f"user:{hash_user(email)}",
+                f"role:{'proctor' if is_proctor else 'student'}",
+            ] + [f"lab:{lab}" for lab in (labs_matched or [])],
         )
+        return str(getattr(trace, 'id', '')) or None
     except Exception as e:
         logger.warning(f"Galileo start_trace failed: {e}")
+        return None
 
 
 def add_llm_span(gl_logger, request_body: dict, result: dict, model_id: str) -> None:
@@ -148,6 +174,95 @@ def add_tool_span(gl_logger, tool_name: str, tool_input: dict, tool_result: Any,
 
 
 _console_url_cache: Optional[str] = None
+_project_id_cache: Optional[str] = None
+_feedback_template_id_cache: Optional[str] = None
+
+
+def _resolve_project_id() -> Optional[str]:
+    """Best-effort lookup of this project's UUID, cached for the life of the
+    process. Needed for direct REST calls (feedback ratings) that the
+    GalileoLogger SDK doesn't wrap. Returns None if unavailable."""
+    global _project_id_cache
+    if not ENABLED:
+        return None
+    if _project_id_cache:
+        return _project_id_cache
+    try:
+        probe = _GalileoLogger(project=GALILEO_PROJECT, log_stream=GALILEO_LOG_STREAM)
+        project_id = getattr(probe, 'project_id', None)
+        if project_id:
+            _project_id_cache = str(project_id)
+    except Exception as e:
+        logger.warning(f"Could not resolve Galileo project id: {e}")
+    return _project_id_cache
+
+
+def _resolve_feedback_template_id() -> Optional[str]:
+    """Find (or create) the like/dislike annotation template used for
+    student thumbs up/down feedback. Cached for the life of the process."""
+    global _feedback_template_id_cache
+    if not ENABLED:
+        return None
+    if _feedback_template_id_cache:
+        return _feedback_template_id_cache
+    project_id = _resolve_project_id()
+    if not project_id:
+        return None
+    headers = {"Galileo-API-Key": GALILEO_API_KEY, "Content-Type": "application/json"}
+    try:
+        r = requests.get(
+            f"{GALILEO_API_BASE}/v2/projects/{project_id}/annotation/templates",
+            headers=headers, timeout=10,
+        )
+        r.raise_for_status()
+        for t in r.json():
+            if t.get("name") == FEEDBACK_TEMPLATE_NAME:
+                _feedback_template_id_cache = t["id"]
+                return _feedback_template_id_cache
+        # Not found - create it once. Idempotent enough for our purposes
+        # (worst case under a race, two templates with this name exist and
+        # we always resolve to whichever the GET returns first).
+        r = requests.post(
+            f"{GALILEO_API_BASE}/v2/projects/{project_id}/annotation/templates",
+            headers=headers, timeout=10,
+            json={
+                "name": FEEDBACK_TEMPLATE_NAME,
+                "criteria": "Was this response helpful?",
+                "constraints": {"annotation_type": "like_dislike"},
+                "include_explanation": False,
+            },
+        )
+        r.raise_for_status()
+        _feedback_template_id_cache = r.json()["id"]
+    except Exception as e:
+        logger.warning(f"Could not resolve/create Galileo feedback template: {e}")
+    return _feedback_template_id_cache
+
+
+def submit_feedback(trace_id: str, liked: bool) -> bool:
+    """Record a student's thumbs up/down on a specific chat response as a
+    Galileo annotation rating on that trace. Best-effort: returns False
+    (and logs a warning) on any failure rather than raising, since a failed
+    feedback submission must never surface as an error to the student."""
+    if not ENABLED or not trace_id:
+        return False
+    project_id = _resolve_project_id()
+    template_id = _resolve_feedback_template_id()
+    if not project_id or not template_id:
+        return False
+    try:
+        r = requests.put(
+            f"{GALILEO_API_BASE}/v2/projects/{project_id}/annotation/templates/"
+            f"{template_id}/traces/{trace_id}/rating",
+            headers={"Galileo-API-Key": GALILEO_API_KEY, "Content-Type": "application/json"},
+            json={"rating": {"annotation_type": "like_dislike", "value": bool(liked)}},
+            timeout=10,
+        )
+        r.raise_for_status()
+        return True
+    except Exception as e:
+        logger.warning(f"Galileo submit_feedback failed for trace {trace_id}: {e}")
+        return False
 
 
 def get_console_url() -> Optional[str]:

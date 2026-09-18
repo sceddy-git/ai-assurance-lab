@@ -506,6 +506,42 @@
             color: white;
         }
 
+        .feedback-buttons {
+            display: flex;
+            gap: 4px;
+            margin-top: 8px;
+        }
+
+        .feedback-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            background: transparent;
+            border: 1px solid var(--border-subtle);
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            opacity: 0.55;
+            transition: all 0.15s;
+        }
+
+        .feedback-btn:hover {
+            opacity: 1;
+            background: var(--accent-soft);
+        }
+
+        .feedback-btn.active {
+            opacity: 1;
+            background: var(--accent-soft);
+            border-color: var(--accent);
+        }
+
+        .feedback-btn:disabled {
+            cursor: default;
+        }
+
         .input-group {
             max-width: 700px;
             margin: 0 auto;
@@ -830,7 +866,7 @@
             conversationHistory = saved;
             for (const turn of saved) {
                 if (typeof turn.content === 'string') {
-                    addMessage(turn.content, turn.role === 'user');
+                    addMessage(turn.content, turn.role === 'user', null, turn.trace_id);
                 }
             }
         }
@@ -981,7 +1017,7 @@
             return DOMPurify.sanitize(rawHtml, { ADD_ATTR: ['target', 'rel'] });
         }
 
-        function addMessage(text, isUser, fileNames) {
+        function addMessage(text, isUser, fileNames, traceId) {
             const messagesContainer = document.getElementById('messages');
             const messagesInner = document.getElementById('messages-inner');
 
@@ -1028,6 +1064,9 @@
                     link.setAttribute('rel', 'noopener noreferrer');
                 });
                 addHtmlDownloadButtons(content);
+                if (traceId) {
+                    content.appendChild(buildFeedbackButtons(traceId));
+                }
             }
 
             messageDiv.appendChild(content);
@@ -1035,6 +1074,45 @@
 
             // Scroll to bottom
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        // Builds the thumbs up/down row shown under an assistant message
+        // that has a Galileo trace_id (i.e. telemetry is enabled for this
+        // response). Clicking either button posts feedback to Galileo and
+        // locks in the choice; it never blocks or errors visibly to the
+        // student if the request fails, since feedback is a nice-to-have.
+        function buildFeedbackButtons(traceId) {
+            const wrap = document.createElement('div');
+            wrap.className = 'feedback-buttons';
+
+            const up = document.createElement('button');
+            up.className = 'feedback-btn';
+            up.title = 'Helpful';
+            up.textContent = '👍';
+
+            const down = document.createElement('button');
+            down.className = 'feedback-btn';
+            down.title = 'Not helpful';
+            down.textContent = '👎';
+
+            const choose = (liked, btn, otherBtn) => {
+                up.disabled = true;
+                down.disabled = true;
+                btn.classList.add('active');
+                otherBtn.style.display = 'none';
+                fetch('/api/chat/feedback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ trace_id: traceId, liked })
+                }).catch(err => console.warn('Feedback submission failed:', err));
+            };
+
+            up.onclick = () => choose(true, up, down);
+            down.onclick = () => choose(false, down, up);
+
+            wrap.appendChild(up);
+            wrap.appendChild(down);
+            return wrap;
         }
 
         // Scan a rendered assistant message for ```html fenced code blocks
@@ -1213,8 +1291,8 @@
                 removeLoadingIndicator();
 
                 // Add assistant response
-                addMessage(data.response, false);
-                conversationHistory.push({ role: 'assistant', content: data.response });
+                addMessage(data.response, false, null, data.trace_id);
+                conversationHistory.push({ role: 'assistant', content: data.response, trace_id: data.trace_id });
                 saveChatHistory();
 
                 // Reload credential status (may have changed)
