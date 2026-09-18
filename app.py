@@ -254,6 +254,11 @@ BEDROCK_REGION = os.getenv('BEDROCK_REGION', 'us-east-1')
 # Initialize Bedrock client
 bedrock_client = boto3.client('bedrock-runtime', region_name=BEDROCK_REGION)
 
+# Claude Haiku 4.5 - chosen for cost/latency over Sonnet across 40 concurrent
+# students running many small tool-calling turns per lab. Override via env
+# var if a future lab needs Sonnet's extra capability for a specific module.
+CLAUDE_MODEL_ID = os.getenv('CLAUDE_MODEL_ID', 'us.anthropic.claude-haiku-4-5-20251001-v1:0')
+
 # Optional Galileo observability - safe no-op if GALILEO_API_KEY isn't set.
 galileo_telemetry.setup_metrics()
 
@@ -766,14 +771,14 @@ def chat():
 
             try:
                 response = bedrock_client.invoke_model(
-                    modelId='us.anthropic.claude-sonnet-4-5-20250929-v1:0',
+                    modelId=CLAUDE_MODEL_ID,
                     body=json.dumps(request_body)
                 )
                 result = json.loads(response['body'].read())
                 content = result.get('content', [])
                 galileo_telemetry.add_llm_span(
                     gl_logger, request_body, result,
-                    model_id='us.anthropic.claude-sonnet-4-5-20250929-v1:0'
+                    model_id=CLAUDE_MODEL_ID
                 )
             except Exception as e:
                 logger.error(f"Bedrock invocation failed: {e}")

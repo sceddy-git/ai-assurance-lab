@@ -40,7 +40,7 @@ build pipeline, no load balancer — this is intentionally minimal for a
 | Cognito App Client | `24ou7s3h56i851ofdjmadbkklm` (`ai-assurance-lab-app`), Hosted UI enabled, callback `https://ai.thousandeyeschannel.com/auth/callback` |
 | Cognito email sending | **SES** (`EmailSendingAccount=DEVELOPER`), source `thousandeyeschannel.com` (verified domain, DKIM/SPF green, production access, 50,000/day quota). Sender: `no-reply@thousandeyeschannel.com`, reply-to `sceddy@cisco.com`. Switched from the old `COGNITO_DEFAULT` mailer (50/day cap, unreliable — see "Email delivery" below) on 2026-09-01. |
 | DynamoDB table | `AIAssuranceLab-UserMCPCredentials` (partition key `email`, `PAY_PER_REQUEST`) |
-| Bedrock model | `us.anthropic.claude-sonnet-4-5-20250929-v1:0` |
+| Bedrock model | `us.anthropic.claude-haiku-4-5-20251001-v1:0` (override via `CLAUDE_MODEL_ID` env var; switched from Sonnet 4.5 on 2026-09-18 for cost/latency across 40 concurrent students) |
 | App path on instance | `/home/ubuntu/ai-assurance-lab` |
 | systemd service | `flask-app` (Gunicorn, `--workers 3 --timeout 180`) |
 | Git remote | `https://github.com/sceddy-git/ai-assurance-lab` (branch `main`) |
