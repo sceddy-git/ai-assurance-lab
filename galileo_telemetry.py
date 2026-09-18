@@ -322,9 +322,13 @@ def get_dashboard_url() -> Optional[str]:
                 headers=headers, timeout=10,
             )
             r.raise_for_status()
-            dashboard_id = r.json().get("id")
-            if dashboard_id:
-                _dashboard_url_cache = f"{console_url}/trends?trends_dashboard_id={dashboard_id}"
+            # There's no query param that deep-links straight into the
+            # Trends tab's saved "Default View" - the console picks that up
+            # from its own client-side state. So we link to the log-stream
+            # page itself; the nav label tells proctors to click
+            # Trends -> Default View once there.
+            if r.json().get("id"):
+                _dashboard_url_cache = console_url
                 return _dashboard_url_cache
     except Exception as e:
         logger.warning(f"Could not resolve Galileo dashboard deep link: {e}")
