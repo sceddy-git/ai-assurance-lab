@@ -295,6 +295,43 @@ def get_console_url() -> Optional[str]:
     return _console_url_cache
 
 
+_dashboard_url_cache: Optional[str] = None
+
+
+def get_dashboard_url() -> Optional[str]:
+    """Best-effort deep link to the log stream's Trends dashboard (the
+    Model Quality / Tool Usage / System Metrics charts set up for
+    proctors), falling back to the plain log-stream console URL if the
+    dashboard-specific link can't be resolved."""
+    global _dashboard_url_cache
+    if not ENABLED:
+        return None
+    if _dashboard_url_cache:
+        return _dashboard_url_cache
+    console_url = get_console_url()
+    if not console_url:
+        return None
+    try:
+        project_id = _resolve_project_id()
+        probe = _GalileoLogger(project=GALILEO_PROJECT, log_stream=GALILEO_LOG_STREAM)
+        log_stream_id = getattr(probe, 'log_stream_id', None)
+        if project_id and log_stream_id:
+            headers = {"Galileo-API-Key": GALILEO_API_KEY}
+            r = requests.get(
+                f"{GALILEO_API_BASE}/v2/projects/{project_id}/log_streams/{log_stream_id}/trends",
+                headers=headers, timeout=10,
+            )
+            r.raise_for_status()
+            dashboard_id = r.json().get("id")
+            if dashboard_id:
+                _dashboard_url_cache = f"{console_url}/trends?trends_dashboard_id={dashboard_id}"
+                return _dashboard_url_cache
+    except Exception as e:
+        logger.warning(f"Could not resolve Galileo dashboard deep link: {e}")
+    _dashboard_url_cache = console_url
+    return _dashboard_url_cache
+
+
 def conclude_and_flush(gl_logger, assistant_message: str) -> None:
     if gl_logger is None:
         return

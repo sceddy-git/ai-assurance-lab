@@ -331,6 +331,9 @@
                 <a href="/lab" style="color:white;opacity:.85;font-size:13px;margin:0 8px;">💬 Chat</a>
                 <a href="/admin/progress" style="color:white;opacity:.85;font-size:13px;margin:0 8px;">📊 Progress</a>
                 <a href="/admin/settings" style="color:white;opacity:.85;font-size:13px;margin:0 8px;">⚙️ Settings</a>
+                {% if galileo_dashboard_url %}
+                <a href="{{ galileo_dashboard_url }}" target="_blank" rel="noopener" style="color:white;opacity:.85;font-size:13px;margin:0 8px;">📊 Metrics Dashboard</a>
+                {% endif %}
                 {% if galileo_url %}
                 <a href="{{ galileo_url }}" target="_blank" rel="noopener" style="color:white;opacity:.85;font-size:13px;margin:0 8px;">🔭 Galileo Traces</a>
                 {% endif %}

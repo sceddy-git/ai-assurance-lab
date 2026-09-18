@@ -907,7 +907,11 @@ def admin_students():
     if not _is_proctor(user_email):
         return jsonify({'error': 'Access denied - proctor access required'}), 403
     
-    return render_template('admin_students.html', email=user_email, galileo_url=galileo_telemetry.get_console_url())
+    return render_template(
+        'admin_students.html', email=user_email,
+        galileo_url=galileo_telemetry.get_console_url(),
+        galileo_dashboard_url=galileo_telemetry.get_dashboard_url()
+    )
 
 
 @app.route('/admin/progress')
@@ -918,7 +922,11 @@ def admin_progress():
     if not _is_proctor(user_email):
         return jsonify({'error': 'Access denied - proctor access required'}), 403
 
-    return render_template('admin_progress.html', email=user_email, galileo_url=galileo_telemetry.get_console_url())
+    return render_template(
+        'admin_progress.html', email=user_email,
+        galileo_url=galileo_telemetry.get_console_url(),
+        galileo_dashboard_url=galileo_telemetry.get_dashboard_url()
+    )
 
 
 @app.route('/api/admin/progress', methods=['GET'])
@@ -1456,7 +1464,11 @@ def admin_settings():
     if not _is_proctor(user_email):
         return jsonify({'error': 'Access denied - proctor access required'}), 403
     
-    return render_template('admin_settings.html', email=user_email, galileo_url=galileo_telemetry.get_console_url())
+    return render_template(
+        'admin_settings.html', email=user_email,
+        galileo_url=galileo_telemetry.get_console_url(),
+        galileo_dashboard_url=galileo_telemetry.get_dashboard_url()
+    )
 
 
 @app.route('/api/admin/settings/config', methods=['GET'])
