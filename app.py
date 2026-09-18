@@ -744,7 +744,18 @@ def chat():
         else:
             user_content = user_message
 
-        messages = conversation_history + [
+        # The frontend's stored history carries extra fields per message
+        # (e.g. trace_id, used to wire up thumbs up/down feedback) that
+        # Bedrock's Converse/InvokeModel schema rejects with "Extra inputs
+        # are not permitted". Strip down to just role/content before
+        # building the Claude request.
+        sanitized_history = [
+            {"role": m.get("role"), "content": m.get("content")}
+            for m in conversation_history
+            if isinstance(m, dict) and m.get("role") and m.get("content") is not None
+        ]
+
+        messages = sanitized_history + [
             {"role": "user", "content": user_content}
         ]
 
