@@ -111,17 +111,26 @@ different cohorts.
 
 ### 2.3.6 Auto-provisioned ThousandEyes accounts (optional)
 
-If `THOUSANDEYES_ADMIN_TOKEN` is configured (see `TECHNICAL_REFERENCE.md`),
-every student who self-registers via a class QR code automatically gets
-their **own** dedicated ThousandEyes Account Group + login (scoped to just
-that group, via the "Account Admin" role) - in addition to their AI
-Assurance Lab account. This is separate from the ThousandEyes *personal
-token* students paste into the Credentials page for the chat's MCP
-integration - that's still needed either way.
+If the super admin (`sceddy@cisco.com`) has saved their **own** ThousandEyes
+token on their own Credentials page, every student who self-registers via a
+class QR code automatically gets their **own** dedicated ThousandEyes
+Account Group + login (scoped to just that group, via the "Account Admin"
+role) - in addition to their AI Assurance Lab account. There's no separate
+admin-token setting anywhere in `.env` — it deliberately reuses that one
+personal token instead. This is separate from the ThousandEyes *personal
+token* each student pastes into their own Credentials page for the chat's
+MCP integration - that's still needed either way.
 
-If this env var isn't set, class scheduling and QR signup still work fine;
-students just won't get an auto-created ThousandEyes account, and the
-`/admin/classes` page shows a banner reminding you it's off.
+**Hard org lock:** this only ever works against the ThousandEyes
+organization named exactly **"AI-Powered Network Observability Day"**. If
+the super admin's saved token belongs to any other organization, every
+auto-provisioning attempt is refused (logged, never silently ignored) and
+the `/admin/classes` page shows a warning banner. This lock is in code
+(`thousandeyes_admin.py`), not configurable via `.env` — it cannot
+accidentally point at the wrong org.
+
+If no valid token is available, class scheduling and QR signup still work
+fine; students just won't get an auto-created ThousandEyes account.
 
 ### 2.4 Give students their instructions
 
@@ -246,7 +255,7 @@ Then add `YOUR_EMAIL` to `PROCTOR_EMAILS` as above.
 | A student's file upload fails | File >60MB, or unsupported type | Supported: images, PDF, XLS/XLSX/CSV, up to 60MB total per message |
 | Whole app is unreachable | EC2 instance issue | See `TECHNICAL_REFERENCE.md` Section "Emergency access" |
 | A student's QR signup says "Link not available" | The class was disabled/deleted, or the QR is from an old class | Create a new class and re-share its QR code |
-| ThousandEyes account group wasn't created for a QR signup | `THOUSANDEYES_ADMIN_TOKEN` not configured, or the API call failed (check `⚙️ Settings` → Logs) | Cognito login still works either way; the student can be provisioned manually later, or just use their own TE token on the Credentials page as normal |
+| ThousandEyes account group wasn't created for a QR signup | The super admin hasn't saved a ThousandEyes token on their own Credentials page, that token belongs to a different org than "AI-Powered Network Observability Day", or the API call failed (check `⚙️ Settings` → Logs) | Cognito login still works either way; the student can be provisioned manually later, or just use their own TE token on the Credentials page as normal |
 
 ---
 

@@ -113,9 +113,11 @@
         <div class="content">
             {% if not te_admin_configured %}
             <div class="help-text" style="background:#fef3c7;color:#92400e;">
-                ⚠️ <b>THOUSANDEYES_ADMIN_TOKEN</b> is not configured on this server, so ThousandEyes
-                Account Groups/users won't be auto-provisioned for students who self-register via QR.
-                Cognito login + class roster tracking still works fine without it.
+                ⚠️ ThousandEyes auto-provisioning is off: the super admin hasn't saved a
+                ThousandEyes token on their own Credentials page yet, or that token doesn't
+                belong to the <b>"{{ te_admin_org_name }}"</b> organization. Students who
+                self-register via QR still get their AI Assurance Lab login either way -
+                they just won't get an auto-created ThousandEyes Account Group.
             </div>
             {% endif %}
 

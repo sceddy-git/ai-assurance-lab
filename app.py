@@ -1542,7 +1542,27 @@ def enable_student(target_email):
 # login in one click, and/or tear down each student's auto-provisioned
 # ThousandEyes Account Group/user as a separate, explicit, destructive
 # action.
+#
+# ThousandEyes auto-provisioning uses the super admin's OWN personal
+# ThousandEyes token (the same one saved on their Credentials page) rather
+# than a separate service-account credential in .env - there is
+# deliberately no THOUSANDEYES_ADMIN_TOKEN env var. Every call is further
+# hard-locked to a single named ThousandEyes organization
+# (thousandeyes_admin.REQUIRED_ORG_NAME) - see thousandeyes_admin.py.
 # ============================================================================
+
+def _get_te_admin_token() -> Optional[str]:
+    """The ThousandEyes token used to drive auto-provisioning: always the
+    super admin's own stored personal token, never a per-request or
+    per-proctor token. Returns None if the super admin hasn't saved one on
+    their own Credentials page."""
+    try:
+        creds = get_user_credentials(SUPER_ADMIN_EMAIL)
+        return creds.get('te_token')
+    except Exception as e:
+        logger.warning(f"Could not load super admin's ThousandEyes token: {e}")
+        return None
+
 
 @app.route('/admin/classes')
 @login_required
@@ -1553,7 +1573,8 @@ def admin_classes():
         return jsonify({'error': 'Access denied - proctor access required'}), 403
     return render_template(
         'admin_classes.html', email=user_email,
-        te_admin_configured=thousandeyes_admin.is_configured()
+        te_admin_configured=thousandeyes_admin.is_org_token(_get_te_admin_token()),
+        te_admin_org_name=thousandeyes_admin.REQUIRED_ORG_NAME
     )
 
 
@@ -1709,8 +1730,13 @@ def api_class_te_cleanup(class_id):
     user_email = session.get('user_email', '')
     if not _is_proctor(user_email):
         return jsonify({'error': 'Access denied'}), 403
-    if not thousandeyes_admin.is_configured():
-        return jsonify({'error': 'THOUSANDEYES_ADMIN_TOKEN is not configured on this server'}), 400
+
+    te_token = _get_te_admin_token()
+    if not te_token:
+        return jsonify({'error': (
+            f'The super admin ({SUPER_ADMIN_EMAIL}) has not saved a ThousandEyes token on their '
+            'own Credentials page - that token is required to manage ThousandEyes resources.'
+        )}), 400
 
     cls = get_class(class_id)
     if not cls:
@@ -1726,9 +1752,15 @@ def api_class_te_cleanup(class_id):
         if not group_id and not user_id:
             continue
         try:
-            thousandeyes_admin.deprovision_student(group_id, user_id)
+            thousandeyes_admin.deprovision_student(te_token, group_id, user_id)
             clear_te_provisioning(email)
             cleaned += 1
+        except thousandeyes_admin.WrongOrganizationError as e:
+            # Fail the whole batch loudly - this means the stored token no
+            # longer belongs to the required org, so continuing would risk
+            # silently skipping every student. Better to stop immediately.
+            logger.error(f"TE cleanup aborted for class {class_id}: {e}")
+            return jsonify({'error': str(e)}), 400
         except thousandeyes_admin.ThousandEyesAdminError as e:
             logger.warning(f"Could not clean up TE resources for {email}: {e}")
             failed.append(email)
@@ -1822,15 +1854,23 @@ def api_join_class(join_token):
     except Exception as e:
         logger.warning(f"Could not save roster metadata for {email}: {e}")
 
-    if thousandeyes_admin.is_configured():
+    te_admin_token = _get_te_admin_token()
+    if te_admin_token:
         try:
-            result = thousandeyes_admin.provision_student(full_name, email)
+            result = thousandeyes_admin.provision_student(te_admin_token, full_name, email)
             save_user_credentials(
                 email,
                 te_account_group_id=result['account_group_id'],
                 te_user_id=result['user_id']
             )
             te_status = 'provisioned'
+        except thousandeyes_admin.WrongOrganizationError as e:
+            # Never provision into the wrong org - refuse and move on. The
+            # student's Cognito account was already created above, so this
+            # is a partial success (login works, TE doesn't), not a hard
+            # failure of the whole signup.
+            logger.error(f"TE auto-provisioning refused for {email}: {e}")
+            te_status = 'wrong_org'
         except thousandeyes_admin.ThousandEyesAdminError as e:
             logger.warning(f"TE auto-provisioning failed for {email}: {e}")
             te_status = 'failed'

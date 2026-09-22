@@ -164,19 +164,38 @@ needed to scale to thousands of rows.
 ### ThousandEyes auto-provisioning (`thousandeyes_admin.py`)
 
 Separate from the per-student personal TE token used for MCP chat tool
-calls. This module uses one org-admin-level `THOUSANDEYES_ADMIN_TOKEN` to
-call the **v7 Administrative REST API** directly (`POST /account-groups`,
-`POST /users`, `DELETE /users/{id}`, `DELETE /account-groups/{id}`) — the
-hosted MCP server's tool catalog has no account/user-management tools at
-all, so this can't go through MCP. Triggered only from the public
-`/api/join/<token>` handler in `app.py` when a student self-registers via a
-class QR code; not used anywhere else. Failures here are logged and
-surfaced as `te_provisioning: "failed"` in the join response, but never
-block the underlying Cognito account creation.
+calls. This module calls the **v7 Administrative REST API** directly
+(`POST /account-groups`, `POST /users`, `DELETE /users/{id}`, `DELETE
+/account-groups/{id}`) — the hosted MCP server's tool catalog has no
+account/user-management tools at all, so this can't go through MCP.
+Triggered only from the public `/api/join/<token>` handler in `app.py` when
+a student self-registers via a class QR code, and from the class
+"Delete ThousandEyes Account Groups" action; not used anywhere else.
+Failures here are logged and surfaced as `te_provisioning: "failed"` (or
+`"wrong_org"`) in the join response, but never block the underlying
+Cognito account creation.
 
-New user's default role (`THOUSANDEYES_DEFAULT_ROLE_NAME`, default
-`"Account Admin"`) is scoped to just their own new Account Group - deliberately
-not `"Organization Admin"`, which would grant access across the whole TE org.
+**Token source:** there is deliberately **no `THOUSANDEYES_ADMIN_TOKEN` env
+var**. `app.py`'s `_get_te_admin_token()` fetches the super admin's
+(`sceddy@cisco.com`) own personal ThousandEyes token straight out of
+`AIAssuranceLab-UserMCPCredentials` — the same token they save on their own
+Credentials page for chat MCP calls — and passes it into every
+`thousandeyes_admin.py` function call explicitly. If they haven't saved
+one, auto-provisioning is a no-op everywhere it's called.
+
+**Hard org lock:** `thousandeyes_admin.REQUIRED_ORG_NAME = "AI-Powered
+Network Observability Day"` is a hardcoded constant, not an env var, on
+purpose — this must never be reconfigurable via `.env` or any UI field.
+Every `provision_student()`/`deprovision_student()` call runs `_verify_org()`
+first, which calls `GET /v7/account-groups` and checks the token's
+`organizationName` against that exact string; any mismatch (or an
+undeterminable org) raises `WrongOrganizationError` before anything is
+created or deleted. `is_org_token(token)` is the non-raising version used
+just to drive the `/admin/classes` "not configured" banner.
+
+New user's default role (`DEFAULT_ROLE_NAME = "Account Admin"`, also
+hardcoded) is scoped to just their own new Account Group — deliberately not
+`"Organization Admin"`, which would grant access across the whole TE org.
 Deletion order matters: a user's `loginAccountGroupId` must not point at a
 group that's already gone, so `deprovision_student()` always deletes the
 user before the account group.
