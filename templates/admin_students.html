@@ -329,6 +329,7 @@
             <p>Manage student accounts for the AI Assurance Lab</p>
             <div style="margin-top:14px;">
                 <a href="/lab" style="color:white;opacity:.85;font-size:13px;margin:0 8px;">💬 Chat</a>
+                <a href="/admin/classes" style="color:white;opacity:.85;font-size:13px;margin:0 8px;">🏫 Classes</a>
                 <a href="/admin/progress" style="color:white;opacity:.85;font-size:13px;margin:0 8px;">📊 Progress</a>
                 <a href="/admin/settings" style="color:white;opacity:.85;font-size:13px;margin:0 8px;">⚙️ Settings</a>
                 {% if galileo_dashboard_url %}
@@ -464,9 +465,12 @@
                                 <th>Email</th>
                                 <th>First Name</th>
                                 <th>Last Name</th>
+                                <th>Company</th>
+                                <th>Class</th>
                                 <th>Created</th>
                                 <th>Status</th>
                                 <th>API Tokens</th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody id="studentsBody">
@@ -636,6 +640,12 @@
             });
         }
 
+        function escapeHtml(s) {
+            const div = document.createElement('div');
+            div.textContent = s == null ? '' : s;
+            return div.innerHTML;
+        }
+
         function tokenBadges(student) {
             const items = [
                 ['TE', student.te_connected],
@@ -683,14 +693,30 @@
 
                         data.students.forEach(student => {
                             const row = tbody.insertRow();
+                            const isEnabled = student.enabled !== false;
+                            const statusColor = isEnabled ? '#10b981' : '#ef4444';
+                            const statusText = isEnabled ? student.status : 'DISABLED';
                             row.innerHTML = `
-                                <td>${student.email}</td>
-                                <td>${student.first_name}</td>
-                                <td>${student.last_name}</td>
+                                <td>${escapeHtml(student.email)}</td>
+                                <td>${escapeHtml(student.first_name)}</td>
+                                <td>${escapeHtml(student.last_name)}</td>
+                                <td>${escapeHtml(student.company)}</td>
+                                <td>${escapeHtml(student.class_id)}</td>
                                 <td>${new Date(student.created).toLocaleDateString()}</td>
-                                <td><span style="color: #10b981; font-weight: 600;">${student.status}</span></td>
+                                <td><span style="color: ${statusColor}; font-weight: 600;">${statusText}</span></td>
                                 <td>${tokenBadges(student)}</td>
+                                <td></td>
                             `;
+                            // Built via DOM APIs (not string-interpolated HTML) so a
+                            // crafted email/company value from the public self-signup
+                            // form can never break out of an inline handler string.
+                            const toggleBtn = document.createElement('button');
+                            toggleBtn.className = `button ${isEnabled ? 'danger' : 'secondary'}`;
+                            toggleBtn.style.padding = '6px 12px';
+                            toggleBtn.style.fontSize = '12px';
+                            toggleBtn.textContent = isEnabled ? 'Disable' : 'Enable';
+                            toggleBtn.addEventListener('click', () => toggleStudent(student.email, !isEnabled));
+                            row.cells[row.cells.length - 1].appendChild(toggleBtn);
                         });
                     }
                 })
@@ -699,6 +725,22 @@
                     emptyState.style.display = 'block';
                     emptyState.innerHTML = `<p>Error loading students: ${error.message}</p>`;
                 });
+        }
+
+        function toggleStudent(email, enable) {
+            const action = enable ? 'enable' : 'disable';
+            if (!enable && !confirm(`Disable login for ${email}? Their data/history is kept - you can re-enable any time.`)) return;
+
+            fetch(`/api/admin/students/${encodeURIComponent(email)}/${action}`, { method: 'POST' })
+                .then(response => response.json().then(data => ({ ok: response.ok, data })))
+                .then(({ ok, data }) => {
+                    if (ok && data.status === 'success') {
+                        loadStudents();
+                    } else {
+                        alert('Error: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => alert('Error: ' + error.message));
         }
 
         function deleteAllStudents() {

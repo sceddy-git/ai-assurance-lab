@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Class Management - AI Assurance Lab</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 { font-size: 28px; margin-bottom: 10px; }
+        .header p { opacity: 0.9; font-size: 14px; }
+        .content { padding: 30px; }
+        .section { margin-bottom: 40px; }
+        .section h2 {
+            font-size: 20px; color: #333; margin-bottom: 20px;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .icon { display: inline-block; width: 20px; height: 20px; text-align: center; line-height: 20px; }
+        .help-text {
+            background: #e0e7ff; padding: 15px; border-radius: 6px;
+            font-size: 12px; color: #667eea; margin-bottom: 20px; line-height: 1.6;
+        }
+        .single-add-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+        .single-add-form input[type="text"], .single-add-form input[type="date"] {
+            padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 6px;
+            font-size: 14px; font-family: inherit;
+        }
+        .single-add-form input[name="name"] { flex: 2; min-width: 220px; }
+        .single-add-form input[name="location"] { flex: 1; min-width: 160px; }
+        .single-add-form input:focus {
+            outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; border: none; padding: 12px 24px; border-radius: 6px;
+            cursor: pointer; font-size: 14px; font-weight: 600;
+            transition: all 0.3s ease; display: inline-block; margin-top: 10px;
+        }
+        .button:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3); }
+        .button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .button.secondary { background: #e0e7ff; color: #667eea; }
+        .button.danger { background: #ef4444; }
+        .button.small { padding: 6px 14px; font-size: 12px; margin-top: 0; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        thead { background: #f8f9fa; border-bottom: 2px solid #e5e7eb; }
+        th { padding: 12px; text-align: left; font-weight: 600; color: #667eea; }
+        td { padding: 12px; border-bottom: 1px solid #e5e7eb; color: #333; }
+        tbody tr:hover { background: #f8f9fa; }
+        .empty-state { text-align: center; padding: 40px 20px; color: #999; }
+        .badge {
+            display: inline-block; padding: 2px 10px; border-radius: 10px;
+            font-size: 11px; font-weight: 600;
+        }
+        .badge.scheduled { background: #e0e7ff; color: #667eea; }
+        .badge.disabled { background: #fee2e2; color: #ef4444; }
+        .modal-overlay {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+            align-items: center; justify-content: center; z-index: 100;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal {
+            background: white; border-radius: 12px; padding: 30px; max-width: 480px;
+            width: 90%; max-height: 85vh; overflow-y: auto;
+        }
+        .modal h3 { margin-bottom: 16px; color: #333; }
+        .modal .close-btn {
+            float: right; cursor: pointer; font-size: 20px; color: #999; line-height: 1;
+        }
+        .qr-wrap { text-align: center; margin: 16px 0; }
+        .qr-wrap img { max-width: 260px; border-radius: 8px; border: 1px solid #e5e7eb; }
+        .join-url-box {
+            background: #f8f9fa; padding: 10px 14px; border-radius: 6px; font-size: 12px;
+            word-break: break-all; margin-top: 10px; color: #667eea;
+        }
+        .warn-box {
+            background: #fef2f2; border-left: 4px solid #ef4444; padding: 14px;
+            border-radius: 6px; font-size: 13px; color: #991b1b; margin: 14px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏫 Class Management</h1>
+            <p>Schedule classes, generate QR self-registration links, and manage rosters</p>
+            <div style="margin-top:14px;">
+                <a href="/lab" style="color:white;opacity:.85;font-size:13px;margin:0 8px;">💬 Chat</a>
+                <a href="/admin/students" style="color:white;opacity:.85;font-size:13px;margin:0 8px;">👥 Students</a>
+                <a href="/admin/progress" style="color:white;opacity:.85;font-size:13px;margin:0 8px;">📊 Progress</a>
+                <a href="/admin/settings" style="color:white;opacity:.85;font-size:13px;margin:0 8px;">⚙️ Settings</a>
+            </div>
+        </div>
+
+        <div class="content">
+            {% if not te_admin_configured %}
+            <div class="help-text" style="background:#fef3c7;color:#92400e;">
+                ⚠️ <b>THOUSANDEYES_ADMIN_TOKEN</b> is not configured on this server, so ThousandEyes
+                Account Groups/users won't be auto-provisioned for students who self-register via QR.
+                Cognito login + class roster tracking still works fine without it.
+            </div>
+            {% endif %}
+
+            <div class="section">
+                <h2><span class="icon">➕</span> Schedule a New Class</h2>
+                <div class="help-text">
+                    Give the class a name, date, and location. You'll get a QR code students can scan
+                    to self-register - no proctor action needed per student.
+                </div>
+                <div class="single-add-form">
+                    <input type="text" id="className" name="name" placeholder="Class name (e.g. AI Assurance Lab - Sept cohort)" required>
+                    <input type="date" id="classDate" name="class_date">
+                    <input type="text" id="classLocation" name="location" placeholder="Location (optional)">
+                    <button class="button" onclick="createClass()" id="createClassBtn">Create Class</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2><span class="icon">📋</span> Scheduled Classes</h2>
+                <button class="button secondary" onclick="loadClasses()">Refresh List</button>
+                <table id="classesTable" style="margin-top:16px;">
+                    <thead>
+                        <tr>
+                            <th>Name</th><th>Date</th><th>Location</th><th>Status</th><th>Enrolled</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="classesBody"></tbody>
+                </table>
+                <div class="empty-state" id="classesEmpty" style="display:none;">
+                    <p>No classes scheduled yet. Create one above.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- QR modal -->
+    <div class="modal-overlay" id="qrModal">
+        <div class="modal">
+            <span class="close-btn" onclick="closeModal('qrModal')">&times;</span>
+            <h3 id="qrModalTitle">Join QR Code</h3>
+            <div class="qr-wrap">
+                <img id="qrImage" src="" alt="QR code">
+            </div>
+            <div class="join-url-box" id="joinUrlBox"></div>
+            <p style="font-size:12px;color:#666;margin-top:10px;">
+                Project or print this QR code for students to scan. Each scan opens a signup form
+                (name, company, email) and auto-enrolls them in this class.
+            </p>
+        </div>
+    </div>
+
+    <!-- Roster modal -->
+    <div class="modal-overlay" id="rosterModal">
+        <div class="modal" style="max-width:700px;">
+            <span class="close-btn" onclick="closeModal('rosterModal')">&times;</span>
+            <h3 id="rosterModalTitle">Roster</h3>
+            <div id="rosterContent"></div>
+        </div>
+    </div>
+
+    <script>
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('show');
+        }
+
+        function escapeHtml(s) {
+            const div = document.createElement('div');
+            div.textContent = s == null ? '' : s;
+            return div.innerHTML;
+        }
+
+        function createClass() {
+            const name = document.getElementById('className').value.trim();
+            const classDate = document.getElementById('classDate').value;
+            const location = document.getElementById('classLocation').value.trim();
+            if (!name) { document.getElementById('className').focus(); return; }
+
+            const btn = document.getElementById('createClassBtn');
+            btn.disabled = true; btn.textContent = 'Creating...';
+
+            fetch('/api/admin/classes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, class_date: classDate, location })
+            })
+            .then(r => r.json().then(data => ({ ok: r.ok, data })))
+            .then(({ ok, data }) => {
+                btn.disabled = false; btn.textContent = 'Create Class';
+                if (ok && data.status === 'success') {
+                    document.getElementById('className').value = '';
+                    document.getElementById('classDate').value = '';
+                    document.getElementById('classLocation').value = '';
+                    loadClasses();
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(e => { btn.disabled = false; btn.textContent = 'Create Class'; alert('Error: ' + e.message); });
+        }
+
+        function loadClasses() {
+            fetch('/api/admin/classes')
+                .then(r => r.json())
+                .then(data => {
+                    const tbody = document.getElementById('classesBody');
+                    const empty = document.getElementById('classesEmpty');
+                    tbody.innerHTML = '';
+                    const classes = data.classes || [];
+                    if (classes.length === 0) {
+                        empty.style.display = 'block';
+                        return;
+                    }
+                    empty.style.display = 'none';
+                    classes.forEach(cls => {
+                        const row = tbody.insertRow();
+                        row.innerHTML = `
+                            <td>${escapeHtml(cls.name)}</td>
+                            <td>${escapeHtml(cls.class_date)}</td>
+                            <td>${escapeHtml(cls.location)}</td>
+                            <td><span class="badge ${cls.status === 'disabled' ? 'disabled' : 'scheduled'}">${escapeHtml(cls.status)}</span></td>
+                            <td>${cls.enrolled_count == null ? '?' : cls.enrolled_count}</td>
+                            <td></td>
+                        `;
+                        const actionsCell = row.cells[row.cells.length - 1];
+                        const qrBtn = document.createElement('button');
+                        qrBtn.className = 'button secondary small';
+                        qrBtn.textContent = 'QR';
+                        qrBtn.style.marginRight = '6px';
+                        qrBtn.addEventListener('click', () => showQr(cls));
+                        const rosterBtn = document.createElement('button');
+                        rosterBtn.className = 'button secondary small';
+                        rosterBtn.textContent = 'Roster';
+                        rosterBtn.style.marginRight = '6px';
+                        rosterBtn.addEventListener('click', () => showRoster(cls));
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.className = 'button danger small';
+                        deleteBtn.textContent = 'Delete';
+                        deleteBtn.addEventListener('click', () => deleteClassRow(cls));
+                        actionsCell.appendChild(qrBtn);
+                        actionsCell.appendChild(rosterBtn);
+                        actionsCell.appendChild(deleteBtn);
+                    });
+                })
+                .catch(e => console.error('Error loading classes:', e));
+        }
+
+        function showQr(cls) {
+            document.getElementById('qrModalTitle').textContent = `Join QR — ${cls.name}`;
+            document.getElementById('qrImage').src = `/api/admin/classes/${cls.class_id}/qr?t=${Date.now()}`;
+            fetch(`/api/admin/classes/${cls.class_id}/roster`)
+                .then(r => r.json())
+                .then(data => {
+                    const joinToken = (data.class || {}).join_token;
+                    const url = joinToken ? `${window.location.origin}/join/${joinToken}` : '';
+                    document.getElementById('joinUrlBox').textContent = url;
+                });
+            document.getElementById('qrModal').classList.add('show');
+        }
+
+        function showRoster(cls) {
+            document.getElementById('rosterModalTitle').textContent = `Roster — ${cls.name}`;
+            const content = document.getElementById('rosterContent');
+            content.innerHTML = '<p style="color:#999;">Loading...</p>';
+            document.getElementById('rosterModal').classList.add('show');
+
+            fetch(`/api/admin/classes/${cls.class_id}/roster`)
+                .then(r => r.json())
+                .then(data => {
+                    const roster = data.roster || [];
+                    let html = '';
+                    if (roster.length === 0) {
+                        html = '<p style="color:#999;">No students enrolled yet.</p>';
+                    } else {
+                        html = '<table><thead><tr><th>Email</th><th>Company</th><th>TE</th><th>Meraki</th><th>Splunk</th><th>Disabled</th></tr></thead><tbody>';
+                        roster.forEach(s => {
+                            html += `<tr>
+                                <td>${escapeHtml(s.email)}</td>
+                                <td>${escapeHtml(s.company)}</td>
+                                <td>${s.te_connected ? '✓' : '—'}</td>
+                                <td>${s.meraki_connected ? '✓' : '—'}</td>
+                                <td>${s.splunk_connected ? '✓' : '—'}</td>
+                                <td>${s.disabled ? 'Yes' : 'No'}</td>
+                            </tr>`;
+                        });
+                        html += '</tbody></table>';
+                    }
+                    html += `
+                        <div class="warn-box">
+                            <b>Class complete?</b> These two actions apply to <b>every</b> student
+                            currently enrolled in this class.
+                        </div>
+                        <button class="button" onclick="disableClass('${cls.class_id}')">Disable Class Access</button>
+                        <button class="button danger" onclick="teCleanupClass('${cls.class_id}')">Delete ThousandEyes Account Groups</button>
+                    `;
+                    content.innerHTML = html;
+                })
+                .catch(e => {
+                    content.innerHTML = `<p style="color:#ef4444;">Error loading roster: ${e.message}</p>`;
+                });
+        }
+
+        function disableClass(classId) {
+            if (!confirm('Disable login for every student enrolled in this class? Their data is kept - you can re-enable individually later from the Students page.')) return;
+            fetch(`/api/admin/classes/${classId}/disable`, { method: 'POST' })
+                .then(r => r.json().then(data => ({ ok: r.ok, data })))
+                .then(({ ok, data }) => {
+                    if (ok && data.status === 'success') {
+                        alert(`Disabled ${data.disabled} student(s).${data.failed && data.failed.length ? ' Failed: ' + data.failed.join(', ') : ''}`);
+                        closeModal('rosterModal');
+                        loadClasses();
+                    } else {
+                        alert('Error: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(e => alert('Error: ' + e.message));
+        }
+
+        function teCleanupClass(classId) {
+            if (!confirm('⚠️ This permanently DELETES the ThousandEyes Account Group and user for every student in this class. This cannot be undone.')) return;
+            if (!confirm('Are you absolutely sure? This is irreversible.')) return;
+            fetch(`/api/admin/classes/${classId}/te-cleanup`, { method: 'POST' })
+                .then(r => r.json().then(data => ({ ok: r.ok, data })))
+                .then(({ ok, data }) => {
+                    if (ok && data.status === 'success') {
+                        alert(`Cleaned up ${data.cleaned} student(s).${data.failed && data.failed.length ? ' Failed: ' + data.failed.join(', ') : ''}`);
+                        closeModal('rosterModal');
+                    } else {
+                        alert('Error: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(e => alert('Error: ' + e.message));
+        }
+
+        function deleteClassRow(cls) {
+            if (!confirm(`Delete class "${cls.name}"? This only removes the class record - enrolled students, their logins, and data are untouched.`)) return;
+            fetch(`/api/admin/classes/${cls.class_id}`, { method: 'DELETE' })
+                .then(r => r.json().then(data => ({ ok: r.ok, data })))
+                .then(({ ok, data }) => {
+                    if (ok && data.status === 'success') {
+                        loadClasses();
+                    } else {
+                        alert('Error: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(e => alert('Error: ' + e.message));
+        }
+
+        window.addEventListener('load', loadClasses);
+    </script>
+</body>
+</html>

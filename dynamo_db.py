@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 # Initialize DynamoDB resource
 dynamodb = boto3.resource('dynamodb', region_name=os.getenv('DYNAMODB_REGION', 'us-east-1'))
 table_name = os.getenv('DYNAMODB_TABLE', 'AIAssuranceLab-UserMCPCredentials')
+classes_table_name = os.getenv('DYNAMODB_CLASSES_TABLE', 'AIAssuranceLab-Classes')
 
 
 def get_table():
@@ -27,6 +28,15 @@ def get_table():
         return dynamodb.Table(table_name)
     except Exception as e:
         logger.error(f"Failed to get DynamoDB table: {e}")
+        raise
+
+
+def get_classes_table():
+    """Get the Classes DynamoDB table resource."""
+    try:
+        return dynamodb.Table(classes_table_name)
+    except Exception as e:
+        logger.error(f"Failed to get Classes DynamoDB table: {e}")
         raise
 
 
@@ -42,7 +52,11 @@ def save_user_credentials(
     meraki_org_id: Optional[str] = None,
     splunk_url: Optional[str] = None,
     splunk_token: Optional[str] = None,
-    splunk_skip_tls_verify: Optional[bool] = None
+    splunk_skip_tls_verify: Optional[bool] = None,
+    company: Optional[str] = None,
+    class_id: Optional[str] = None,
+    te_account_group_id: Optional[str] = None,
+    te_user_id: Optional[str] = None
 ) -> bool:
     """
     Save or update a user's encrypted MCP credentials.
@@ -127,7 +141,26 @@ def save_user_credentials(
         if splunk_skip_tls_verify is not None:
             set_clauses.append("splunk_skip_tls_verify = :splunk_skip_tls_verify")
             expr_values[":splunk_skip_tls_verify"] = splunk_skip_tls_verify
-        
+
+        # Roster/class metadata - not secrets, stored in plain text alongside
+        # the existing credential fields so the class-scheduling feature
+        # doesn't need a second per-student table.
+        if company:
+            set_clauses.append("company = :company")
+            expr_values[":company"] = company
+
+        if class_id:
+            set_clauses.append("class_id = :class_id")
+            expr_values[":class_id"] = class_id
+
+        if te_account_group_id:
+            set_clauses.append("te_account_group_id = :te_account_group_id")
+            expr_values[":te_account_group_id"] = te_account_group_id
+
+        if te_user_id:
+            set_clauses.append("te_user_id = :te_user_id")
+            expr_values[":te_user_id"] = te_user_id
+
         # Set created_at if this is the first save
         set_clauses.insert(0, "#created = if_not_exists(#created, :created_at)")
         expr_values[":created_at"] = current_time
@@ -191,7 +224,12 @@ def get_user_credentials(email: str) -> Dict:
                 "splunk_connected": False,
                 "splunk_skip_tls_verify": False,
                 "created_at": None,
-                "updated_at": None
+                "updated_at": None,
+                "company": None,
+                "class_id": None,
+                "te_account_group_id": None,
+                "te_user_id": None,
+                "disabled": False
             }
         
         item = response['Item']
@@ -203,7 +241,12 @@ def get_user_credentials(email: str) -> Dict:
             "splunk_url": item.get("splunk_mcp_url"),
             "splunk_skip_tls_verify": bool(item.get("splunk_skip_tls_verify", False)),
             "created_at": item.get("created_at"),
-            "updated_at": item.get("updated_at")
+            "updated_at": item.get("updated_at"),
+            "company": item.get("company"),
+            "class_id": item.get("class_id"),
+            "te_account_group_id": item.get("te_account_group_id"),
+            "te_user_id": item.get("te_user_id"),
+            "disabled": bool(item.get("disabled", False))
         }
         
         # Decrypt tokens
@@ -632,3 +675,164 @@ def delete_user_credentials(email: str, service: str) -> bool:
     except Exception as e:
         logger.error(f"Unexpected error deleting credential for {email}: {e}")
         raise DynamoDBError(f"Failed to delete credential: {str(e)}")
+
+
+def clear_te_provisioning(email: str) -> bool:
+    """Remove the te_account_group_id/te_user_id attributes after a proctor
+    has torn down that student's ThousandEyes resources. A plain
+    save_user_credentials() call can't do this - its fields are only ever
+    set when truthy, by design, so partial credential updates never
+    accidentally blank out an unrelated field."""
+    if not email:
+        raise DynamoDBError("Email is required")
+    try:
+        table = get_table()
+        table.update_item(
+            Key={"email": email},
+            UpdateExpression="REMOVE te_account_group_id, te_user_id SET updated_at = :updated_at",
+            ExpressionAttributeValues={":updated_at": int(time.time())}
+        )
+        return True
+    except ClientError as e:
+        error_code = e.response['Error']['Code']
+        logger.error(f"DynamoDB error clearing TE provisioning for {email}: {error_code}")
+        raise DynamoDBError(f"DynamoDB error: {error_code}")
+
+
+def set_disabled(email: str, disabled: bool) -> bool:
+    """Mark (or clear) the soft-disabled flag for one student's roster
+    record. This mirrors whatever the caller has just done to their Cognito
+    login (admin_disable_user/admin_enable_user) - it's a display/roster
+    flag only, not itself an access control (Cognito is what actually
+    blocks login), so it can never fall out of sync in a way that grants
+    access; at worst it just under/over-reports status until refreshed.
+    """
+    if not email:
+        raise DynamoDBError("Email is required")
+    try:
+        table = get_table()
+        table.update_item(
+            Key={"email": email},
+            UpdateExpression="SET disabled = :disabled, updated_at = :updated_at",
+            ExpressionAttributeValues={":disabled": disabled, ":updated_at": int(time.time())}
+        )
+        return True
+    except ClientError as e:
+        error_code = e.response['Error']['Code']
+        logger.error(f"DynamoDB error setting disabled for {email}: {error_code}")
+        raise DynamoDBError(f"DynamoDB error: {error_code}")
+
+
+def list_credentials_by_class(class_id: str) -> list:
+    """Scan the credentials table for every student roster record tagged
+    with class_id. Used by the class roster/disable/TE-cleanup admin
+    actions. Returns decrypted-free summaries (no tokens) - just the
+    roster-relevant fields.
+    """
+    if not class_id:
+        return []
+    table = get_table()
+    results = []
+    scan_kwargs = {}
+    while True:
+        response = table.scan(**scan_kwargs)
+        for item in response.get('Items', []):
+            if item.get('class_id') != class_id:
+                continue
+            results.append({
+                "email": item.get('email'),
+                "company": item.get('company'),
+                "disabled": bool(item.get('disabled', False)),
+                "te_account_group_id": item.get('te_account_group_id'),
+                "te_user_id": item.get('te_user_id'),
+                "te_connected": bool(item.get('te_connected', False)),
+                "meraki_connected": bool(item.get('meraki_connected', False)),
+                "splunk_connected": bool(item.get('splunk_connected', False)),
+            })
+        last_key = response.get('LastEvaluatedKey')
+        if not last_key:
+            break
+        scan_kwargs['ExclusiveStartKey'] = last_key
+    return results
+
+
+# ============================================================================
+# Class scheduling
+# ============================================================================
+
+def create_class(class_id: str, name: str, location: str, class_date: str,
+                  join_token: str, created_by: str) -> bool:
+    """Create a new scheduled class. class_date is stored as a plain string
+    (e.g. 'YYYY-MM-DD') - display formatting only, not used for any
+    automatic disable logic (disabling is always a manual proctor action).
+    """
+    table = get_classes_table()
+    now = int(time.time())
+    table.put_item(Item={
+        "class_id": class_id,
+        "name": name,
+        "location": location or "",
+        "class_date": class_date or "",
+        "status": "scheduled",
+        "join_token": join_token,
+        "created_by": created_by,
+        "created_at": now,
+        "updated_at": now,
+    })
+    return True
+
+
+def get_class(class_id: str) -> Optional[Dict]:
+    table = get_classes_table()
+    response = table.get_item(Key={"class_id": class_id})
+    return response.get('Item')
+
+
+def get_class_by_join_token(join_token: str) -> Optional[Dict]:
+    """Look up a class by its public join token (used by the QR/self-registration
+    flow). Small table, full scan is fine at this scale (dozens of classes)."""
+    if not join_token:
+        return None
+    table = get_classes_table()
+    scan_kwargs = {}
+    while True:
+        response = table.scan(**scan_kwargs)
+        for item in response.get('Items', []):
+            if item.get('join_token') == join_token:
+                return item
+        last_key = response.get('LastEvaluatedKey')
+        if not last_key:
+            return None
+        scan_kwargs['ExclusiveStartKey'] = last_key
+
+
+def list_classes() -> list:
+    table = get_classes_table()
+    results = []
+    scan_kwargs = {}
+    while True:
+        response = table.scan(**scan_kwargs)
+        results.extend(response.get('Items', []))
+        last_key = response.get('LastEvaluatedKey')
+        if not last_key:
+            break
+        scan_kwargs['ExclusiveStartKey'] = last_key
+    results.sort(key=lambda c: c.get('class_date') or '', reverse=True)
+    return results
+
+
+def update_class_status(class_id: str, status: str) -> bool:
+    table = get_classes_table()
+    table.update_item(
+        Key={"class_id": class_id},
+        UpdateExpression="SET #s = :status, updated_at = :updated_at",
+        ExpressionAttributeNames={"#s": "status"},
+        ExpressionAttributeValues={":status": status, ":updated_at": int(time.time())}
+    )
+    return True
+
+
+def delete_class(class_id: str) -> bool:
+    table = get_classes_table()
+    table.delete_item(Key={"class_id": class_id})
+    return True

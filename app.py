@@ -8,13 +8,14 @@ import json
 import logging
 import re
 import secrets
+import time
 from datetime import datetime, timedelta, timezone
 from functools import wraps
-from typing import Optional
+from typing import Dict, Optional
 from urllib.parse import urlencode, parse_qs
 from urllib.request import urlopen
 
-from flask import Flask, render_template, session, request, redirect, url_for, jsonify
+from flask import Flask, render_template, session, request, redirect, url_for, jsonify, send_file
 from flask_cors import CORS
 import requests
 import boto3
@@ -33,6 +34,15 @@ from dynamo_db import (
     get_progress_summary,
     record_prospect,
     get_all_prospects,
+    set_disabled,
+    clear_te_provisioning,
+    list_credentials_by_class,
+    create_class,
+    get_class,
+    get_class_by_join_token,
+    list_classes,
+    update_class_status,
+    delete_class,
     DynamoDBError
 )
 from crypto import EncryptionError
@@ -45,6 +55,7 @@ from mcp_client import (
 )
 from attachments import process_uploaded_files, AttachmentError, MAX_FILES, MAX_FILE_BYTES
 import galileo_telemetry
+import thousandeyes_admin
 
 # Configure logging
 logging.basicConfig(
@@ -1117,6 +1128,26 @@ def _create_cognito_student(email: str, first_name: str = '', last_name: str = '
     )
 
 
+def _disable_cognito_user(email: str) -> None:
+    """Soft-disable a student's login (Cognito AdminDisableUser). Their
+    Cognito account, DynamoDB credentials, and activity history are all
+    left completely intact - they just can't sign in until re-enabled.
+    This is the "class is complete" action, distinct from deleting a
+    student or tearing down their ThousandEyes resources."""
+    cognito_client.admin_disable_user(
+        UserPoolId=os.getenv('COGNITO_USER_POOL_ID'),
+        Username=email
+    )
+
+
+def _enable_cognito_user(email: str) -> None:
+    """Re-enable a previously soft-disabled student login."""
+    cognito_client.admin_enable_user(
+        UserPoolId=os.getenv('COGNITO_USER_POOL_ID'),
+        Username=email
+    )
+
+
 def _parse_students_csv(file) -> list:
     import io
     import csv
@@ -1292,9 +1323,12 @@ def list_students():
                 'last_name': last_name,
                 'created': str(user['UserCreateDate']),
                 'status': user['UserStatus'],
+                'enabled': user.get('Enabled', True),
                 'te_connected': bool(creds.get('te_connected')),
                 'meraki_connected': bool(creds.get('meraki_connected')),
-                'splunk_connected': bool(creds.get('splunk_connected'))
+                'splunk_connected': bool(creds.get('splunk_connected')),
+                'company': creds.get('company'),
+                'class_id': creds.get('class_id')
             })
         
         return jsonify({
@@ -1462,6 +1496,348 @@ def delete_proctor():
         'status': 'success',
         'message': f'{target_email} is no longer a proctor. Flask is restarting to apply it everywhere.'
     })
+
+
+@app.route('/api/admin/students/<path:target_email>/disable', methods=['POST'])
+@login_required
+def disable_student(target_email):
+    """Soft-disable one student's login. Keeps their Cognito account,
+    credentials, and activity history intact - only blocks sign-in."""
+    user_email = session.get('user_email', '')
+    if not _is_proctor(user_email):
+        return jsonify({'error': 'Access denied'}), 403
+    try:
+        _disable_cognito_user(target_email)
+        set_disabled(target_email, True)
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        logger.error(f"Error disabling student {target_email}: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/students/<path:target_email>/enable', methods=['POST'])
+@login_required
+def enable_student(target_email):
+    """Re-enable a previously soft-disabled student login."""
+    user_email = session.get('user_email', '')
+    if not _is_proctor(user_email):
+        return jsonify({'error': 'Access denied'}), 403
+    try:
+        _enable_cognito_user(target_email)
+        set_disabled(target_email, False)
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        logger.error(f"Error enabling student {target_email}: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
+# Class Scheduling Routes (Proctor Portal)
+# ============================================================================
+#
+# A "class" is a scheduled session (name, date, location) with its own
+# unique QR/join link. Students self-register into a specific class by
+# scanning its QR code - see the public /join/<token> routes below. Once a
+# class is complete, a proctor can soft-disable every enrolled student's
+# login in one click, and/or tear down each student's auto-provisioned
+# ThousandEyes Account Group/user as a separate, explicit, destructive
+# action.
+# ============================================================================
+
+@app.route('/admin/classes')
+@login_required
+def admin_classes():
+    """Proctor portal for scheduling classes and managing rosters."""
+    user_email = session.get('user_email', '')
+    if not _is_proctor(user_email):
+        return jsonify({'error': 'Access denied - proctor access required'}), 403
+    return render_template(
+        'admin_classes.html', email=user_email,
+        te_admin_configured=thousandeyes_admin.is_configured()
+    )
+
+
+@app.route('/api/admin/classes', methods=['GET'])
+@login_required
+def api_list_classes():
+    user_email = session.get('user_email', '')
+    if not _is_proctor(user_email):
+        return jsonify({'error': 'Access denied'}), 403
+    try:
+        classes = list_classes()
+        for c in classes:
+            try:
+                c['enrolled_count'] = len(list_credentials_by_class(c['class_id']))
+            except Exception as e:
+                logger.warning(f"Could not count roster for class {c.get('class_id')}: {e}")
+                c['enrolled_count'] = None
+        return jsonify({'status': 'success', 'classes': classes})
+    except Exception as e:
+        logger.error(f"Error listing classes: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/classes', methods=['POST'])
+@login_required
+def api_create_class():
+    user_email = session.get('user_email', '')
+    if not _is_proctor(user_email):
+        return jsonify({'error': 'Access denied'}), 403
+
+    data = request.json or {}
+    name = (data.get('name') or '').strip()
+    location = (data.get('location') or '').strip()
+    class_date = (data.get('class_date') or '').strip()
+
+    if not name:
+        return jsonify({'error': 'Class name is required'}), 400
+
+    class_id = secrets.token_hex(8)
+    join_token = secrets.token_urlsafe(24)
+
+    try:
+        create_class(class_id, name, location, class_date, join_token, user_email)
+        join_url = f"{APP_URL}/join/{join_token}"
+        return jsonify({'status': 'success', 'class_id': class_id, 'join_url': join_url})
+    except Exception as e:
+        logger.error(f"Error creating class: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/classes/<class_id>', methods=['DELETE'])
+@login_required
+def api_delete_class(class_id):
+    """Delete a class record. Does NOT touch enrolled students' Cognito
+    accounts, credentials, or ThousandEyes resources - use the disable/
+    TE-cleanup actions first if that's what you actually want."""
+    user_email = session.get('user_email', '')
+    if not _is_proctor(user_email):
+        return jsonify({'error': 'Access denied'}), 403
+    try:
+        delete_class(class_id)
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        logger.error(f"Error deleting class {class_id}: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/classes/<class_id>/qr', methods=['GET'])
+@login_required
+def api_class_qr(class_id):
+    """Return a PNG QR code encoding this class's public join URL, for the
+    proctor to display/print/project."""
+    user_email = session.get('user_email', '')
+    if not _is_proctor(user_email):
+        return jsonify({'error': 'Access denied'}), 403
+
+    cls = get_class(class_id)
+    if not cls:
+        return jsonify({'error': 'Class not found'}), 404
+
+    import io
+    import qrcode
+
+    join_url = f"{APP_URL}/join/{cls['join_token']}"
+    img = qrcode.make(join_url, box_size=10, border=2)
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    return send_file(buf, mimetype='image/png')
+
+
+@app.route('/api/admin/classes/<class_id>/roster', methods=['GET'])
+@login_required
+def api_class_roster(class_id):
+    user_email = session.get('user_email', '')
+    if not _is_proctor(user_email):
+        return jsonify({'error': 'Access denied'}), 403
+    cls = get_class(class_id)
+    if not cls:
+        return jsonify({'error': 'Class not found'}), 404
+    try:
+        roster = list_credentials_by_class(class_id)
+        return jsonify({'status': 'success', 'class': cls, 'roster': roster})
+    except Exception as e:
+        logger.error(f"Error loading roster for class {class_id}: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/classes/<class_id>/disable', methods=['POST'])
+@login_required
+def api_disable_class(class_id):
+    """Soft-disable Cognito login for every student enrolled in this class
+    ('the class is complete'). Credentials, activity history, and
+    ThousandEyes resources are all left untouched - use the separate
+    TE-cleanup action if you also want those torn down."""
+    user_email = session.get('user_email', '')
+    if not _is_proctor(user_email):
+        return jsonify({'error': 'Access denied'}), 403
+    cls = get_class(class_id)
+    if not cls:
+        return jsonify({'error': 'Class not found'}), 404
+
+    roster = list_credentials_by_class(class_id)
+    disabled = 0
+    failed = []
+    for student in roster:
+        email = student['email']
+        try:
+            _disable_cognito_user(email)
+            set_disabled(email, True)
+            disabled += 1
+        except Exception as e:
+            logger.warning(f"Could not disable student {email} in class {class_id}: {e}")
+            failed.append(email)
+
+    try:
+        update_class_status(class_id, 'disabled')
+    except Exception as e:
+        logger.warning(f"Could not update status for class {class_id}: {e}")
+
+    return jsonify({'status': 'success', 'disabled': disabled, 'failed': failed})
+
+
+@app.route('/api/admin/classes/<class_id>/te-cleanup', methods=['POST'])
+@login_required
+def api_class_te_cleanup(class_id):
+    """Delete every enrolled student's auto-provisioned ThousandEyes
+    Account Group + user for this class. Destructive and irreversible -
+    the frontend requires a double confirmation before calling this.
+    Deliberately separate from the 'disable' action above: disabling login
+    is routine end-of-class cleanup, deleting TE resources is a bigger
+    decision a proctor may want to defer or skip."""
+    user_email = session.get('user_email', '')
+    if not _is_proctor(user_email):
+        return jsonify({'error': 'Access denied'}), 403
+    if not thousandeyes_admin.is_configured():
+        return jsonify({'error': 'THOUSANDEYES_ADMIN_TOKEN is not configured on this server'}), 400
+
+    cls = get_class(class_id)
+    if not cls:
+        return jsonify({'error': 'Class not found'}), 404
+
+    roster = list_credentials_by_class(class_id)
+    cleaned = 0
+    failed = []
+    for student in roster:
+        email = student['email']
+        group_id = student.get('te_account_group_id')
+        user_id = student.get('te_user_id')
+        if not group_id and not user_id:
+            continue
+        try:
+            thousandeyes_admin.deprovision_student(group_id, user_id)
+            clear_te_provisioning(email)
+            cleaned += 1
+        except thousandeyes_admin.ThousandEyesAdminError as e:
+            logger.warning(f"Could not clean up TE resources for {email}: {e}")
+            failed.append(email)
+
+    return jsonify({'status': 'success', 'cleaned': cleaned, 'failed': failed})
+
+
+# ============================================================================
+# Public self-registration (no auth) - QR join flow
+# ============================================================================
+#
+# This is the only unauthenticated route in the app that creates real
+# resources (a Cognito login and, if configured, a ThousandEyes account),
+# so it gets its own light anti-abuse layer: a honeypot field plus a small
+# in-memory per-IP rate limit. Good enough for a classroom-scale audience
+# scanning a QR code off a screen/handout, not meant to withstand a
+# determined attacker - there's nothing sensitive to steal (no admin
+# capability is reachable from here), the worst case is spam signups.
+# ============================================================================
+
+_join_attempts: Dict[str, list] = {}
+_JOIN_RATE_LIMIT = 8          # max attempts
+_JOIN_RATE_WINDOW_SECS = 3600  # per hour, per IP
+
+
+def _join_rate_limited(ip: str) -> bool:
+    now = time.time()
+    attempts = [t for t in _join_attempts.get(ip, []) if now - t < _JOIN_RATE_WINDOW_SECS]
+    attempts.append(now)
+    _join_attempts[ip] = attempts
+    return len(attempts) > _JOIN_RATE_LIMIT
+
+
+@app.route('/join/<join_token>', methods=['GET'])
+def join_class(join_token):
+    """Public self-registration page for one scheduled class."""
+    cls = get_class_by_join_token(join_token)
+    if not cls or cls.get('status') == 'disabled':
+        return render_template('join.html', valid=False), 404
+    return render_template('join.html', valid=True, join_token=join_token, cls=cls)
+
+
+@app.route('/api/join/<join_token>', methods=['POST'])
+def api_join_class(join_token):
+    """Public registration handler: creates the student's Cognito login,
+    tags them to this class, and (if an org-admin TE token is configured)
+    provisions a dedicated ThousandEyes Account Group + user for them.
+
+    TE provisioning failures are logged but never block the Cognito account
+    from being created - a partial success (login works, TE doesn't) is
+    far better than blocking the whole signup on a third-party API hiccup;
+    a proctor can retry TE provisioning for that student manually later.
+    """
+    client_ip = request.headers.get('X-Forwarded-For', request.remote_addr or 'unknown').split(',')[0].strip()
+    if _join_rate_limited(client_ip):
+        return jsonify({'error': 'Too many signup attempts from this network. Please try again later.'}), 429
+
+    data = request.json or {}
+    # Honeypot: a hidden field real browsers never fill in. Any non-empty
+    # value here means a bot filled every field blindly - silently succeed
+    # without doing anything, so the bot can't tell it was detected.
+    if (data.get('website') or '').strip():
+        return jsonify({'status': 'success'})
+
+    full_name = (data.get('name') or '').strip()
+    company = (data.get('company') or '').strip()
+    email = (data.get('email') or '').strip().lower()
+
+    if not full_name or not email or '@' not in email:
+        return jsonify({'error': 'Name and a valid email address are required'}), 400
+
+    cls = get_class_by_join_token(join_token)
+    if not cls or cls.get('status') == 'disabled':
+        return jsonify({'error': 'This class link is no longer active'}), 404
+
+    name_parts = full_name.split(None, 1)
+    first_name = name_parts[0] if name_parts else ''
+    last_name = name_parts[1] if len(name_parts) > 1 else ''
+
+    try:
+        _create_cognito_student(email, first_name, last_name)
+    except cognito_client.exceptions.UsernameExistsException:
+        pass  # Already registered (e.g. re-scanning after a page refresh) - fine, just (re)tag below.
+    except Exception as e:
+        logger.error(f"Error creating student {email} via class join {cls['class_id']}: {str(e)}")
+        return jsonify({'error': 'Could not create your account. Please tell your proctor.'}), 500
+
+    te_status = 'skipped'
+    try:
+        save_user_credentials(email, company=company or None, class_id=cls['class_id'])
+    except Exception as e:
+        logger.warning(f"Could not save roster metadata for {email}: {e}")
+
+    if thousandeyes_admin.is_configured():
+        try:
+            result = thousandeyes_admin.provision_student(full_name, email)
+            save_user_credentials(
+                email,
+                te_account_group_id=result['account_group_id'],
+                te_user_id=result['user_id']
+            )
+            te_status = 'provisioned'
+        except thousandeyes_admin.ThousandEyesAdminError as e:
+            logger.warning(f"TE auto-provisioning failed for {email}: {e}")
+            te_status = 'failed'
+
+    logger.info(f"Self-registered {email} into class {cls['class_id']} (TE: {te_status})")
+    return jsonify({'status': 'success', 'email': email, 'te_provisioning': te_status})
+
 
 # ============================================================================
 # Settings/Administration Routes

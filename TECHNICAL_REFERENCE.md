@@ -40,6 +40,7 @@ build pipeline, no load balancer — this is intentionally minimal for a
 | Cognito App Client | `24ou7s3h56i851ofdjmadbkklm` (`ai-assurance-lab-app`), Hosted UI enabled, callback `https://ai.thousandeyeschannel.com/auth/callback` |
 | Cognito email sending | **SES** (`EmailSendingAccount=DEVELOPER`), source `thousandeyeschannel.com` (verified domain, DKIM/SPF green, production access, 50,000/day quota). Sender: `no-reply@thousandeyeschannel.com`, reply-to `sceddy@cisco.com`. Switched from the old `COGNITO_DEFAULT` mailer (50/day cap, unreliable — see "Email delivery" below) on 2026-09-01. |
 | DynamoDB table | `AIAssuranceLab-UserMCPCredentials` (partition key `email`, `PAY_PER_REQUEST`) |
+| DynamoDB table | `AIAssuranceLab-Classes` (partition key `class_id`, `PAY_PER_REQUEST`) — scheduled classes + QR join tokens, added 2026-09-22 for the class-scheduling feature |
 | Bedrock model | `us.anthropic.claude-haiku-4-5-20251001-v1:0` (override via `CLAUDE_MODEL_ID` env var; switched from Sonnet 4.5 on 2026-09-18 for cost/latency across 40 concurrent students) |
 | App path on instance | `/home/ubuntu/ai-assurance-lab` |
 | systemd service | `flask-app` (Gunicorn, `--workers 3 --timeout 180`) |
@@ -104,18 +105,22 @@ password directly.
 
 ```
 app.py                 Flask app: routes, auth, chat/tool-use loop, admin APIs
-dynamo_db.py           DynamoDB CRUD + per-service connectivity tests
+dynamo_db.py           DynamoDB CRUD + per-service connectivity tests + class CRUD
 mcp_client.py          Generic MCP client (Streamable HTTP) used for TE/Meraki/Splunk
+thousandeyes_admin.py  ThousandEyes v7 Administrative REST API (org-admin token) -
+                        create/delete Account Groups + users, for QR self-registration
 crypto.py              Fernet encryption helpers for stored tokens
 attachments.py         In-memory file upload processing (images/PDF/Excel) for chat
 templates/
   lab.html             Main chat UI (Claude-style rendering, guide sidebar, attachments)
   credentials.html     Per-user credential management (TE, Meraki+OrgID, Splunk)
   guide.html           In-app lab guide (rendered in an iframe sidebar + pop-out tab)
-  admin_students.html  Student bulk/single add, list, delete-all
+  admin_students.html  Student bulk/single add, list, delete-all, per-student disable/enable
+  admin_classes.html   Class scheduling, QR code display, roster, class-wide disable/TE-cleanup
   admin_settings.html  Config, system status, logs, restart, git pull
+  join.html            Public (no-auth) self-registration form for a class's QR link
 ec2-setup.sh           One-time bootstrap script for a fresh EC2 instance
-requirements.txt       Python deps (Flask, boto3, mcp SDK, pypdf, openpyxl, etc.)
+requirements.txt       Python deps (Flask, boto3, mcp SDK, pypdf, openpyxl, qrcode, etc.)
 ```
 
 ## How credentials are stored
@@ -130,11 +135,51 @@ Per user (`dynamo_db.py`), keyed by email:
 | `splunk_mcp_url` | Plaintext — varies per student/facilitator |
 | `splunk_token` | Fernet-encrypted, optional |
 | `te_connected` / `meraki_connected` / `splunk_connected` | Cached bool from last "Test Connection" |
+| `company` | Plaintext — collected on the public class-signup form (`/join/<token>`), optional for proctor-added students |
+| `class_id` | Plaintext — which `AIAssuranceLab-Classes` row this student joined via QR, if any |
+| `te_account_group_id` / `te_user_id` | Plaintext IDs (not secrets) of this student's auto-provisioned ThousandEyes Account Group + user, set by `thousandeyes_admin.py` on QR signup; cleared by the class's "Delete ThousandEyes Account Groups" action |
+| `disabled` | Bool — mirrors whatever a proctor last did with Cognito `AdminDisableUser`/`AdminEnableUser`; display-only, Cognito itself is what actually blocks login |
 
 Connectivity tests (`test_te_connectivity`, `test_meraki_connectivity`,
 `test_splunk_connectivity`) work by actually calling `list_mcp_tools()` against
 the real MCP server with the stored token — **not** a legacy REST endpoint —
 so "Connected ✓" means the MCP server genuinely accepted the credential.
+
+### Class scheduling data model (`AIAssuranceLab-Classes`)
+
+| Field | Notes |
+|---|---|
+| `class_id` | Partition key, `secrets.token_hex(8)` |
+| `name` / `location` / `class_date` | Plaintext, proctor-entered |
+| `join_token` | `secrets.token_urlsafe(24)` — the unguessable part of the public `/join/<join_token>` URL encoded in the QR code |
+| `status` | `scheduled` or `disabled` (set when a proctor clicks "Disable Class Access") |
+| `created_by` / `created_at` / `updated_at` | Audit fields |
+
+There's no foreign key from a class to its students — membership is looked
+up by scanning `AIAssuranceLab-UserMCPCredentials` for matching `class_id`
+(`list_credentials_by_class()` in `dynamo_db.py`). Fine at classroom scale
+(dozens of classes, tens of students each); would need a GSI if this ever
+needed to scale to thousands of rows.
+
+### ThousandEyes auto-provisioning (`thousandeyes_admin.py`)
+
+Separate from the per-student personal TE token used for MCP chat tool
+calls. This module uses one org-admin-level `THOUSANDEYES_ADMIN_TOKEN` to
+call the **v7 Administrative REST API** directly (`POST /account-groups`,
+`POST /users`, `DELETE /users/{id}`, `DELETE /account-groups/{id}`) — the
+hosted MCP server's tool catalog has no account/user-management tools at
+all, so this can't go through MCP. Triggered only from the public
+`/api/join/<token>` handler in `app.py` when a student self-registers via a
+class QR code; not used anywhere else. Failures here are logged and
+surfaced as `te_provisioning: "failed"` in the join response, but never
+block the underlying Cognito account creation.
+
+New user's default role (`THOUSANDEYES_DEFAULT_ROLE_NAME`, default
+`"Account Admin"`) is scoped to just their own new Account Group - deliberately
+not `"Organization Admin"`, which would grant access across the whole TE org.
+Deletion order matters: a user's `loginAccountGroupId` must not point at a
+group that's already gone, so `deprovision_student()` always deletes the
+user before the account group.
 
 ## Chat request flow (`/api/chat` in `app.py`)
 

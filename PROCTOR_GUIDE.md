@@ -21,6 +21,7 @@ lab session**.
 | AI backend | AWS Bedrock, Claude Sonnet 4.5 |
 | Credential storage | Encrypted per-user in DynamoDB (`AIAssuranceLab-UserMCPCredentials`) |
 | MCP integrations | ThousandEyes (hosted), Meraki (hosted), Splunk (student/facilitator-provided URL) |
+| Class scheduling | `/admin/classes` - QR self-registration per class, roster view, disable/TE-cleanup actions |
 | Infra | 1× EC2 `t3.micro` (`i-09cdb070a8b829165`), Elastic IP `54.198.247.24`, Nginx + Let's Encrypt TLS, Flask/Gunicorn via systemd, managed via AWS SSM (no SSH) |
 
 The lab is **designed to stay running between sessions** — you don't need to
@@ -77,6 +78,50 @@ section on `/admin/students`:
 Adding/removing a proctor restarts the Flask service (a few seconds of
 downtime for anyone actively chatting) so the change takes effect for every
 worker process immediately, rather than only on the next full redeploy.
+
+### 2.3.5 Schedule a class with QR self-registration (optional alternative to 2.1)
+
+Instead of (or in addition to) uploading a roster yourself, you can let
+students register themselves by scanning a QR code. Go to
+**🏫 Classes** (`/admin/classes`):
+
+1. **Create Class** — name, date, location. This generates a unique join
+   link/QR code for that specific class only.
+2. Click **QR** on the class row to display/print/project the QR code.
+   Students scan it, fill in name/company/email, and get a Cognito login
+   the same way as any other student (temp password emailed via SES) —
+   fully self-service, nothing for you to click per student.
+3. Click **Roster** to see who's joined, their company, and their TE/Meraki/
+   Splunk connection status for that class.
+4. **When the class is over**, from the Roster view:
+   - **Disable Class Access** — soft-disables login for every enrolled
+     student in one click. Their credentials, chat history, and progress
+     are all kept; you (or they) can be re-enabled anytime from
+     `/admin/students` (per-student Enable/Disable button in the last
+     column).
+   - **Delete ThousandEyes Account Groups** — a **separate, destructive**
+     action that permanently deletes each student's auto-provisioned
+     ThousandEyes Account Group and user (see 2.3.6). Only use this once
+     you're sure you don't need those TE sandboxes anymore — there's no
+     undo.
+
+Classes and self-registration work independently of the Delete All
+Students / bulk-upload flow in 2.1-2.2 - you can mix both approaches across
+different cohorts.
+
+### 2.3.6 Auto-provisioned ThousandEyes accounts (optional)
+
+If `THOUSANDEYES_ADMIN_TOKEN` is configured (see `TECHNICAL_REFERENCE.md`),
+every student who self-registers via a class QR code automatically gets
+their **own** dedicated ThousandEyes Account Group + login (scoped to just
+that group, via the "Account Admin" role) - in addition to their AI
+Assurance Lab account. This is separate from the ThousandEyes *personal
+token* students paste into the Credentials page for the chat's MCP
+integration - that's still needed either way.
+
+If this env var isn't set, class scheduling and QR signup still work fine;
+students just won't get an auto-created ThousandEyes account, and the
+`/admin/classes` page shows a banner reminding you it's off.
 
 ### 2.4 Give students their instructions
 
@@ -200,6 +245,8 @@ Then add `YOUR_EMAIL` to `PROCTOR_EMAILS` as above.
 | AI gives a wrong/outdated date when asked about "the last N hours" | Was a bug (model guessed the date) — **fixed**, current UTC time is now injected into every request | Shouldn't happen; if it does, note the exact prompt and report it |
 | A student's file upload fails | File >60MB, or unsupported type | Supported: images, PDF, XLS/XLSX/CSV, up to 60MB total per message |
 | Whole app is unreachable | EC2 instance issue | See `TECHNICAL_REFERENCE.md` Section "Emergency access" |
+| A student's QR signup says "Link not available" | The class was disabled/deleted, or the QR is from an old class | Create a new class and re-share its QR code |
+| ThousandEyes account group wasn't created for a QR signup | `THOUSANDEYES_ADMIN_TOKEN` not configured, or the API call failed (check `⚙️ Settings` → Logs) | Cognito login still works either way; the student can be provisioned manually later, or just use their own TE token on the Credentials page as normal |
 
 ---
 
