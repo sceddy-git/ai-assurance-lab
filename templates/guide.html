@@ -179,7 +179,7 @@
       <ul>
         <li><a href="#sec-te" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-te"></span><b>1 · ThousandEyes</b> — connect via Credentials &amp; 4 labs <span class="badge b-req">Required</span></a></li>
         <li><a href="#sec-meraki" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-mk"></span><b>2 · Meraki</b> — connect via Credentials &amp; lab prompts <span class="badge b-req">Required</span></a></li>
-        <li><a href="#sec-splunk" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-sp"></span><b>3 · Splunk</b> — connect via Credentials &amp; 3 investigation labs (bonus) <span class="badge b-opt">Optional</span></a></li>
+        <li><a href="#sec-splunk" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-sp"></span><b>3 · Splunk</b> — create a token, connect it, then 2 investigation exercises (bonus) <span class="badge b-opt">Optional</span></a></li>
       </ul>
       <p style="margin:8px 0 0;font-size:14px;color:var(--muted)">Modules 1 &amp; 2 (and connecting Module 3) all run inside this web app — nothing to install. Module 3's labs need a running Splunk MCP server (yours or the facilitator's) as bonus content. Use the <b>Print / Save PDF</b> button at the top of the page to save a copy of this guide for your event.</p>
     </div>
@@ -331,38 +331,48 @@ For each test:
   <section id="sec-splunk">
     <div class="sec-head sp"><div class="sec-tag">Module 3 · Optional / Bonus<a href="#">↑ back to top</a></div>
       <h2>Splunk MCP <span class="badge b-opt">Optional</span></h2>
-      <div class="sec-desc">Investigate your Splunk data in plain English — no SPL required.</div></div>
+      <div class="sec-desc">Query Splunk data in plain English — no SPL required.</div></div>
 
     <div class="note"><span class="i">🖥️</span><div>Unlike ThousandEyes and Meraki, there's no single Cisco-hosted Splunk MCP server — the server has to run <i>somewhere</i> that can talk to a Splunk instance (port 8089), and that "somewhere" is different for each student: your own laptop, a shared facilitator-hosted server, etc. So instead of a fixed connector, this app lets you plug in <b>your own MCP server URL</b>.</div></div>
 
-    <h3>Connect Splunk (in this app)</h3>
-    <p class="lead">Ask your facilitator whether they're providing a shared Splunk MCP server URL for today, or whether you're expected to run your own locally (in which case you'll need a tunnel like <a href="https://ngrok.com" target="_blank" rel="noopener">ngrok</a> so this web app — running in the cloud — can reach a server on your laptop).</p>
+    <h3>Exercise 1 — Create an MCP token &amp; connect it in this app</h3>
+    <p class="lead">You'll first create an encrypted access token inside Splunk itself, then paste that token into this app's Credentials page so the AI chat can use it.</p>
     <div class="sp">
     <ol class="steps">
-      <li><div><div class="st-t">Get your MCP server URL (and credentials, if running your own)</div><div class="st-d">Either the URL your facilitator gives you, or — if running locally — start your local Splunk MCP server, expose it with a tunnel (e.g. <code>ngrok http 8000</code>), and use the public <code>https://…ngrok.io/mcp</code> URL it gives you. Your facilitator will also give you the Splunk host/port 8089 and credentials your local server itself needs to reach Splunk (that part is configured on the server, not in this app).</div></div></li>
-      <li><div><div class="st-t">Open Credentials in this app</div><div class="st-d">Click <b>⚙️ Credentials</b> in the header, then find the <b>Splunk</b> card.</div></div></li>
-      <li><div><div class="st-t">Paste the MCP Server URL</div><div class="st-d">Paste the URL into the <b>MCP Server URL</b> field. If your server also enforces its own auth token/API key, paste that into <b>Auth Token / API Key</b> too — otherwise leave it blank.</div></div></li>
-      <li><div><div class="st-t">Save and test</div><div class="st-d">Click <b>Save</b>, then <b>Test Connection</b>. You should see <b>Connected ✓</b>. A "Splunk" status dot will also appear in the chat header once configured.</div></div></li>
+      <li><div><div class="st-t">Log in to Splunk</div><div class="st-d">Log in with the <b>admin</b> credentials from your Splunk Cloud workshop details page.</div></div></li>
+      <li><div><div class="st-t">Open the Splunk MCP Server app</div><div class="st-d">From the Splunk Apps menu, click <b>Splunk MCP Server</b>.</div></div></li>
+      <li><div><div class="st-t">Create an MCP Encrypted Token</div><div class="st-d">Click <b>Create MCP Encrypted Token</b>. Set <b>User</b> to the account you logged in with (e.g. <code>admin</code> — not a real-world best practice, but fine for this lab). Leave <b>Audience</b> as <code>mcp</code>. Leave <b>Expiration</b> as Relative Time <code>+30d</code>. Click <b>Create</b>.</div></div></li>
+      <li><div><div class="st-t">Copy the token — this is your only chance</div><div class="st-d">Click <b>Copy</b> and paste the token somewhere safe (Notepad/TextEdit). The full token is shown <b>only once</b> — if you close the dialog without copying it, you'll need to create a new one. Click <b>Close</b> when done.</div></div></li>
+      <li><div><div class="st-t">Open Credentials in this app</div><div class="st-d">Go to the <a href="https://ai.thousandeyeschannel.com" target="_blank" rel="noopener">AI Assurance Lab</a>, click <b>⚙️ Credentials</b> in the header, and scroll to the <b>Splunk</b> card.</div></div></li>
+      <li><div><div class="st-t">Enter the MCP Server URL and token</div><div class="st-d">Enter the <b>MCP Server URL</b> your facilitator gave you (or your own tunnel URL if running locally — see below), paste the token from step 4 into <b>Auth Token</b>, and check <b>Skip TLS certificate verification</b> (Splunk Show instances use a self-signed certificate).</div></div></li>
+      <li><div><div class="st-t">Save, then test</div><div class="st-d">Click <b>Save</b> <i>first</i>, then click <b>Test Connection</b>. <b>Important:</b> if you click Test Connection before Save, it will fail. Once saved and tested you'll see <b>Server Configured: Yes</b> and <b>Connection Status: Connected</b>.</div></div></li>
+      <li><div><div class="st-t">Back to chat</div><div class="st-d">Click <b>Back to Chat</b>, then <b>New Chat</b> to start a fresh session with Splunk tools available.</div></div></li>
     </ol>
     </div>
-    <div class="note"><span class="i">🔒</span><div><b>Using a Splunk "Show" training instance?</b> Those use a self-signed certificate, which will fail the connection test with a TLS/certificate error. Check the <b>Skip TLS certificate verification</b> box on the Splunk card and test again. Only enable this for a server you trust with a self-signed cert (like Splunk Show) — never for anything else.</div></div>
-    <div class="lab"><div class="lab-h"><span class="n">LAB 1</span> Natural-language threat hunt</div><div class="lab-b">
-      <div class="sub">Investigate suspicious activity without writing SPL.</div>
-      <div class="prompt">Search Splunk for failed login attempts (Windows Event ID 4625) in the last 2 hours. Show the top 10 source IPs by failure count and flag any with more than 50 — likely brute force.</div>
-      <div class="prompt">For the top offending IP, check for any successful logins in the last 24 hours. If so, which accounts and from which endpoints?</div>
-      <div class="prompt">Write an optimised SPL saved search that alerts when more than 20 failed logins come from the same IP within 5 minutes, and suggest an alert action.</div>
+    <div class="note"><span class="i">🔒</span><div><b>Using a Splunk "Show" training instance?</b> Those use a self-signed certificate, which will fail the connection test with a TLS/certificate error unless you check <b>Skip TLS certificate verification</b> on the Splunk card. Only enable this for a server you trust with a self-signed cert (like Splunk Show) — never for anything else.</div></div>
+    <div class="note"><span class="i">🌐</span><div><b>Running Splunk MCP locally instead?</b> Start your local Splunk MCP server, expose it with a tunnel (e.g. <code>ngrok http 8000</code>) so this cloud-hosted app can reach it, and use the public <code>https://…ngrok.io/mcp</code> URL in step 6 above. Your facilitator will give you the Splunk host/port 8089 and credentials your local server needs to reach Splunk itself — that's configured on the server side, not in this app.</div></div>
+
+    <h3>Exercise 2 — Ask questions of your data using natural language</h3>
+    <p class="lead">Scenario: you're a compliance/risk manager trying to understand PCI compliance posture. You don't know SPL, but your AI assistant is now connected to Splunk — let's find out what it can tell you.</p>
+    <div class="lab"><div class="lab-h"><span class="n">LAB 1</span> PCI compliance investigation</div><div class="lab-b">
+      <div class="sub">Set the session preference, then work top-down from "what do I have" to "what's wrong" to "write it up".</div>
+      <div class="prompt">For all answers in this chat session answer this in-line using text. Only provide report format when asked.</div>
+      <div class="prompt">What is the relevance of log data to PCI compliance, and what are some example log sources that might be useful?</div>
+      <div class="prompt">List and document all of the log data available in Splunk that is important for PCI compliance.</div>
+      <div class="prompt">I see there are some missing data sources — can you outline a plan for getting this data into Splunk, and explain where some of the data might come from?</div>
+      <div class="prompt">Based on the log data in Splunk, are there any logs that indicate an issue with PCI compliance? Outline the searches you used so I can share them with my Splunk platform team.</div>
+      <div class="prompt">Write a 500-word paragraph in report format explaining the findings about PCI compliance in Splunk.</div>
     </div></div>
-    <div class="lab"><div class="lab-h"><span class="n">LAB 2</span> Operational health &amp; index audit</div><div class="lab-b">
-      <div class="sub">Know what data you have and whether it's still flowing.</div>
-      <div class="prompt">List all Splunk indexes and tell me which haven't received events in the last 60 minutes. Flag these as potentially broken pipelines.</div>
-      <div class="prompt">What's the current indexer disk usage? Are any indexers above 85% capacity?</div>
-      <div class="prompt">Show event volume by index for the last 24 hours, sorted descending. Highlight any index down more than 50% vs the same window yesterday.</div>
-    </div></div>
-    <div class="lab"><div class="lab-h"><span class="n">LAB 3</span> Network event correlation</div><div class="lab-b">
-      <div class="sub">Join Meraki syslog &amp; ThousandEyes data already in Splunk.</div>
-      <div class="prompt">Search the Meraki syslog index for 802.11 disassociation events in the last 4 hours. Correlate the timestamps with ThousandEyes latency spikes in the network_performance index — are they happening simultaneously?</div>
-      <div class="prompt">Build a timeline starting from the first Meraki disassociation event, then show network performance over the next 15 minutes. Which event was likely causal?</div>
-      <div class="prompt">Write an SPL search that joins these two sources on timestamp within a 5-minute window and produces a correlation table I can save as a dashboard panel.</div>
+
+    <h3>Exercise 3 — Support the business (bonus, needs Infosec Multi-cloud dataset)</h3>
+    <p class="lead">Scenario: you're a financial analyst for the CFO, trying to understand cloud spend across the business.</p>
+    <div class="lab"><div class="lab-h"><span class="n">LAB 2</span> Multi-cloud spend analysis</div><div class="lab-b">
+      <div class="sub">Requires the Infosec Multi-cloud dataset — check with your facilitator if this data isn't in your instance.</div>
+      <div class="prompt">Provide all forthcoming replies in text format. Do you know what data is available in Splunk, and is any of it relevant to understanding cloud spend?</div>
+      <div class="prompt">Examine the billing data structure and determine the total cloud spend across all providers.</div>
+      <div class="prompt">Break down the spend on a day-by-day basis for each of GCP, AWS and Azure, detailing the accounts for each provider. Which accounts generated the highest spend?</div>
+      <div class="prompt">Break down the spend on a day-by-day basis for each type of service and each cloud provider.</div>
+      <div class="prompt">Show me the Splunk searches used to generate the results in this chat, then write a 500-word report based on these findings for my CFO.</div>
     </div></div>
     </div>
   </section>
