@@ -179,7 +179,7 @@
       <ul>
         <li><a href="#sec-te" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-te"></span><b>1 · ThousandEyes</b> — connect via Credentials &amp; 4 labs <span class="badge b-req">Required</span></a></li>
         <li><a href="#sec-meraki" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-mk"></span><b>2 · Meraki</b> — connect via Credentials &amp; lab prompts <span class="badge b-req">Required</span></a></li>
-        <li><a href="#sec-splunk" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-sp"></span><b>3 · Splunk</b> — create a token, connect it, then 2 investigation exercises (bonus) <span class="badge b-opt">Optional</span></a></li>
+        <li><a href="#sec-splunk" style="display:flex;gap:10px;align-items:center;width:100%;color:inherit;text-decoration:none"><span class="dot d-sp"></span><b>3 · Splunk</b> — AI Assistant (3 labs) + MCP token &amp; 2 investigation exercises, ~50–65 min (bonus) <span class="badge b-opt">Optional</span></a></li>
       </ul>
       <p style="margin:8px 0 0;font-size:14px;color:var(--muted)">Modules 1 &amp; 2 (and connecting Module 3) all run inside this web app — nothing to install. Module 3's labs need a running Splunk MCP server (yours or the facilitator's) as bonus content. Use the <b>Print / Save PDF</b> button at the top of the page to save a copy of this guide for your event.</p>
     </div>
@@ -330,16 +330,80 @@ For each test:
   <!-- 3. SPLUNK (optional) -->
   <section id="sec-splunk">
     <div class="sec-head sp"><div class="sec-tag">Module 3 · Optional / Bonus<a href="#">↑ back to top</a></div>
-      <h2>Splunk MCP <span class="badge b-opt">Optional</span></h2>
-      <div class="sec-desc">Query Splunk data in plain English — no SPL required.</div></div>
+      <h2>Splunk <span class="badge b-opt">Optional</span></h2>
+      <div class="sec-desc">Two parts: the native Splunk AI Assistant, then the Splunk MCP Server connected into this app.</div></div>
 
-    <div class="note"><span class="i">🖥️</span><div>Unlike ThousandEyes and Meraki, there's no single Cisco-hosted Splunk MCP server — the server has to run <i>somewhere</i> that can talk to a Splunk instance (port 8089), and that "somewhere" is different for each student: your own laptop, a shared facilitator-hosted server, etc. So instead of a fixed connector, this app lets you plug in <b>your own MCP server URL</b>.</div></div>
+    <div class="note"><span class="i">⏱️</span><div><b>Time estimate: ~50–65 minutes total</b> if doing everything — Part A (AI Assistant, 3 exercises) is ~20–25 min; Part B (MCP token setup + PCI investigation) is ~25–30 min; the multi-cloud spend exercise is a further ~10–15 min bonus on top if your instance has that dataset. Each part stands alone, so feel free to split across breaks or skip Part A if short on time — it doesn't feed into Part B.</div></div>
 
-    <h3>Exercise 1 — Create an MCP token &amp; connect it in this app</h3>
-    <p class="lead">You'll first create an encrypted access token inside Splunk itself, then paste that token into this app's Credentials page so the AI chat can use it.</p>
+    <h3>Part A — Splunk AI Assistant</h3>
+    <p class="lead">This part uses Splunk's own built-in AI Assistant (native to Splunk, not this app or MCP) to write, explain, optimize, run and explain SPL — no separate setup required beyond logging in.</p>
     <div class="sp">
     <ol class="steps">
       <li><div><div class="st-t">Log in to Splunk</div><div class="st-d">Log in with the <b>admin</b> credentials from your Splunk Cloud workshop details page.</div></div></li>
+      <li><div><div class="st-t">Open the Splunk AI Assistant app</div><div class="st-d">Navigate to the <b>Splunk AI Assistant</b> app.</div></div></li>
+      <li><div><div class="st-t">Turn on Agent Mode</div><div class="st-d">You'll be prompted whether to turn on Agent Mode — click <b>Yes</b>.</div></div></li>
+    </ol>
+    </div>
+    <div class="note"><span class="i">🎭</span><div><b>Scenario:</b> you're a new analyst in a SOC team that uses Splunk. Despite being unfamiliar with the platform, you've heard the Splunk AI Assistant could be a good way to get value out of Splunk faster.</div></div>
+
+    <div class="lab"><div class="lab-h"><span class="n">LAB 1</span> Identify some potentially suspicious emails</div><div class="lab-b">
+      <div class="sub">There have been reports of a high volume of emails from gmail accounts — investigate. Click <b>+ New Chat</b> first. You may be asked to approve SPL execution — click <b>Always execute for this session</b>. Results are non-deterministic, so yours may differ from this guide.</div>
+      <div class="prompt">Is there any data in this environment that contains email logs? Use index=main.</div>
+      <div class="prompt">From those email log sources can you identify any data that contains senders with a gmail domain?</div>
+      <div class="prompt">Can you show me who the recipients of those emails are?</div>
+      <div class="prompt">Can you show me the volume of emails over time from that sender to that recipient, broken down day-by-day?</div>
+      <div class="prompt">Can you summarize the findings from this chat for me in 200 words or less?</div>
+    </div></div>
+
+    <div class="lab"><div class="lab-h"><span class="n">LAB 2</span> Support the Detection Engineering team</div><div class="lab-b">
+      <div class="sub">Your manager wants you to get familiar with the detection engineering team's work. Click <b>+ New Chat</b>, then paste this complex detection rule and ask the assistant to explain it.</div>
+      <pre>| tstats `security_content_summariesonly` count min(_time) as firstTime max(_time) as lastTime
+from datamodel=Web where
+Web.http_user_agent =*
+NOT Web.http_user_agent IN (
+    "-",
+    "unknown"
+)
+by Web.http_user_agent Web.dest Web.src Web.status
+| `security_content_ctime(firstTime)`
+| `security_content_ctime(lastTime)`
+| `drop_dm_object_name(Web)`
+| eval http_user_agent = lower(http_user_agent)
+| lookup scripting_tools_user_agents tool_user_agent AS http_user_agent OUTPUT tool
+| where isnotnull(tool)
+| stats count
+    min(firstTime) as first_seen
+    max(lastTime) as last_seen
+    values(tool) as tool
+by http_user_agent dest src status
+| `security_content_ctime(first_seen)`
+| `security_content_ctime(last_seen)`
+| `http_scripting_tool_user_agent_filter`</pre>
+      <div class="prompt">Help describe what this SPL is doing: [paste the SPL above]</div>
+      <div class="prompt">Help me understand where this detection rule came from — is it from Splunk's ESCU content?</div>
+      <div class="prompt">Help me understand what macros are, how to use them, and how Splunk stores them.</div>
+      <div class="prompt">Summarize the findings of this chat so I can document this SPL search in my knowledge base.</div>
+    </div></div>
+
+    <div class="lab"><div class="lab-h"><span class="n">LAB 3</span> Help a friend</div><div class="lab-b">
+      <div class="sub">An SRE who doesn't use Splunk often has handed the detection engineering team this search. First, notice it fails when you run it directly from the search bar (permissions) — then ask the AI Assistant to explain it instead. Click <b>+ New Chat</b>, then write "Help explain this SPL:" followed by the query below.</div>
+      <pre>index=_internal (host="*") (sourcetype=aws:s3:log OR sourcetype=aws:logs:log OR sourcetype=aws:sqsbaseds3:log OR sourcetype=aws:metadata*:log OR sourcetype=aws:cloudwatch:log OR sourcetype=aws:cloudwatchlogs:log OR sourcetype=aws:kinesis:log) (datainput="*") level=ERROR
+| fillnull value="" ErrorCode, ErrorDetail
+| eval ErrorDetail = if((ErrorDetail == "" or ErrorDetail == "''") and !isnull(message), message, ErrorDetail)
+| table count by _time, message, host, sourcetype, datainput, ErrorCode, ErrorDetail
+| eval error_count=1
+| lookup aws_health_error_type_lookup ErrorCode, ErrorDetail, sourcetype OUTPUT ErrorType | rename error_count as count
+| lookup aws_log_sourcetype_modinput_lookup sourcetype OUTPUT modinput
+| timechart sum(count) by modinput</pre>
+      <div class="sub">Does the explanation catch anything unusual about the search?</div>
+    </div></div>
+
+    <h3>Part B — Splunk MCP Server</h3>
+    <h4>Exercise 1 — Create an MCP token &amp; connect it in this app</h4>
+    <p class="lead">You'll first create an encrypted access token inside Splunk itself, then paste that token into this app's Credentials page so the AI chat can use it.</p>
+    <div class="sp">
+    <ol class="steps">
+      <li><div><div class="st-t">Log in to Splunk</div><div class="st-d">Verify you're still logged in as <b>admin</b>.</div></div></li>
       <li><div><div class="st-t">Open the Splunk MCP Server app</div><div class="st-d">From the Splunk Apps menu, click <b>Splunk MCP Server</b>.</div></div></li>
       <li><div><div class="st-t">Create an MCP Encrypted Token</div><div class="st-d">Click <b>Create MCP Encrypted Token</b>. Set <b>User</b> to the account you logged in with (e.g. <code>admin</code> — not a real-world best practice, but fine for this lab). Leave <b>Audience</b> as <code>mcp</code>. Leave <b>Expiration</b> as Relative Time <code>+30d</code>. Click <b>Create</b>.</div></div></li>
       <li><div><div class="st-t">Copy the token — this is your only chance</div><div class="st-d">Click <b>Copy</b> and paste the token somewhere safe (Notepad/TextEdit). The full token is shown <b>only once</b> — if you close the dialog without copying it, you'll need to create a new one. Click <b>Close</b> when done.</div></div></li>
@@ -352,9 +416,9 @@ For each test:
     <div class="note"><span class="i">🔒</span><div><b>Using a Splunk "Show" training instance?</b> Those use a self-signed certificate, which will fail the connection test with a TLS/certificate error unless you check <b>Skip TLS certificate verification</b> on the Splunk card. Only enable this for a server you trust with a self-signed cert (like Splunk Show) — never for anything else.</div></div>
     <div class="note"><span class="i">🌐</span><div><b>Running Splunk MCP locally instead?</b> Start your local Splunk MCP server, expose it with a tunnel (e.g. <code>ngrok http 8000</code>) so this cloud-hosted app can reach it, and use the public <code>https://…ngrok.io/mcp</code> URL in step 6 above. Your facilitator will give you the Splunk host/port 8089 and credentials your local server needs to reach Splunk itself — that's configured on the server side, not in this app.</div></div>
 
-    <h3>Exercise 2 — Ask questions of your data using natural language</h3>
+    <h4>Exercise 2 — Ask questions of your data using natural language</h4>
     <p class="lead">Scenario: you're a compliance/risk manager trying to understand PCI compliance posture. You don't know SPL, but your AI assistant is now connected to Splunk — let's find out what it can tell you.</p>
-    <div class="lab"><div class="lab-h"><span class="n">LAB 1</span> PCI compliance investigation</div><div class="lab-b">
+    <div class="lab"><div class="lab-h"><span class="n">LAB 4</span> PCI compliance investigation</div><div class="lab-b">
       <div class="sub">Set the session preference, then work top-down from "what do I have" to "what's wrong" to "write it up".</div>
       <div class="prompt">For all answers in this chat session answer this in-line using text. Only provide report format when asked.</div>
       <div class="prompt">What is the relevance of log data to PCI compliance, and what are some example log sources that might be useful?</div>
@@ -364,9 +428,9 @@ For each test:
       <div class="prompt">Write a 500-word paragraph in report format explaining the findings about PCI compliance in Splunk.</div>
     </div></div>
 
-    <h3>Exercise 3 — Support the business (bonus, needs Infosec Multi-cloud dataset)</h3>
+    <h4>Exercise 3 — Support the business (bonus, needs Infosec Multi-cloud dataset)</h4>
     <p class="lead">Scenario: you're a financial analyst for the CFO, trying to understand cloud spend across the business.</p>
-    <div class="lab"><div class="lab-h"><span class="n">LAB 2</span> Multi-cloud spend analysis</div><div class="lab-b">
+    <div class="lab"><div class="lab-h"><span class="n">LAB 5</span> Multi-cloud spend analysis</div><div class="lab-b">
       <div class="sub">Requires the Infosec Multi-cloud dataset — check with your facilitator if this data isn't in your instance.</div>
       <div class="prompt">Provide all forthcoming replies in text format. Do you know what data is available in Splunk, and is any of it relevant to understanding cloud spend?</div>
       <div class="prompt">Examine the billing data structure and determine the total cloud spend across all providers.</div>
