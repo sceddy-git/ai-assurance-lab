@@ -19,6 +19,7 @@ Design goals:
 """
 
 import hashlib
+import json
 import logging
 import os
 from typing import Any, Optional
@@ -158,6 +159,33 @@ def start_trace(gl_logger, email: str, user_message: str, labs_matched: Any,
         return None
 
 
+# Cap on any single logged input/output string. Real Meraki/ThousandEyes/
+# Splunk tool results and multi-turn message histories can run to hundreds
+# of thousands of tokens (e.g. the Meraki "full configuration audit" lab
+# chains several execute_api calls, each returning a large JSON payload).
+# The full, untruncated data always still goes to Claude for the actual
+# chat response - this cap only applies to the copy sent to Galileo for
+# observability. Without it, a single oversized trace can push Galileo's
+# judge-model scoring call over Bedrock's 200k-token context limit,
+# producing a hard ValidationException ("prompt is too long") and failing
+# every metric on that trace. ~24k chars is a generous margin under that
+# limit even with several such spans in one trace.
+MAX_LOGGED_CHARS = 24_000
+
+
+def _truncate_for_logging(value: Any) -> str:
+    """Stringify and cap a value before sending it to Galileo. Never raises -
+    telemetry formatting must never be the reason a chat request fails."""
+    try:
+        text = value if isinstance(value, str) else json.dumps(value, default=str)
+    except Exception:
+        text = str(value)
+    if len(text) > MAX_LOGGED_CHARS:
+        omitted = len(text) - MAX_LOGGED_CHARS
+        text = text[:MAX_LOGGED_CHARS] + f"\n...[truncated {omitted} chars for Galileo logging only - full data was still sent to Claude]"
+    return text
+
+
 def _anthropic_tools_to_openai_schema(anthropic_tools: Optional[list]) -> Optional[list]:
     """Convert Bedrock/Anthropic tool definitions ({name, description,
     input_schema}) into the OpenAI-style {type: function, function: {...}}
@@ -191,8 +219,8 @@ def add_llm_span(gl_logger, request_body: dict, result: dict, model_id: str) -> 
     try:
         usage = (result or {}).get('usage', {})
         gl_logger.add_llm_span(
-            input=str(request_body.get('messages', '')),
-            output=str(result.get('content', '')),
+            input=_truncate_for_logging(request_body.get('messages', '')),
+            output=_truncate_for_logging(result.get('content', '')),
             model=model_id,
             tools=_anthropic_tools_to_openai_schema(request_body.get('tools')),
             num_input_tokens=usage.get('input_tokens'),
@@ -207,10 +235,9 @@ def add_tool_span(gl_logger, tool_name: str, tool_input: dict, tool_result: Any,
     if gl_logger is None:
         return
     try:
-        import json as _json
         gl_logger.add_tool_span(
-            input=_json.dumps(tool_input) if not isinstance(tool_input, str) else tool_input,
-            output=_json.dumps(tool_result) if not isinstance(tool_result, str) else tool_result,
+            input=_truncate_for_logging(tool_input),
+            output=_truncate_for_logging(tool_result),
             name=tool_name,
             tool_call_id=tool_use_id,
             status_code=500 if had_error else 200,
@@ -391,7 +418,7 @@ def conclude_and_flush(gl_logger, assistant_message: str) -> None:
         # opened in start_trace) all the way to the trace itself, setting the
         # same final output on each level it closes. Safe even if no agent
         # span was opened - it just concludes the trace once.
-        gl_logger.conclude(output=assistant_message or "", conclude_all=True)
+        gl_logger.conclude(output=_truncate_for_logging(assistant_message or ""), conclude_all=True)
         gl_logger.flush()
     except Exception as e:
         logger.warning(f"Galileo conclude/flush failed: {e}")
