@@ -479,14 +479,50 @@
             color: var(--accent);
         }
 
-        /* Downloadable HTML output blocks */
-        .html-output-actions {
-            display: flex;
-            gap: 8px;
-            margin: -6px 0 12px 0;
+        /* Downloadable HTML output blocks - the raw HTML source itself is
+           collapsed by default (nobody wants to read a wall of markup),
+           with a link to actually open/download the rendered page shown
+           at the bottom of the response instead. */
+        .html-output-source {
+            margin: 8px 0 12px 0;
         }
 
-        .html-download-btn {
+        .html-output-source summary {
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary, #888);
+            padding: 4px 0;
+            list-style: none;
+        }
+
+        .html-output-source summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .html-output-source summary::before {
+            content: '▶ ';
+            font-size: 10px;
+        }
+
+        .html-output-source[open] summary::before {
+            content: '▼ ';
+        }
+
+        .html-output-source pre {
+            margin-top: 6px;
+        }
+
+        .html-output-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .html-output-link {
             display: inline-flex;
             align-items: center;
             gap: 6px;
@@ -499,9 +535,10 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
+            text-decoration: none;
         }
 
-        .html-download-btn:hover {
+        .html-output-link:hover {
             background: var(--accent);
             color: white;
         }
@@ -1116,46 +1153,71 @@
         }
 
         // Scan a rendered assistant message for ```html fenced code blocks
-        // (marked renders these as <pre><code class="language-html">) and
-        // inject a Download button so the user can save the generated
-        // report/document as a standalone .html file.
+        // (marked renders these as <pre><code class="language-html">),
+        // collapse the raw source itself (nobody wants a wall of markup
+        // inline in the chat), and instead append a link to open/download
+        // the actual rendered webpage at the very bottom of the response,
+        // after all other text.
         function addHtmlDownloadButtons(contentEl) {
             const htmlBlocks = contentEl.querySelectorAll('pre > code.language-html');
+            if (htmlBlocks.length === 0) return;
+
+            const linksRow = document.createElement('div');
+            linksRow.className = 'html-output-links';
+
             htmlBlocks.forEach((codeEl, idx) => {
                 const pre = codeEl.parentElement;
                 const htmlSource = codeEl.textContent;
+                const filename = `report-${Date.now()}${idx ? '-' + idx : ''}.html`;
 
-                const actions = document.createElement('div');
-                actions.className = 'html-output-actions';
+                // Collapse the raw HTML source into a closed <details> in
+                // place of the plain <pre>, so the source is still
+                // reachable (e.g. to copy/paste) but hidden by default.
+                const details = document.createElement('details');
+                details.className = 'html-output-source';
+                const summary = document.createElement('summary');
+                summary.textContent = `View HTML source (${filename})`;
+                details.appendChild(summary);
+                pre.replaceWith(details);
+                details.appendChild(pre);
 
-                const downloadBtn = document.createElement('button');
-                downloadBtn.className = 'html-download-btn';
-                downloadBtn.textContent = '⬇ Download HTML';
-                downloadBtn.onclick = () => {
+                // The actual "open the webpage" link, shown at the bottom
+                // of the response rather than inline next to the source.
+                const openLink = document.createElement('a');
+                openLink.className = 'html-output-link';
+                openLink.href = '#';
+                openLink.textContent = `🔗 Open ${filename}`;
+                openLink.onclick = (e) => {
+                    e.preventDefault();
+                    const blob = new Blob([htmlSource], { type: 'text/html' });
+                    const url = URL.createObjectURL(blob);
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                };
+
+                const downloadLink = document.createElement('a');
+                downloadLink.className = 'html-output-link';
+                downloadLink.href = '#';
+                downloadLink.textContent = '⬇ Download';
+                downloadLink.onclick = (e) => {
+                    e.preventDefault();
                     const blob = new Blob([htmlSource], { type: 'text/html' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `report-${Date.now()}${idx ? '-' + idx : ''}.html`;
+                    a.download = filename;
                     document.body.appendChild(a);
                     a.click();
                     a.remove();
                     URL.revokeObjectURL(url);
                 };
 
-                const previewBtn = document.createElement('button');
-                previewBtn.className = 'html-download-btn';
-                previewBtn.textContent = '👁 Preview';
-                previewBtn.onclick = () => {
-                    const blob = new Blob([htmlSource], { type: 'text/html' });
-                    const url = URL.createObjectURL(blob);
-                    window.open(url, '_blank', 'noopener,noreferrer');
-                };
-
-                actions.appendChild(downloadBtn);
-                actions.appendChild(previewBtn);
-                pre.parentNode.insertBefore(actions, pre);
+                linksRow.appendChild(openLink);
+                linksRow.appendChild(downloadLink);
             });
+
+            // Append once, after all the message's text/markdown content,
+            // so it always ends up at the bottom of the response.
+            contentEl.appendChild(linksRow);
         }
 
         // ---- Attachment handling ----
