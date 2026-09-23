@@ -44,11 +44,14 @@ _GalileoLogger = None
 _GalileoMetrics = None
 _enable_metrics_fn = None
 
+_AgentType = None
+
 if ENABLED:
     try:
         from galileo import GalileoLogger as _GalileoLogger  # noqa: N812
         from galileo import GalileoMetrics as _GalileoMetrics  # noqa: N812
         from galileo.log_streams import enable_metrics as _enable_metrics_fn
+        from galileo.logger.logger import AgentType as _AgentType  # noqa: N812
     except Exception as e:  # pragma: no cover - defensive, package may not be installed yet
         logger.warning(f"Galileo SDK not available, disabling telemetry: {e}")
         ENABLED = False
@@ -133,10 +136,53 @@ def start_trace(gl_logger, email: str, user_message: str, labs_matched: Any,
                 f"role:{'proctor' if is_proctor else 'student'}",
             ] + [f"lab:{lab}" for lab in (labs_matched or [])],
         )
+        # Wrap the whole tool-use loop in a "react" agent span so the llm/tool
+        # spans added below nest under it (current-parent stack) instead of
+        # sitting flat under the trace. Metrics that only evaluate agent
+        # spans - Action Completion, Action Advancement - never fire without
+        # this, and just silently don't appear on the trace at all. Best
+        # effort: if this fails, spans still attach fine to the trace itself,
+        # just without those two metrics.
+        if _AgentType is not None:
+            try:
+                gl_logger.add_agent_span(
+                    input=user_message or "",
+                    name="chat_turn",
+                    agent_type=_AgentType.react,
+                )
+            except Exception as e:
+                logger.warning(f"Galileo add_agent_span failed (continuing without it): {e}")
         return str(getattr(trace, 'id', '')) or None
     except Exception as e:
         logger.warning(f"Galileo start_trace failed: {e}")
         return None
+
+
+def _anthropic_tools_to_openai_schema(anthropic_tools: Optional[list]) -> Optional[list]:
+    """Convert Bedrock/Anthropic tool definitions ({name, description,
+    input_schema}) into the OpenAI-style {type: function, function: {...}}
+    shape Galileo's add_llm_span(tools=...) expects.
+
+    Metrics like tool_selection_quality and tool_error_rate are computed by
+    comparing the tools available to the model against the tool call it
+    actually made - without this, Galileo has nothing to judge selection
+    against and every such metric silently reports "not applicable"."""
+    if not anthropic_tools:
+        return None
+    converted = []
+    for t in anthropic_tools:
+        try:
+            converted.append({
+                "type": "function",
+                "function": {
+                    "name": t.get("name"),
+                    "description": t.get("description", ""),
+                    "parameters": t.get("input_schema", {"type": "object", "properties": {}}),
+                },
+            })
+        except Exception:
+            continue
+    return converted or None
 
 
 def add_llm_span(gl_logger, request_body: dict, result: dict, model_id: str) -> None:
@@ -148,6 +194,7 @@ def add_llm_span(gl_logger, request_body: dict, result: dict, model_id: str) -> 
             input=str(request_body.get('messages', '')),
             output=str(result.get('content', '')),
             model=model_id,
+            tools=_anthropic_tools_to_openai_schema(request_body.get('tools')),
             num_input_tokens=usage.get('input_tokens'),
             num_output_tokens=usage.get('output_tokens'),
         )
@@ -340,7 +387,11 @@ def conclude_and_flush(gl_logger, assistant_message: str) -> None:
     if gl_logger is None:
         return
     try:
-        gl_logger.conclude(output=assistant_message or "")
+        # conclude_all=True walks back up through the agent span (if one was
+        # opened in start_trace) all the way to the trace itself, setting the
+        # same final output on each level it closes. Safe even if no agent
+        # span was opened - it just concludes the trace once.
+        gl_logger.conclude(output=assistant_message or "", conclude_all=True)
         gl_logger.flush()
     except Exception as e:
         logger.warning(f"Galileo conclude/flush failed: {e}")

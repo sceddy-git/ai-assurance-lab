@@ -297,6 +297,7 @@ For each test:
     <p>If Claude says it has no Meraki tools, go back to <b>Credentials</b> and re-check the key and Test Connection result. If Claude asks you for an Organization ID when running a lab prompt, go back to <b>Credentials</b> and make sure it's saved in the Meraki card.</p>
 
     <h3 style="color:var(--meraki)">Meraki Labs</h3>
+    <div class="note"><span class="i">✏️</span><div>Prompts below with a <code>[network]</code>, <code>[MX model]</code>, or <code>[switch model]</code> placeholder need that replaced with a real name from your org before you send it — e.g. <code>[network]</code> → <code>API-Branch</code>. If you paste one verbatim, Claude will just ask you which one you meant, costing you a round trip.</div></div>
     <div class="mk">
 
     <div class="lab"><div class="lab-h"><span class="n">LAB 1</span> Overview &amp; device health</div><div class="lab-b">
@@ -309,8 +310,9 @@ For each test:
     <div class="lab"><div class="lab-h"><span class="n">LAB 2</span> Security &amp; visibility</div><div class="lab-b">
       <div class="prompt">Show all firewall rules on my [MX model] and flag any that allow unrestricted inbound traffic from 0.0.0.0/0. Rank by risk and suggest which to tighten.</div>
       <div class="prompt">List all clients on [network] from the last 7 days — MAC, manufacturer, IP, SSID/switchport, and first/last seen. Flag any that first connected outside business hours (e.g. before 7am or after 7pm).</div>
-      <div class="prompt">Conduct a full security audit of my Meraki organisation: risky firewall rules, SSID auth modes, rogue APs (last 7 days), firmware with known CVEs, VPN peers. Give each finding a High/Medium/Low risk and a remediation for the top 3.</div>
+      <div class="prompt">Conduct a full security audit of my Meraki organisation: risky firewall rules, SSID auth modes, and rogue APs (last 7 days). Give each finding a High/Medium/Low risk and a remediation for the top 3.</div>
     </div></div>
+    <p class="tip">💡 On the last prompt: if your org has no VPN peers or firmware CVE data configured, a good answer says so explicitly instead of inventing findings — that's Claude staying grounded in real tool output rather than guessing.</p>
 
     <div class="lab"><div class="lab-h"><span class="n">LAB 3</span> Performance &amp; usage</div><div class="lab-b">
       <div class="prompt">Draw a performance dashboard for my network — client count per AP, top bandwidth consumers, WAN uplink health, and any high-error devices.</div>
@@ -321,8 +323,9 @@ For each test:
     <div class="lab"><div class="lab-h"><span class="n">LAB 4</span> Config &amp; optimisation</div><div class="lab-b">
       <div class="prompt">Show the VLAN configuration on all switch ports in [network] and flag anything misconfigured — wrong access VLANs, untagged where tagged should be, inconsistencies. Suggest tidy-ups.</div>
       <div class="prompt">Is 802.11r fast roaming enabled on my APs? If not, what are the steps and caveats to turn it on?</div>
-      <div class="prompt">Generate a full configuration audit of my [network] — devices &amp; serials, SSIDs &amp; security, VLANs &amp; subnets, firewall rules, firmware status, and anything non-standard. Format it as a report I could hand to a customer.</div>
+      <div class="prompt">Generate a configuration audit of my [network] — devices &amp; serials, SSIDs &amp; security, firewall rules, and firmware status. Format it as a report I could hand to a customer. If any section isn't available for this network, say so rather than guessing.</div>
     </div></div>
+    <p class="tip">💡 The Meraki demo org used in this lab doesn't have routed VLANs or a WAN VPN configured on every network, so questions about them may come back "not configured" — that's expected, and a good sign the AI isn't fabricating an answer.</p>
 
     </div>
   </section>
