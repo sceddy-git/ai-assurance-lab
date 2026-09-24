@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Proctor Guide — AI Assurance Lab</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root{
+    --navy:#0c122e; --navy2:#104b88; --te:#00adef; --meraki:#04aeb1;
+    --splunk:#f15e22; --gold:#f9a425;
+    --cyan:#00adef; --coral:#fb7c32;
+    --ink:#32515b; --muted:#4f565c; --line:#e3e5e4; --bg:#ffffff;
+    --soft:#f1f3f3; --code:#0c122e;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink);background:var(--bg);line-height:1.65;font-size:16px}
+  .wrap{max-width:980px;margin:0 auto;padding:0 24px 90px}
+  a{color:var(--te)}
+  html{scroll-behavior:smooth}
+
+  .topnav{background:var(--navy);padding:10px 24px;display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+  .topnav a{color:#fff;opacity:.85;font-size:13px;margin:0 8px;text-decoration:none}
+  .topnav a:hover{opacity:1;text-decoration:underline}
+
+  .cover{background:
+      radial-gradient(900px 360px at 88% -20%, rgba(0,173,239,.36), transparent 60%),
+      radial-gradient(700px 320px at -8% 30%, rgba(251,124,50,.30), transparent 60%),
+      linear-gradient(135deg,#0c122e 0%,#104b88 55%,#0e404c 100%);color:#fff;padding:46px 24px 40px;text-align:center}
+  .cover .kick{font-size:12px;letter-spacing:.28em;text-transform:uppercase;color:#a8d4ee;margin-bottom:14px}
+  .cover .kick b{color:var(--coral)}
+  .cover h1{font-size:36px;line-height:1.1;font-weight:800;letter-spacing:-.02em}
+  .cover h1 em{font-style:normal;color:var(--cyan)}
+  .cover .sub{margin-top:12px;color:#d7e6f0;font-size:16px;max-width:640px;margin-left:auto;margin-right:auto}
+
+  section{padding-top:14px;scroll-margin-top:20px}
+  .sec-head{margin:42px 0 8px;padding-top:20px;border-top:3px solid var(--line)}
+  .sec-tag{font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+  .sec-head h2{font-size:26px;font-weight:800;letter-spacing:-.01em;margin-top:3px;color:var(--navy)}
+  .sec-desc{color:var(--muted);margin-top:4px}
+  .badge{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.08em;padding:3px 9px;border-radius:100px;color:#fff;vertical-align:middle;margin-left:8px}
+  .b-required{background:#00adef} .b-danger{background:#d64545} .b-optional{background:#f15e22}
+
+  h3{font-size:19px;font-weight:700;margin:26px 0 8px;color:var(--navy)}
+  h4{font-size:16px;font-weight:700;margin:18px 0 6px}
+  p{margin:9px 0}
+  .lead{font-size:17px}
+  code{font-family:"SF Mono",Consolas,Menlo,monospace;background:#eef2f5;border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:13.5px;color:var(--navy)}
+  ul,ol{margin:8px 0 8px 22px}
+  li{margin:4px 0}
+
+  .note,.tip,.warn{border-radius:10px;padding:13px 16px;margin:14px 0;font-size:15px;display:flex;gap:11px}
+  .note{background:#e6f6fd;border:1px solid #b3e0f7}
+  .tip{background:#e8f9f5;border:1px solid #b3e5d8}
+  .warn{background:#fef3ec;border:1px solid #fad2b5}
+  .note .i,.tip .i,.warn .i{font-size:16px;flex-shrink:0}
+
+  ol.steps{list-style:none;counter-reset:s;margin:16px 0}
+  ol.steps>li{counter-increment:s;display:flex;gap:14px;margin-bottom:16px;margin-left:0}
+  ol.steps>li::before{content:counter(s);flex-shrink:0;width:28px;height:28px;border-radius:50%;
+    background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;margin-top:2px}
+  .st-t{font-weight:700}
+  .st-d{color:var(--muted);font-size:15px}
+
+  .card{border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:14px 0;background:#fff}
+  .card.te{border-left:4px solid var(--te)} .card.mk{border-left:4px solid var(--meraki)}
+  .card.danger{border-left:4px solid #d64545;background:#fff7f6}
+  .card h4{margin-top:0}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:14px 0}
+  @media (max-width:640px){.grid2{grid-template-columns:1fr}}
+
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14.5px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+
+  .toc{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:16px 20px;margin:22px 0}
+  .toc b{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+  .toc ul{list-style:none;margin-top:8px;margin-left:0}
+  .toc li{padding:5px 0;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center;font-size:15px}
+  .toc li:last-child{border:none}
+  .toc a{text-decoration:none;color:var(--navy);font-weight:600}
+  .toc a:hover{text-decoration:underline}
+
+  .mermaid{background:#fff;border:1px solid var(--line);border-radius:10px;padding:18px;margin:14px 0;overflow-x:auto}
+
+  ul.tick{list-style:none;margin:8px 0 8px 0}
+  ul.tick li{padding:4px 0 4px 22px;position:relative}
+  ul.tick li::before{content:"→";position:absolute;left:0;color:var(--gold)}
+
+  footer{text-align:center;color:var(--muted);font-size:13px;margin-top:50px;padding-top:22px;border-top:1px solid var(--line)}
+
+  @media print{
+    .topnav{display:none}
+    .cover{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    body{font-size:12px}
+  }
+</style>
+</head>
+<body>
+
+<div class="topnav">
+  <a href="/lab">💬 Chat</a>
+  <a href="/admin/students">👥 Students</a>
+  <a href="/admin/classes">🏫 Classes</a>
+  <a href="/admin/progress">📊 Progress</a>
+  <a href="/admin/settings">⚙️ Settings</a>
+</div>
+
+<div class="cover">
+  <div class="kick">AI Assurance Lab Platform &nbsp;·&nbsp; Internal &nbsp;·&nbsp; <b>Proctor-Only</b></div>
+  <h1>Running the <em>AI Assurance</em> Workshop</h1>
+  <div class="sub">Everything a proctor needs to know: architecture, the end-to-end workflow, and a step-by-step run-of-show for before, during, and after the session.</div>
+</div>
+
+<div class="wrap">
+
+  <div class="toc">
+    <b>On this page</b>
+    <ul>
+      <li>🧭 <a href="#sec-overview">1 · What this platform is</a></li>
+      <li>🔀 <a href="#sec-workflow">2 · End-to-end workflow diagram</a></li>
+      <li>🧱 <a href="#sec-architecture">3 · Architecture at a glance</a></li>
+      <li>🛠️ <a href="#sec-before">4 · Before the workshop (one-time setup)</a></li>
+      <li>📅 <a href="#sec-dayof">5 · Day-of run-of-show</a></li>
+      <li>👥 <a href="#sec-students">6 · Managing students &amp; classes</a></li>
+      <li>📊 <a href="#sec-monitoring">7 · Monitoring live progress</a></li>
+      <li>🛰️ <a href="#sec-te">8 · ThousandEyes auto-provisioning</a></li>
+      <li>🔑 <a href="#sec-meraki">9 · Meraki shared credential</a></li>
+      <li>🩺 <a href="#sec-ops">10 · System ops (restart, logs, deploy)</a></li>
+      <li>🧹 <a href="#sec-after">11 · After the workshop (wind-down)</a></li>
+      <li>🚑 <a href="#sec-troubleshooting">12 · Troubleshooting</a></li>
+      <li>🔐 <a href="#sec-security">13 · Security notes</a></li>
+    </ul>
+  </div>
+
+  <!-- 1. OVERVIEW -->
+  <section id="sec-overview">
+    <div class="sec-head"><div class="sec-tag">1 · Overview</div><h2>What this platform is</h2></div>
+    <p class="lead">A self-service, browser-based lab environment where each student gets their own login, pastes in their own (or a pre-configured shared) API credentials, and chats with Claude — which calls ThousandEyes, Meraki, and (optionally) Splunk through official hosted <b>MCP servers</b> to actually complete tasks, not just describe them.</p>
+    <ul class="tick">
+      <li>Students never install anything — everything runs in this web app (Flask on EC2), reached over HTTPS.</li>
+      <li>Chat is powered by Claude on <b>AWS Bedrock</b>; login is <b>AWS Cognito</b> (Hosted UI, OAuth).</li>
+      <li>Per-student credentials (ThousandEyes token, Meraki key, Splunk URL) are encrypted and stored in <b>DynamoDB</b> — never in source code.</li>
+      <li>Every chat turn is logged to <b>Galileo</b> for observability (tool selection quality, error rate, instruction adherence, etc.) — optional, but on by default in this deployment.</li>
+      <li>Proctors get a separate admin area (this page, plus Students / Classes / Progress / Settings) gated by an explicit proctor allow-list, not just "any logged-in user."</li>
+    </ul>
+  </section>
+
+  <!-- 2. WORKFLOW DIAGRAM -->
+  <section id="sec-workflow">
+    <div class="sec-head"><div class="sec-tag">2 · Workflow</div><h2>End-to-end workflow diagram</h2></div>
+    <p>From scheduling a class to a student running their first lab prompt:</p>
+    <div class="mermaid">
+flowchart TD
+    A["Proctor: Settings page<br/>one-time config<br/>(Cognito, encryption key,<br/>Galileo, shared Meraki key,<br/>own ThousandEyes token)"] --> B["Proctor: Classes page<br/>Schedule a class<br/>→ generates QR + join link"]
+    B --> C["Proctor projects QR code<br/>at the start of the session"]
+    C --> D["Student scans QR<br/>/join/&lt;token&gt; page"]
+    D --> E["Student submits<br/>name, company, email"]
+    E --> F["Cognito account created<br/>(temp password emailed via SES)"]
+    F --> G{"Super admin has a valid<br/>ThousandEyes token for the<br/>required training org?"}
+    G -- yes --> H["Dedicated ThousandEyes<br/>Account Group + user<br/>auto-provisioned for student"]
+    G -- no --> I["TE provisioning skipped<br/>(login still works)"]
+    H --> J["Student logs in via<br/>Cognito Hosted UI"]
+    I --> J
+    J --> K["Student opens Credentials page<br/>pastes ThousandEyes token<br/>(Meraki: shared key works by default,<br/>own key optional)"]
+    K --> L["Student clicks Test Connection<br/>for each service"]
+    L --> M["Student opens Lab Guide<br/>+ Chat interface"]
+    M --> N["Student sends a prompt<br/>→ Claude (Bedrock) decides<br/>which MCP tool(s) to call"]
+    N --> O["MCP tool call →<br/>ThousandEyes / Meraki / Splunk API"]
+    O --> P["Result returned to Claude<br/>→ natural-language answer<br/>shown to student"]
+    P --> Q["Chat turn logged to Galileo<br/>(quality/error metrics)"]
+    P --> R["Progress checkpoint recorded<br/>in DynamoDB"]
+    Q --> S["Proctor: Progress dashboard<br/>sees live completion %,<br/>who's stuck, who's ahead"]
+    R --> S
+    S --> T["Proctor helps stuck students<br/>via Credentials/Guide,<br/>or Logs if something's broken"]
+    T --> M
+    S --> U["Workshop ends"]
+    U --> V["Proctor: Classes page<br/>Disable class (soft-disable logins)"]
+    V --> W["Optional: Delete ThousandEyes<br/>Account Groups (destructive,<br/>separate confirmed action)"]
+    </div>
+    <div class="note"><span class="i">ℹ️</span><div>This diagram renders in-browser via Mermaid. If it shows as raw text instead of a chart, the CDN script (<code>cdn.jsdelivr.net</code>) may be blocked on this network — the rest of the guide below doesn't depend on it.</div></div>
+  </section>
+
+  <!-- 3. ARCHITECTURE -->
+  <section id="sec-architecture">
+    <div class="sec-head"><div class="sec-tag">3 · Architecture</div><h2>Architecture at a glance</h2></div>
+    <div class="grid2">
+      <div class="card">
+        <h4>Compute &amp; hosting</h4>
+        <ul>
+          <li>Single EC2 instance (<code>us-east-1</code>) running Flask under <b>gunicorn</b>, managed by <b>systemd</b> (<code>flask-app.service</code>)</li>
+          <li>Code lives in a git repo (GitHub) — deploys are a <code>git pull</code> + service restart</li>
+          <li>Public URL fronted by HTTPS (Nginx/ALB depending on env) — <code>APP_URL</code> in config</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>Identity</h4>
+        <ul>
+          <li><b>AWS Cognito</b> user pool — students self-register via the join flow; proctors are added manually or via <code>PROCTOR_EMAILS</code></li>
+          <li>One permanent super admin email, hard-coded (<code>SUPER_ADMIN_EMAIL</code>), can never be removed</li>
+          <li>Session-based login (Flask session cookie) after Cognito Hosted UI OAuth callback</li>
+        </ul>
+      </div>
+      <div class="card te">
+        <h4>AI &amp; tools</h4>
+        <ul>
+          <li><b>Claude</b> (Haiku 4.5 by default) via <b>AWS Bedrock</b> — does the actual reasoning and tool selection</li>
+          <li><b>MCP servers</b>: ThousandEyes (Cisco-hosted), Meraki (Cisco-hosted), Splunk (optional) — Claude calls these directly with each student's own bearer token</li>
+          <li><b>Galileo</b> observability — every chat turn logged as a trace with LLM/tool/agent spans and scored on 6 metrics</li>
+        </ul>
+      </div>
+      <div class="card mk">
+        <h4>Data</h4>
+        <ul>
+          <li><b>DynamoDB</b> table for per-student encrypted credentials, connection status, and progress checkpoints</li>
+          <li><b>DynamoDB</b> table for scheduled classes and their rosters</li>
+          <li>Credentials encrypted at rest with a Fernet key (<code>ENCRYPTION_KEY</code>) — never stored or logged in plaintext</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. BEFORE -->
+  <section id="sec-before">
+    <div class="sec-head"><div class="sec-tag">4 · Setup</div><h2>Before the workshop (one-time)</h2><span class="badge b-required">Do this once per deployment</span></div>
+    <p>This is already done for the current live deployment — included here so a new proctor or a rebuild knows what "done" looks like. Check <b>Settings → Configuration</b> to confirm current values (secrets are redacted in the UI).</p>
+    <ol class="steps">
+      <li><div><div class="st-t">Cognito configured</div><div class="st-d">User pool, domain, client ID/secret, region all set in <code>.env</code>. Confirm on <b>Settings</b> that <code>cognito_domain</code>/<code>cognito_client_id</code> are non-empty.</div></div></li>
+      <li><div><div class="st-t">Encryption key set</div><div class="st-d"><code>ENCRYPTION_KEY</code> — a 32-byte Fernet key. Without this, credentials can't be stored at all. Generate with <code>python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"</code> — never reuse across environments.</div></div></li>
+      <li><div><div class="st-t">Proctor emails listed</div><div class="st-d"><code>PROCTOR_EMAILS</code> (comma-separated) — anyone on this list plus the permanent super admin gets access to Students/Classes/Progress/Settings/this guide. Manage via <b>Students → Proctors</b> in the UI, no manual <code>.env</code> editing needed day-to-day.</div></div></li>
+      <li><div><div class="st-t">Super admin's own ThousandEyes token saved</div><div class="st-d">On the super admin's own <b>Credentials</b> page, save a ThousandEyes token that belongs to the required training org (see §8). This is what drives auto-provisioning for every student — there is deliberately no separate service-account token.</div></div></li>
+      <li><div><div class="st-t">Shared Meraki key set (optional but recommended)</div><div class="st-d"><code>MERAKI_SHARED_API_KEY</code> / <code>MERAKI_SHARED_ORG_ID</code> in <code>.env</code> — gives every student working Meraki access with zero setup. Students can still override with their own key (see §9).</div></div></li>
+      <li><div><div class="st-t">Galileo configured (optional)</div><div class="st-d"><code>GALILEO_API_KEY</code>/<code>GALILEO_PROJECT</code>/<code>GALILEO_LOG_STREAM</code> — if unset, chat still works, just without observability. Dashboard link surfaces automatically in the admin nav once set.</div></div></li>
+      <li><div><div class="st-t">Sanity-check the lab guide</div><div class="st-d">Open <code>/guide</code> yourself and skim the ThousandEyes and Meraki lab prompts against the current demo org's actual data — placeholders like <code>[network]</code> need real names from the org that's connected today.</div></div></li>
+    </ol>
+  </section>
+
+  <!-- 5. DAY OF -->
+  <section id="sec-dayof">
+    <div class="sec-head"><div class="sec-tag">5 · Run-of-show</div><h2>Day-of run-of-show</h2></div>
+    <ol class="steps">
+      <li><div><div class="st-t">Schedule the class (5 min before doors open)</div><div class="st-d">Go to <a href="/admin/classes">Classes</a> → <b>Schedule a New Class</b> → name, date, location. This generates a unique join link + QR code.</div></div></li>
+      <li><div><div class="st-t">Project the QR code</div><div class="st-d">Click the class row to open its QR modal, project/display it. Students scan it on their own device — no app install, just a browser.</div></div></li>
+      <li><div><div class="st-t">Students self-register</div><div class="st-d">They fill in name, company, email → Cognito account created instantly, temp password emailed. If ThousandEyes auto-provisioning is healthy, their dedicated Account Group is created in the background at the same moment (a few hundred ms slower, non-blocking).</div></div></li>
+      <li><div><div class="st-t">Watch the roster fill in</div><div class="st-d">The class's <b>Roster</b> modal on the Classes page shows everyone who's joined so far — useful for a headcount before you start talking.</div></div></li>
+      <li><div><div class="st-t">Kick off</div><div class="st-d">Point students at <code>/guide</code> (linked from the header once they're logged in) and have them work through Credentials → Verify connection → Labs, in order.</div></div></li>
+      <li><div><div class="st-t">Monitor live</div><div class="st-d">Keep <a href="/admin/progress">Progress</a> open on a second screen — sorted so students with the least progress float to the top, so you always see who needs help first.</div></div></li>
+      <li><div><div class="st-t">Unblock stuck students</div><div class="st-d">Most issues are one of: wrong/expired token, org mismatch, or a placeholder prompt sent verbatim. See §12 for the fast diagnosis for each.</div></div></li>
+    </ol>
+    <div class="tip"><span class="i">💡</span><div>Keep this Proctor Guide open in one tab and Progress in another — you rarely need anything else during the live session.</div></div>
+  </section>
+
+  <!-- 6. MANAGING STUDENTS -->
+  <section id="sec-students">
+    <div class="sec-head"><div class="sec-tag">6 · Rosters</div><h2>Managing students &amp; classes</h2></div>
+    <div class="grid2">
+      <div class="card">
+        <h4><a href="/admin/students">👥 Students page</a></h4>
+        <ul>
+          <li>Add one student manually, or bulk-import a CSV/Excel roster</li>
+          <li>See every current student, their connection status per service</li>
+          <li>Add/remove proctors (the super admin is permanent and can't be removed)</li>
+          <li>"Reset Students" — for wiping a stale roster between unrelated cohorts</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4><a href="/admin/classes">🏫 Classes page</a></h4>
+        <ul>
+          <li>Schedule/delete classes, each with its own QR/join link and roster</li>
+          <li><b>Disable class</b> — soft-disables login for every enrolled student. Reversible; nothing is deleted.</li>
+          <li><b>Delete ThousandEyes Account Groups</b> — separate, explicit, <em>destructive</em> action. Tears down every enrolled student's dedicated TE Account Group + user. Confirmed with a warning dialog; cannot be undone.</li>
+          <li>Deleting a class record itself does <b>not</b> touch student logins, credentials, or TE resources — do the disable/cleanup actions first if that's what you actually want.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="warn"><span class="i">⚠️</span><div>The two class-management actions that matter for "end of workshop" are separate on purpose: <b>Disable</b> (safe, reversible, just blocks login) vs. <b>Delete TE Account Groups</b> (irreversible, deletes real ThousandEyes resources). Don't run the second one until you're sure the workshop is fully over and no one needs their data.</div></div>
+  </section>
+
+  <!-- 7. MONITORING -->
+  <section id="sec-monitoring">
+    <div class="sec-head"><div class="sec-tag">7 · Monitoring</div><h2>Monitoring live progress</h2></div>
+    <p>The <a href="/admin/progress">Progress dashboard</a> merges Cognito's full user list with activity signals recorded server-side on every chat turn, so it shows:</p>
+    <table>
+      <tr><th>Column</th><th>What it means</th></tr>
+      <tr><td>TE / Meraki / Splunk connected</td><td>Whether that student has a working credential for each service right now</td></tr>
+      <tr><td>Labs completed</td><td>Which lab checkpoints they've hit, out of the full curriculum</td></tr>
+      <tr><td>% complete</td><td>Based only on the <em>required</em> checkpoints — optional/bonus labs don't count against anyone</td></tr>
+      <tr><td>Chat message count</td><td>Total turns sent — a very low count with a connected credential usually means "stuck, not lost"</td></tr>
+      <tr><td>Last active</td><td>Timestamp of their most recent chat message</td></tr>
+    </table>
+    <p>Students who haven't logged in yet still appear (pulled straight from Cognito) with zero progress, so no-shows are obvious at a glance. The list is sorted <b>least progress first</b> so the students who most need help are always at the top.</p>
+    <div class="note"><span class="i">ℹ️</span><div>If Galileo is configured, the <b>Metrics Dashboard</b> link in the admin nav opens a separate, deeper view — tool selection quality, error rates, instruction adherence, etc. — useful after the session for retros, not usually needed live.</div></div>
+  </section>
+
+  <!-- 8. TE PROVISIONING -->
+  <section id="sec-te">
+    <div class="sec-head"><div class="sec-tag">8 · ThousandEyes</div><h2>ThousandEyes auto-provisioning</h2></div>
+    <p>When a student self-registers, the app tries to give them their own dedicated ThousandEyes <b>Account Group</b> (named <code>{{ '{name} ({email})' }}</code>) plus a scoped user — so every student has real, isolated ThousandEyes access without a proctor doing anything by hand.</p>
+    <ol class="steps">
+      <li><div><div class="st-t">Driven by the super admin's own token</div><div class="st-d">There is deliberately <b>no separate service-account token</b> in <code>.env</code>. Auto-provisioning always uses whatever ThousandEyes token the super admin (<code>{{ super_admin_email }}</code>) has saved on their own Credentials page — the same token they'd use to chat.</div></div></li>
+      <li><div><div class="st-t">Hard-locked to one organization</div><div class="st-d">Every provisioning/cleanup call is checked against a single required org name, currently <code>"{{ required_org_name }}"</code>, hard-coded in <code>thousandeyes_admin.py</code>. If the super admin's token doesn't have an account group in that exact org, the app <b>refuses</b> to provision anything — it will never silently create resources in the wrong ThousandEyes organization.</div></div></li>
+      <li><div><div class="st-t">Non-blocking</div><div class="st-d">If the super admin hasn't saved a token, or it's for the wrong org, TE provisioning is simply skipped — the student's Cognito login still works fine, they'd just need their own ThousandEyes credential pasted in manually on the Credentials page.</div></div></li>
+    </ol>
+    <div class="warn"><span class="i">⚠️</span><div>If TE provisioning stops working mid-workshop, the most common cause is the super admin's saved ThousandEyes token expiring. Re-save a fresh token on the super admin's own Credentials page — no restart needed, the next student join will pick it up.</div></div>
+  </section>
+
+  <!-- 9. MERAKI -->
+  <section id="sec-meraki">
+    <div class="sec-head"><div class="sec-tag">9 · Meraki</div><h2>Meraki shared credential</h2></div>
+    <p>Unlike ThousandEyes, Meraki does <b>not</b> auto-provision a dedicated org per student. Instead, one shared class-wide API key + Org ID is configured server-side (<code>MERAKI_SHARED_API_KEY</code> / <code>MERAKI_SHARED_ORG_ID</code> in <code>.env</code> — never in source control) and used as a fallback:</p>
+    <ul class="tick">
+      <li>Every student automatically has working Meraki access from the moment they log in — nothing to paste.</li>
+      <li>A student's <b>own</b> saved Meraki credential (if they add one on the Credentials page) always takes priority over the shared default.</li>
+      <li>If a student later deletes their personal credential, they automatically fall back to the shared default again — the fallback re-engages, it doesn't need re-enabling.</li>
+    </ul>
+    <div class="note"><span class="i">ℹ️</span><div>The Credentials page shows a note to students when the shared key is the one actually in effect for them, so there's no confusion about whose Meraki org they're looking at.</div></div>
+  </section>
+
+  <!-- 10. OPS -->
+  <section id="sec-ops">
+    <div class="sec-head"><div class="sec-tag">10 · Operations</div><h2>System ops (restart, logs, deploy)</h2></div>
+    <p>All under <a href="/admin/settings">Settings</a>, proctor-only:</p>
+    <div class="grid2">
+      <div class="card"><h4>Status tab</h4><p>Live CPU/memory and whether the <code>flask-app</code> systemd service is active, plus a one-click <b>Restart Flask App</b> button (needed after changing <code>.env</code> values like proctor emails or the encryption key).</p></div>
+      <div class="card"><h4>Logs tab</h4><p>Tails <code>journalctl -u flask-app</code> with filters by user email, free text, log level, or a time window — the fastest way to see exactly why one student's request failed.</p></div>
+      <div class="card"><h4>Deployment tab</h4><p><b>Pull Latest Code</b> runs <code>git pull origin main</code> in the app directory and restarts Flask automatically. Use this after merging any guide/app change during the workshop.</p></div>
+      <div class="card"><h4>Configuration tab</h4><p>View (redacted) and edit core <code>.env</code> values — Cognito settings, proctor emails, encryption key. Saving requires a restart to take effect (the Status tab button, or Deployment's pull, both restart it).</p></div>
+    </div>
+    <div class="warn"><span class="i">⚠️</span><div>If a <code>git pull</code> or any root-run command touches <code>.git/objects</code> as a different OS user, you may hit a "dubious ownership" error on the next manual <code>git</code> command over SSM. Fix with <code>sudo chown -R ubuntu:ubuntu .git</code> then run git as <code>sudo -u ubuntu</code> — cosmetic, doesn't affect the running app.</div></div>
+  </section>
+
+  <!-- 11. AFTER -->
+  <section id="sec-after">
+    <div class="sec-head"><div class="sec-tag">11 · Wind-down</div><h2>After the workshop</h2></div>
+    <ol class="steps">
+      <li><div><div class="st-t">Disable the class</div><div class="st-d">Classes → find the class → <b>Disable</b>. Soft-disables every enrolled student's Cognito login. Fully reversible — nothing else is touched, so this is always safe to do immediately once the session ends.</div></div></li>
+      <li><div><div class="st-t">Decide on ThousandEyes cleanup</div><div class="st-d">Only if you're sure no one needs their data anymore: Classes → <b>Delete ThousandEyes Account Groups</b>. This is destructive and irreversible — it deletes the dedicated Account Group + user for every student in that class. There's a confirmation dialog; read it.</div></div></li>
+      <li><div><div class="st-t">Leave students' credentials/progress alone</div><div class="st-d">There's no need to delete student records after a session — they're harmless at rest (encrypted), and keeping them lets you pull retro numbers from Progress/Galileo later.</div></div></li>
+      <li><div><div class="st-t">Optional retro</div><div class="st-d">If Galileo is configured, the Metrics Dashboard link (Settings/Students/Progress nav) is the best place to review tool-selection quality and error rates across the whole cohort after the fact.</div></div></li>
+    </ol>
+  </section>
+
+  <!-- 12. TROUBLESHOOTING -->
+  <section id="sec-troubleshooting">
+    <div class="sec-head"><div class="sec-tag">12 · Troubleshooting</div><h2>Common issues, fast diagnosis</h2></div>
+    <table>
+      <tr><th>Symptom</th><th>Likely cause</th><th>Fix</th></tr>
+      <tr><td>Student never got a login email</td><td>SES delivery delay, or typo'd email at join time</td><td>Check Students page for the account; re-invite or have them re-join with the correct email</td></tr>
+      <tr><td>"Invalid or expired ThousandEyes token"</td><td>Token typo'd, expired, or lacks API Access permission</td><td>Student re-copies token from ThousandEyes UI → Credentials page → re-save → Test Connection</td></tr>
+      <tr><td>Claude says "no tools available"</td><td>Credential saved but never tested/connected, or token invalid</td><td>Credentials page → Test Connection for that service; check the error message shown</td></tr>
+      <tr><td>Claude asks "which network/device did you mean?"</td><td>Student pasted a guide prompt with a <code>[network]</code>/<code>[model]</code> placeholder verbatim</td><td>Point them at the ✏️ note at the top of the Meraki Labs section — replace placeholders with a real name first</td></tr>
+      <tr><td>Meraki answers look like the wrong organization</td><td>Student added their own personal Meraki key by mistake (overriding the shared default)</td><td>Credentials page → delete their personal Meraki key → shared default re-engages automatically</td></tr>
+      <tr><td>New student has no ThousandEyes Account Group</td><td>Super admin's saved TE token expired or is for the wrong org</td><td>Super admin re-saves a fresh token on their own Credentials page (§8) — future joins pick it up; that one student can add their own token manually meanwhile</td></tr>
+      <tr><td>Whole app is down / 500s for everyone</td><td>Service crashed, or a bad config change</td><td>Settings → Logs tab, filter by <code>level=ERROR</code>; Settings → Status → Restart Flask App</td></tr>
+      <tr><td>A guide/app fix was just pushed to GitHub but isn't live</td><td>Server hasn't pulled the new commit yet</td><td>Settings → Deployment tab → Pull Latest Code (auto-restarts)</td></tr>
+    </table>
+  </section>
+
+  <!-- 13. SECURITY -->
+  <section id="sec-security">
+    <div class="sec-head"><div class="sec-tag">13 · Security</div><h2>Security notes</h2></div>
+    <ul class="tick">
+      <li>No credential (API key, token, secret) is ever stored in source code — only in encrypted DynamoDB fields (per-student) or the server's gitignored <code>.env</code> (shared defaults like the Meraki fallback key).</li>
+      <li>Credentials are encrypted at rest with a Fernet key and are never returned to the browser in plaintext, including on the proctor's own Credentials page.</li>
+      <li>Proctor access is an explicit allow-list (<code>PROCTOR_EMAILS</code> + one permanent super admin) — being logged in is not enough on its own.</li>
+      <li>ThousandEyes auto-provisioning is hard-locked in code to one named training organization — it will refuse to run rather than risk touching the wrong org, even if the super admin's token happens to have access to others.</li>
+      <li>Student logins can be soft-disabled (reversible) independently of any destructive ThousandEyes cleanup (irreversible) — these are always separate, explicitly confirmed actions.</li>
+    </ul>
+  </section>
+
+  <footer>AI Assurance Lab Platform · Proctor Guide · Internal use only</footer>
+</div>
+
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'base', themeVariables: { primaryColor: '#e6f6fd', primaryBorderColor: '#00adef', lineColor: '#4f565c', fontFamily: '-apple-system,Segoe UI,Roboto,sans-serif', fontSize: '13px' } });
+</script>
+</body>
+</html>

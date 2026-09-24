@@ -1893,6 +1893,23 @@ def api_join_class(join_token):
 # Settings/Administration Routes
 # ============================================================================
 
+@app.route('/admin/guide')
+@login_required
+def admin_guide():
+    """Proctor-only run-of-show guide: architecture, workflow diagram,
+    pre-workshop setup, day-of checklist, and troubleshooting. Purely
+    informational - no state-changing actions live on this page."""
+    user_email = session.get('user_email', '')
+    if not _is_proctor(user_email):
+        return jsonify({'error': 'Access denied - proctor access required'}), 403
+    return render_template(
+        'proctor_guide.html', email=user_email,
+        super_admin_email=SUPER_ADMIN_EMAIL,
+        required_org_name=thousandeyes_admin.REQUIRED_ORG_NAME,
+        proctor_emails=', '.join(_get_proctor_emails())
+    )
+
+
 @app.route('/admin/settings')
 @login_required
 def admin_settings():
