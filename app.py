@@ -262,6 +262,15 @@ COGNITO_USER_POOL_ID = os.getenv('COGNITO_USER_POOL_ID')
 APP_URL = os.getenv('APP_URL', 'http://localhost:5000')
 BEDROCK_REGION = os.getenv('BEDROCK_REGION', 'us-east-1')
 
+# Class-wide shared Meraki demo credential, set only as a server-side env
+# var (never in source control) so every student gets working Meraki access
+# without needing their own API key. Used as a fallback in the chat and
+# credentials-status routes below whenever a student hasn't saved a
+# personal Meraki token - a student's own saved credential always takes
+# priority over this if they add one.
+MERAKI_SHARED_TOKEN = os.getenv('MERAKI_SHARED_API_KEY')
+MERAKI_SHARED_ORG_ID = os.getenv('MERAKI_SHARED_ORG_ID')
+
 # Initialize Bedrock client
 bedrock_client = boto3.client('bedrock-runtime', region_name=BEDROCK_REGION)
 
@@ -435,9 +444,10 @@ def get_credentials_status():
         return jsonify({
             "te_configured": bool(credentials.get('te_token')),
             "te_connected": credentials.get('te_connected', False),
-            "meraki_configured": bool(credentials.get('meraki_token')),
-            "meraki_connected": credentials.get('meraki_connected', False),
-            "meraki_org_id": credentials.get('meraki_org_id'),
+            "meraki_configured": bool(credentials.get('meraki_token') or MERAKI_SHARED_TOKEN),
+            "meraki_connected": credentials.get('meraki_connected', False) or bool(MERAKI_SHARED_TOKEN),
+            "meraki_org_id": credentials.get('meraki_org_id') or MERAKI_SHARED_ORG_ID,
+            "meraki_shared": bool(MERAKI_SHARED_TOKEN) and not credentials.get('meraki_token'),
             "splunk_configured": bool(credentials.get('splunk_url')),
             "splunk_connected": credentials.get('splunk_connected', False),
             "splunk_url": credentials.get('splunk_url'),
@@ -701,8 +711,8 @@ def chat():
             return jsonify({'error': 'Failed to retrieve your credentials'}), 500
         
         te_token = credentials.get('te_token')
-        meraki_token = credentials.get('meraki_token')
-        meraki_org_id = credentials.get('meraki_org_id')
+        meraki_token = credentials.get('meraki_token') or MERAKI_SHARED_TOKEN
+        meraki_org_id = credentials.get('meraki_org_id') or MERAKI_SHARED_ORG_ID
         splunk_url = credentials.get('splunk_url')
         splunk_token = credentials.get('splunk_token')
         splunk_skip_tls_verify = credentials.get('splunk_skip_tls_verify', False)
