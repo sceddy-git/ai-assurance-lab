@@ -297,6 +297,7 @@ For each test:
     <p>If Claude says it has no Meraki tools, go back to <b>Credentials</b> and re-check the key and Test Connection result. If Claude asks you for an Organization ID when running a lab prompt, go back to <b>Credentials</b> and make sure it's saved in the Meraki card.</p>
 
     <h3 style="color:var(--meraki)">Meraki Labs</h3>
+    <div class="note"><span class="i">🔑</span><div>A default shared Meraki organisation is already connected for everyone — you don't need to add your own API key or Org ID to do these labs. If you'd rather use your own Meraki organisation, go to the <strong>Credentials</strong> page and add your own API key and Org ID; your personal credentials will automatically take priority over the shared default. Delete your personal key later and you'll fall back to the shared default automatically.</div></div>
     <div class="note"><span class="i">✏️</span><div>Prompts below with a <code>[network]</code>, <code>[MX model]</code>, or <code>[switch model]</code> placeholder need that replaced with a real name from your org before you send it — e.g. <code>[network]</code> → <code>API-Branch</code>. If you paste one verbatim, Claude will just ask you which one you meant, costing you a round trip.</div></div>
     <div class="mk">
 
