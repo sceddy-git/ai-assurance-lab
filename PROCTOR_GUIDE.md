@@ -255,6 +255,8 @@ Then add `YOUR_EMAIL` to `PROCTOR_EMAILS` as above.
 | A student's file upload fails | File >60MB, or unsupported type | Supported: images, PDF, XLS/XLSX/CSV, up to 60MB total per message |
 | Whole app is unreachable | EC2 instance issue | See `TECHNICAL_REFERENCE.md` Section "Emergency access" |
 | A student's QR signup says "Link not available" | The class was disabled/deleted, or the QR is from an old class | Create a new class and re-share its QR code |
+| Some students get "Too many signup attempts from this network" while scanning the QR together | Anti-bot rate limit on the public join page, keyed by IP — everyone on the same venue Wi-Fi shares one IP. Raised to 100/hour on 2026-09-27 specifically to cover a full ~40-student class, but a very large or slow-trickling cohort could still theoretically hit it | Wait a few minutes and retry, or have the last few students join from cellular data / a different network |
+| Registration feels slow when many students join at once | Gunicorn now runs 2 workers × 6 threads (12 concurrent slots) so a burst just queues briefly instead of failing — with ~40 students it may take a couple of minutes to fully drain, that's expected | No action needed; if it takes much longer than that, check `⚙️ Settings` → Logs for repeated ThousandEyes API errors slowing down provisioning |
 | ThousandEyes account group wasn't created for a QR signup | The super admin hasn't saved a ThousandEyes token on their own Credentials page, that token belongs to a different org than "AI-Powered Network Observability Day", or the API call failed (check `⚙️ Settings` → Logs) | Cognito login still works either way; the student can be provisioned manually later, or just use their own TE token on the Credentials page as normal |
 
 ---

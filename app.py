@@ -1792,7 +1792,14 @@ def api_class_te_cleanup(class_id):
 # ============================================================================
 
 _join_attempts: Dict[str, list] = {}
-_JOIN_RATE_LIMIT = 8          # max attempts
+# Sized for a full workshop cohort (up to ~40 students) joining from the
+# SAME public IP - e.g. everyone on one venue Wi-Fi/NAT scanning the QR
+# code within a few minutes of each other, plus some slack for page
+# refreshes/retries. This is only a per-IP counter, not per-email, so a
+# shared classroom IP burns through it fast; 100 gives real headroom
+# without meaningfully weakening the anti-bot intent (a bot spamming from
+# one IP still gets capped well below anything useful).
+_JOIN_RATE_LIMIT = 100         # max attempts
 _JOIN_RATE_WINDOW_SECS = 3600  # per hour, per IP
 
 

@@ -43,7 +43,7 @@ build pipeline, no load balancer — this is intentionally minimal for a
 | DynamoDB table | `AIAssuranceLab-Classes` (partition key `class_id`, `PAY_PER_REQUEST`) — scheduled classes + QR join tokens, added 2026-09-22 for the class-scheduling feature |
 | Bedrock model | `us.anthropic.claude-haiku-4-5-20251001-v1:0` (override via `CLAUDE_MODEL_ID` env var; switched from Sonnet 4.5 on 2026-09-18 for cost/latency across 40 concurrent students) |
 | App path on instance | `/home/ubuntu/ai-assurance-lab` |
-| systemd service | `flask-app` (Gunicorn, `--workers 3 --timeout 180`) |
+| systemd service | `flask-app` (Gunicorn, `--workers 2 --threads 6 --worker-class gthread --timeout 180` — threads added 2026-09-27 so the ~40-student join burst and concurrent chat traffic aren't serialized behind only 2 request slots; see "Registration capacity" below) |
 | Git remote | `https://github.com/sceddy-git/ai-assurance-lab` (branch `main`) |
 
 No SSH key is usable for login (port 22 closed); all instance access is via
@@ -315,6 +315,30 @@ already fixed on `main` / live:
    Organization ID and would either ask the user mid-conversation or guess
    wrong. Fixed by adding a `meraki_org_id` field to the Credentials page,
    stored per-user and injected into the system prompt.
+5. **Class-join burst capacity for ~40 students** — two separate problems,
+   both fixed 2026-09-27:
+   - The public `/api/join/<token>` per-IP anti-bot rate limit
+     (`_JOIN_RATE_LIMIT` in `app.py`) was 8 attempts/hour. Since it's keyed
+     by IP and a whole classroom typically shares one public IP via
+     Wi-Fi/NAT, a real cohort scanning the QR code within a few minutes of
+     each other would start getting `429 Too many signup attempts` well
+     before everyone got through. Raised to 100/hour — still meaningfully
+     caps a bot hitting from one IP, but gives a full class (plus retries)
+     real headroom.
+   - Gunicorn was `--workers 2` with the default sync worker (only 2
+     concurrent request slots for the *entire* app — join page + every
+     logged-in student's chat traffic). Each join does several sequential
+     network calls (Cognito, DynamoDB, up to ~4 ThousandEyes Admin API
+     calls), so a burst of registrations would queue almost entirely
+     behind those 2 slots. Since the box only has 2 vCPUs, more worker
+     *processes* wouldn't add real parallelism — the work is I/O-bound
+     (waiting on external APIs), not CPU-bound. Switched to
+     `--worker-class gthread --threads 6` (2 processes × 6 threads = 12
+     concurrent in-flight requests) so a 40-student burst drains in
+     parallel instead of one-at-a-time, without needing a bigger instance.
+   - DynamoDB tables are already `PAY_PER_REQUEST` (see table above) so
+     they auto-scale with the write burst; no change needed there. SES is
+     on a 50,000/day production quota, far above 40 invite emails.
 
 ## Adding a new MCP-backed service (e.g. a 4th tool)
 

@@ -190,7 +190,7 @@ flowchart TD
       <div class="card">
         <h4>Compute &amp; hosting</h4>
         <ul>
-          <li>Single EC2 instance (<code>us-east-1</code>) running Flask under <b>gunicorn</b>, managed by <b>systemd</b> (<code>flask-app.service</code>)</li>
+          <li>Single EC2 instance (<code>us-east-1</code>) running Flask under <b>gunicorn</b> (2 workers × 6 threads — sized for a ~40-student registration burst plus concurrent chat traffic), managed by <b>systemd</b> (<code>flask-app.service</code>)</li>
           <li>Code lives in a git repo (GitHub) — deploys are a <code>git pull</code> + service restart</li>
           <li>Public URL fronted by HTTPS (Nginx/ALB depending on env) — <code>APP_URL</code> in config</li>
         </ul>
