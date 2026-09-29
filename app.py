@@ -229,6 +229,78 @@ def _extract_prospect_info(user_message: str) -> Optional[dict]:
     return {"name": name[:120], "urls": urls}
 
 
+# ----------------------------------------------------------------------
+# Bedrock context-window safety net.
+#
+# Claude Haiku 4.5 on Bedrock has a 200K-token context window. A few MCP
+# tools (mainly Meraki's bulk client/device listings and ThousandEyes'
+# detailed test results) can return 80K-300K+ tokens' worth of raw JSON
+# in a single tool_result. That result then gets echoed straight back
+# into `messages` and sent to Bedrock again on the very next iteration
+# (and, since the frontend re-sends the full conversation history on
+# every subsequent chat turn too, it stays there for the rest of the
+# session unless trimmed) - so one big tool call can push a request over
+# the limit immediately, or several medium ones can push it over a few
+# turns later. Bedrock then raises "ValidationException: prompt is too
+# long", which without this safety net just fails the whole chat turn
+# with a generic 500 ("Failed to invoke AI model") and no way to recover
+# except starting a brand new conversation.
+#
+# Two independent caps below close this off: each individual tool result
+# is capped before it's ever added to `messages` (bounds one big call),
+# and the full message list is capped by total size right before every
+# Bedrock call (bounds slow growth across turns/iterations). Both trim
+# from the middle/oldest content, never the current user message.
+# ----------------------------------------------------------------------
+MAX_TOOL_RESULT_CHARS = 30_000
+MAX_TOTAL_MESSAGE_CHARS = 350_000
+
+
+def _cap_tool_result_text(text: str, max_chars: int = MAX_TOOL_RESULT_CHARS) -> str:
+    """Truncate one tool result's text before it's ever sent to Claude.
+    Keeps the front (most tool APIs put summary/first-page data first) and
+    a small tail, so Claude can still see there's more data available
+    rather than silently getting a half-cut JSON blob."""
+    if len(text) <= max_chars:
+        return text
+    head = text[: max_chars - 400]
+    tail = text[-300:]
+    omitted = len(text) - len(head) - len(tail)
+    return (
+        f"{head}\n"
+        f"... [TRUNCATED: {omitted:,} characters omitted - this tool result was too large "
+        f"to send in full. Ask a more specific/narrower question (fewer devices, a shorter "
+        f"time window, or one network at a time) to see the rest.] ...\n"
+        f"{tail}"
+    )
+
+
+def _cap_messages_for_bedrock(messages: list, max_total_chars: int = MAX_TOTAL_MESSAGE_CHARS) -> list:
+    """Keep the total serialized size of `messages` under budget right
+    before every Bedrock call, dropping the OLDEST messages first. Always
+    keeps at least the most recent user turn, even if that alone is over
+    budget (Bedrock's own error is a clearer signal at that point than us
+    silently deleting the user's actual question)."""
+    try:
+        sizes = [len(json.dumps(m.get('content'), default=str)) for m in messages]
+    except Exception:
+        return messages
+    total = sum(sizes)
+    if total <= max_total_chars or len(messages) <= 1:
+        return messages
+    start = 0
+    while total > max_total_chars and start < len(messages) - 1:
+        total -= sizes[start]
+        start += 1
+    if start == 0:
+        return messages
+    logger.warning(
+        f"Trimmed {start} oldest message(s) from a Bedrock request to stay under "
+        f"the context safety budget ({max_total_chars:,} chars)"
+    )
+    return messages[start:]
+
+
 def _build_system_prompt(meraki_org_id=None):
     """Build the system prompt, including the real current date/time.
 
@@ -810,6 +882,7 @@ def chat():
         system_prompt = _build_system_prompt(meraki_org_id)
 
         for iteration in range(MAX_TOOL_ITERATIONS):
+            messages = _cap_messages_for_bedrock(messages)
             request_body = {
                 "anthropic_version": "bedrock-2023-05-31",
                 "max_tokens": 4096,
@@ -833,6 +906,19 @@ def chat():
             except Exception as e:
                 logger.error(f"Bedrock invocation failed: {e}")
                 galileo_telemetry.conclude_and_flush(gl_logger, f"[error] Bedrock invocation failed: {e}")
+                error_str = str(e)
+                if 'ValidationException' in error_str and 'too long' in error_str.lower():
+                    # Belt-and-suspenders: the proactive caps above should
+                    # prevent this, but if something still slips through
+                    # (e.g. a single tool result right at the cap plus a
+                    # long user message), tell the student what to actually
+                    # do instead of a bare, unexplained failure.
+                    return jsonify({'error': (
+                        'This conversation has grown too large for the AI model to '
+                        'process (usually from one or more very large tool results). '
+                        'Please start a new conversation, or ask a narrower question '
+                        '(fewer devices/networks, or a shorter time window).'
+                    )}), 413
                 return jsonify({'error': 'Failed to invoke AI model'}), 500
 
             tool_calls = [c for c in content if c.get('type') == 'tool_use']
@@ -878,10 +964,11 @@ def chat():
                     module=tool_module, had_error=bool(isinstance(tool_result, dict) and tool_result.get('error'))
                 )
 
+                tool_result_text = json.dumps(tool_result) if not isinstance(tool_result, str) else tool_result
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": tool_use_id,
-                    "content": json.dumps(tool_result) if not isinstance(tool_result, str) else tool_result
+                    "content": _cap_tool_result_text(tool_result_text)
                 })
 
             # Feed the tool results back and let Claude continue (may call more tools)
