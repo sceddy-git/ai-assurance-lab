@@ -1088,6 +1088,19 @@ def api_admin_progress():
             first_name = next((attr['Value'] for attr in user['Attributes'] if attr['Name'] == 'given_name'), '')
             last_name = next((attr['Value'] for attr in user['Attributes'] if attr['Name'] == 'family_name'), '')
 
+            # Cognito's UserStatus tells us something the activity-based
+            # progress % can't: FORCE_CHANGE_PASSWORD means this student has
+            # NEVER completed a single login - they're not "slow", they're
+            # locked out (temp password never used, or lost/never received).
+            # Caught live on 2026-09-29: a student sat at 0% for most of a
+            # class because of exactly this, indistinguishable in the old
+            # dashboard from someone who was just behind. "Forgot password"
+            # doesn't fix it either (Cognito blocks that flow for accounts
+            # in this state) - the fix is a proctor-triggered resend, so
+            # this needs to be obvious at a glance, not inferred from a %.
+            cognito_status = user.get('UserStatus', '')
+            never_logged_in = cognito_status == 'FORCE_CHANGE_PASSWORD'
+
             p = progress_by_email.get(email_l, {})
             labs_completed = p.get('labs_completed', [])
             required_done = [c for c in labs_completed if c in REQUIRED_CHECKPOINTS]
@@ -1104,11 +1117,14 @@ def api_admin_progress():
                 'chat_message_count': p.get('chat_message_count', 0),
                 'last_active_at': p.get('last_active_at'),
                 'prospect_count': p.get('prospect_count', 0),
-                'percent_complete': percent
+                'percent_complete': percent,
+                'cognito_status': cognito_status,
+                'never_logged_in': never_logged_in
             })
 
-        # Least progress first so proctors can immediately see who needs help
-        students.sort(key=lambda s: (s['percent_complete'], -(s['last_active_at'] or 0)))
+        # Never-logged-in students float to the very top (they need a
+        # proctor action, not just patience), then least progress first.
+        students.sort(key=lambda s: (not s['never_logged_in'], s['percent_complete'], -(s['last_active_at'] or 0)))
 
         return jsonify({
             'status': 'success',

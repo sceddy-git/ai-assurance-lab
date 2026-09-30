@@ -162,6 +162,10 @@
         }
         .badge.on { background: #d4edda; color: #155724; }
         .badge.off { background: #f0f0f0; color: #999; }
+        .badge.never { background: #f8d7da; color: #721c24; }
+
+        tr.never-logged-in td { background: #fff8f8; }
+        tr.never-logged-in:hover td { background: #fdeeee; }
 
         .muted { color: #999; font-size: 12px; }
 
@@ -315,8 +319,8 @@
             body.innerHTML = students.map(s => {
                 const name = (s.first_name || s.last_name) ? `${s.first_name || ''} ${s.last_name || ''}`.trim() : '';
                 return `
-                <tr>
-                    <td><b>${s.email}</b>${name ? `<div class="muted">${name}</div>` : ''}</td>
+                <tr class="${s.never_logged_in ? 'never-logged-in' : ''}">
+                    <td><b>${s.email}</b>${name ? `<div class="muted">${name}</div>` : ''}${s.never_logged_in ? '<div><span class="badge never">Never logged in</span></div>' : ''}</td>
                     <td>
                         <div class="bar-wrap">
                             <div class="bar-fill" style="width:${s.percent_complete}%"></div>
@@ -340,6 +344,7 @@
             const complete = students.filter(s => s.percent_complete === 100).length;
             const avg = total ? Math.round(students.reduce((a, s) => a + s.percent_complete, 0) / total) : 0;
             const activeRecently = students.filter(s => s.last_active_at && (Date.now() / 1000 - s.last_active_at) < 900).length;
+            const neverLoggedIn = students.filter(s => s.never_logged_in).length;
 
             document.getElementById('summaryCards').innerHTML = `
                 <div class="card"><div class="num">${total}</div><div class="lbl">Students</div></div>
@@ -347,6 +352,7 @@
                 <div class="card"><div class="num">${complete}</div><div class="lbl">Fully complete</div></div>
                 <div class="card"><div class="num">${notStarted}</div><div class="lbl">Not started</div></div>
                 <div class="card"><div class="num">${activeRecently}</div><div class="lbl">Active last 15 min</div></div>
+                ${neverLoggedIn ? `<div class="card" style="background:#fff5f5;border-color:#f5c6cb;"><div class="num" style="color:#721c24;">${neverLoggedIn}</div><div class="lbl" style="color:#721c24;">Never logged in ⚠️</div></div>` : ''}
             `;
         }
 

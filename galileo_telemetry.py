@@ -18,6 +18,7 @@ Design goals:
   addresses forever.
 """
 
+import datetime
 import hashlib
 import json
 import logging
@@ -130,6 +131,27 @@ def start_trace(gl_logger, email: str, user_message: str, labs_matched: Any,
     if gl_logger is None:
         return None
     try:
+        # Group every trace from the same student on the same day into one
+        # Galileo Session. Without this, each chat turn was its own
+        # standalone trace with no session at all - which is exactly why
+        # session-only agentic metrics (Action Completion, Action
+        # Advancement) never appeared on a single one of the 90 real traces
+        # from the 2026-09-29 class despite the agent-span wrapping below:
+        # per Galileo's own docs, those metrics can only be applied to a
+        # Session, never to a bare trace. Using the same external_id
+        # (hashed student + date) on every call lets Galileo resolve/reuse
+        # the same session across this whole request lifecycle - a fresh
+        # GalileoLogger per request is fine, this doesn't require the
+        # process to hold any session state itself.
+        session_external_id = f"{hash_user(email)}:{datetime.date.today().isoformat()}"
+        try:
+            gl_logger.start_session(
+                name=f"Student session {session_external_id}",
+                external_id=session_external_id,
+            )
+        except Exception as e:
+            logger.warning(f"Galileo start_session failed (continuing without a session): {e}")
+
         trace = gl_logger.start_trace(
             input=user_message or "",
             tags=[

@@ -98,6 +98,19 @@ def _find_anchor_account_group(token: str) -> str:
     ThousandEyes silently operates in the token's default login account
     group's organization instead of the one we actually asked for.
 
+    Deterministic on purpose: as a class runs, every new student adds
+    another account group to this same org, so "first match in API
+    response order" can pick a *different* anchor on every call (API
+    ordering isn't guaranteed stable/insertion-order). That was caught
+    live on 2026-09-29 - a student's user-creation call 404'd against an
+    anchor aid none of the other 7 students that session got, most likely
+    because the anchor picked for their call was a different, newer group
+    than everyone else's. Sorting and always taking the numerically
+    lowest aid consistently picks the org's original/oldest account group
+    (present before any student ever joined), which is stable across the
+    whole class regardless of how many student groups pile up alongside
+    it.
+
     Raises WrongOrganizationError if no account group in
     REQUIRED_ORG_NAME is visible to this token at all - this is the single
     choke point every provisioning/cleanup function must call first, and
@@ -105,11 +118,26 @@ def _find_anchor_account_group(token: str) -> str:
     """
     groups = _list_account_groups(token)
     visible_orgs = sorted({g.get("organizationName") for g in groups if g.get("organizationName")})
+    candidates = []
     for group in groups:
         if group.get("organizationName") == REQUIRED_ORG_NAME:
             aid = group.get("aid") or group.get("id")
             if aid:
-                return str(aid)
+                try:
+                    candidates.append(int(aid))
+                except (TypeError, ValueError):
+                    candidates.append(aid)  # non-numeric id, sort as string below
+
+    if candidates:
+        try:
+            anchor = str(min(candidates))
+        except TypeError:
+            # Mixed int/str ids (shouldn't normally happen) - fall back to
+            # string sort so this still never raises.
+            anchor = str(sorted(str(c) for c in candidates)[0])
+        logger.info(f"Resolved TE anchor account group aid={anchor} for '{REQUIRED_ORG_NAME}' "
+                    f"({len(candidates)} candidate group(s) visible)")
+        return anchor
 
     raise WrongOrganizationError(
         f"This ThousandEyes token has no account group in the required organization "
@@ -233,10 +261,38 @@ def provision_student(token: str, name: str, email: str) -> dict:
     Raises WrongOrganizationError (a ThousandEyesAdminError subclass)
     before creating anything if this token has no visibility into the
     required org at all - this check happens first, every time.
+
+    User creation gets one retry with a freshly re-resolved anchor before
+    giving up: seen live on 2026-09-29, a user-creation call 404'd even
+    though the account group right before it was created fine with the
+    same anchor - transient enough that a same-request retry is worth it
+    before failing the student's whole signup. If the retry also fails,
+    the now-orphaned empty account group (no user ever attached to it)
+    is deleted so it doesn't linger as clutter in the org.
     """
     anchor_aid = _find_anchor_account_group(token)
     group_id = create_account_group(token, f"{name} ({email})" if name else email, anchor_aid)
-    user_id = create_user(token, name or email, email, group_id, anchor_aid)
+    try:
+        user_id = create_user(token, name or email, email, group_id, anchor_aid)
+    except ThousandEyesAdminError as first_error:
+        logger.warning(
+            f"First TE user-creation attempt failed for {email} (anchor aid={anchor_aid}): "
+            f"{first_error}. Re-resolving anchor and retrying once."
+        )
+        try:
+            retry_anchor_aid = _find_anchor_account_group(token)
+            user_id = create_user(token, name or email, email, group_id, retry_anchor_aid)
+            logger.info(f"TE user-creation retry succeeded for {email} (anchor aid={retry_anchor_aid})")
+        except ThousandEyesAdminError as retry_error:
+            logger.error(
+                f"TE user-creation retry also failed for {email}; deleting orphaned "
+                f"account group {group_id} so it doesn't linger unused."
+            )
+            try:
+                delete_account_group(token, group_id, anchor_aid)
+            except ThousandEyesAdminError as cleanup_error:
+                logger.warning(f"Could not clean up orphaned account group {group_id}: {cleanup_error}")
+            raise retry_error
     return {"account_group_id": group_id, "user_id": user_id}
 
 
