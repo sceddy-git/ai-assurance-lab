@@ -55,7 +55,7 @@ from mcp_client import (
 )
 from attachments import process_uploaded_files, AttachmentError, MAX_FILES, MAX_FILE_BYTES
 import galileo_telemetry
-import splunk_observability
+import splunk_ao_telemetry
 import thousandeyes_admin
 
 # Configure logging
@@ -354,6 +354,7 @@ CLAUDE_MODEL_ID = os.getenv('CLAUDE_MODEL_ID', 'us.anthropic.claude-haiku-4-5-20
 
 # Optional Galileo observability - safe no-op if GALILEO_API_KEY isn't set.
 galileo_telemetry.setup_metrics()
+splunk_ao_telemetry.setup_metrics()
 
 
 def login_required(f):
@@ -872,12 +873,14 @@ def chat():
             gl_logger, email, user_message, labs_matched, is_proctor=_is_proctor(email)
         )
 
-        # Splunk Observability Cloud: separate, independent trace sent in
-        # parallel via OpenTelemetry. No-op (sp_ctx is None) if
-        # SPLUNK_REALM/SPLUNK_ACCESS_TOKEN aren't configured.
-        sp_ctx = splunk_observability.new_context()
-        splunk_observability.start_trace(
-            sp_ctx, email, user_message, labs_matched, is_proctor=_is_proctor(email)
+        # Splunk Agent Observability: separate, independent logger/trace
+        # sent in parallel, using the exact same call shape as Galileo
+        # above (splunk-ao's SplunkAOLogger is built on Galileo internally).
+        # No-op (ao_logger is None) if SPLUNK_AO_REALM/SPLUNK_AO_O11Y_TOKEN
+        # aren't configured.
+        ao_logger = splunk_ao_telemetry.new_logger()
+        splunk_ao_telemetry.start_trace(
+            ao_logger, email, user_message, labs_matched, is_proctor=_is_proctor(email)
         )
 
         # Agentic loop: Claude may need multiple rounds of tool calls before it
@@ -912,14 +915,14 @@ def chat():
                     gl_logger, request_body, result,
                     model_id=CLAUDE_MODEL_ID
                 )
-                splunk_observability.add_llm_span(
-                    sp_ctx, request_body, result,
+                splunk_ao_telemetry.add_llm_span(
+                    ao_logger, request_body, result,
                     model_id=CLAUDE_MODEL_ID
                 )
             except Exception as e:
                 logger.error(f"Bedrock invocation failed: {e}")
                 galileo_telemetry.conclude_and_flush(gl_logger, f"[error] Bedrock invocation failed: {e}")
-                splunk_observability.conclude_and_flush(sp_ctx, f"[error] Bedrock invocation failed: {e}")
+                splunk_ao_telemetry.conclude_and_flush(ao_logger, f"[error] Bedrock invocation failed: {e}")
                 error_str = str(e)
                 if 'ValidationException' in error_str and 'too long' in error_str.lower():
                     # Belt-and-suspenders: the proactive caps above should
@@ -977,8 +980,8 @@ def chat():
                     gl_logger, tool_name, tool_input, tool_result, tool_use_id,
                     module=tool_module, had_error=bool(isinstance(tool_result, dict) and tool_result.get('error'))
                 )
-                splunk_observability.add_tool_span(
-                    sp_ctx, tool_name, tool_input, tool_result, tool_use_id,
+                splunk_ao_telemetry.add_tool_span(
+                    ao_logger, tool_name, tool_input, tool_result, tool_use_id,
                     module=tool_module, had_error=bool(isinstance(tool_result, dict) and tool_result.get('error'))
                 )
 
@@ -1008,7 +1011,7 @@ def chat():
             logger.warning(f"Failed to record lab activity for {email}: {e}")
 
         galileo_telemetry.conclude_and_flush(gl_logger, assistant_message)
-        splunk_observability.conclude_and_flush(sp_ctx, assistant_message)
+        splunk_ao_telemetry.conclude_and_flush(ao_logger, assistant_message)
 
         if prospect_info:
             try:
@@ -1048,7 +1051,9 @@ def admin_students():
     return render_template(
         'admin_students.html', email=user_email,
         galileo_url=galileo_telemetry.get_console_url(),
-        galileo_dashboard_url=galileo_telemetry.get_dashboard_url()
+        galileo_dashboard_url=galileo_telemetry.get_dashboard_url(),
+        splunk_ao_url=splunk_ao_telemetry.get_console_url(),
+        splunk_ao_dashboard_url=splunk_ao_telemetry.get_dashboard_url()
     )
 
 
@@ -1063,7 +1068,9 @@ def admin_progress():
     return render_template(
         'admin_progress.html', email=user_email,
         galileo_url=galileo_telemetry.get_console_url(),
-        galileo_dashboard_url=galileo_telemetry.get_dashboard_url()
+        galileo_dashboard_url=galileo_telemetry.get_dashboard_url(),
+        splunk_ao_url=splunk_ao_telemetry.get_console_url(),
+        splunk_ao_dashboard_url=splunk_ao_telemetry.get_dashboard_url()
     )
 
 
@@ -2050,7 +2057,9 @@ def admin_settings():
     return render_template(
         'admin_settings.html', email=user_email,
         galileo_url=galileo_telemetry.get_console_url(),
-        galileo_dashboard_url=galileo_telemetry.get_dashboard_url()
+        galileo_dashboard_url=galileo_telemetry.get_dashboard_url(),
+        splunk_ao_url=splunk_ao_telemetry.get_console_url(),
+        splunk_ao_dashboard_url=splunk_ao_telemetry.get_dashboard_url()
     )
 
 
