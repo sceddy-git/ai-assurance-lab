@@ -55,6 +55,7 @@ from mcp_client import (
 )
 from attachments import process_uploaded_files, AttachmentError, MAX_FILES, MAX_FILE_BYTES
 import galileo_telemetry
+import splunk_observability
 import thousandeyes_admin
 
 # Configure logging
@@ -871,6 +872,14 @@ def chat():
             gl_logger, email, user_message, labs_matched, is_proctor=_is_proctor(email)
         )
 
+        # Splunk Observability Cloud: separate, independent trace sent in
+        # parallel via OpenTelemetry. No-op (sp_ctx is None) if
+        # SPLUNK_REALM/SPLUNK_ACCESS_TOKEN aren't configured.
+        sp_ctx = splunk_observability.new_context()
+        splunk_observability.start_trace(
+            sp_ctx, email, user_message, labs_matched, is_proctor=_is_proctor(email)
+        )
+
         # Agentic loop: Claude may need multiple rounds of tool calls before it
         # has enough information to answer (e.g. Meraki's MCP server exposes a
         # generic semantic_search + execute_api pair that often requires a
@@ -903,9 +912,14 @@ def chat():
                     gl_logger, request_body, result,
                     model_id=CLAUDE_MODEL_ID
                 )
+                splunk_observability.add_llm_span(
+                    sp_ctx, request_body, result,
+                    model_id=CLAUDE_MODEL_ID
+                )
             except Exception as e:
                 logger.error(f"Bedrock invocation failed: {e}")
                 galileo_telemetry.conclude_and_flush(gl_logger, f"[error] Bedrock invocation failed: {e}")
+                splunk_observability.conclude_and_flush(sp_ctx, f"[error] Bedrock invocation failed: {e}")
                 error_str = str(e)
                 if 'ValidationException' in error_str and 'too long' in error_str.lower():
                     # Belt-and-suspenders: the proactive caps above should
@@ -963,6 +977,10 @@ def chat():
                     gl_logger, tool_name, tool_input, tool_result, tool_use_id,
                     module=tool_module, had_error=bool(isinstance(tool_result, dict) and tool_result.get('error'))
                 )
+                splunk_observability.add_tool_span(
+                    sp_ctx, tool_name, tool_input, tool_result, tool_use_id,
+                    module=tool_module, had_error=bool(isinstance(tool_result, dict) and tool_result.get('error'))
+                )
 
                 tool_result_text = json.dumps(tool_result) if not isinstance(tool_result, str) else tool_result
                 tool_results.append({
@@ -990,6 +1008,7 @@ def chat():
             logger.warning(f"Failed to record lab activity for {email}: {e}")
 
         galileo_telemetry.conclude_and_flush(gl_logger, assistant_message)
+        splunk_observability.conclude_and_flush(sp_ctx, assistant_message)
 
         if prospect_info:
             try:
