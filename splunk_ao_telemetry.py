@@ -80,6 +80,19 @@ if ENABLED:
 SPLUNK_AO_JUDGE_MODEL = os.getenv(
     'SPLUNK_AO_JUDGE_MODEL', 'Anthropic - Claude 3.5 Sonnet v2 (Bedrock)'
 )
+# KNOWN SPLUNK AO BUG (confirmed 2026-10-01, splunk-ao 0.4.0, AO on O11y Cloud
+# pre-GA): every judge-model invocation through the AWS Bedrock integration
+# fails with "InvalidSignatureException... Canonical String ... should have
+# been 'POST /model/<id>%253A0/invoke'" - the colon in the Bedrock model ID
+# is double-URL-encoded by Splunk's backend signer. Reproduced identically
+# with two different model families (Anthropic Claude Haiku 4.5 AND Amazon
+# Nova Lite), and verified our own IAM credentials correctly sign/invoke
+# both models directly via boto3 - this is not an AWS credentials/policy
+# issue, it's a bug in Splunk's own SigV4 request construction for any
+# Bedrock model id (all of which contain a colon+revision suffix). No known
+# workaround exists on our side; evaluators will keep failing until Splunk
+# fixes this server-side. Traces/sessions/spans are unaffected - only
+# LLM-judge *scoring* is blocked.
 
 # splunk-ao 0.4.0's SplunkAOEvaluators enum values don't all match the
 # actual registered scorer label/name - action_completion's enum value
