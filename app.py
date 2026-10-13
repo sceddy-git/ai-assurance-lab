@@ -9,6 +9,7 @@ import logging
 import re
 import secrets
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import Dict, Optional
@@ -301,6 +302,35 @@ def _cap_messages_for_bedrock(messages: list, max_total_chars: int = MAX_TOTAL_M
         f"the context safety budget ({max_total_chars:,} chars)"
     )
     return messages[start:]
+
+
+# Bounded pool for calls to third-party observability SDKs (Galileo, Splunk
+# AO) that make their own HTTP requests outside our control and don't expose
+# a reliable timeout knob. Found 2026-10-13: the chat wall-clock budget only
+# guards the tool-calling loop, not these start/conclude/flush calls made
+# just before and after it - a slow Galileo/Splunk backend could still hang
+# a request past nginx's proxy timeout with zero visibility (no exception,
+# no log line, just a silent 504). Running each call in a worker thread and
+# giving up after TELEMETRY_CALL_TIMEOUT_SECONDS converts that failure mode
+# into "telemetry for this one message is missing" - which is invisible to
+# the student - rather than "the whole chat response never arrives."
+TELEMETRY_CALL_TIMEOUT_SECONDS = 8
+_telemetry_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="telemetry")
+
+
+def _run_with_timeout(fn, timeout_seconds, default, *args, **kwargs):
+    """Run fn(*args, **kwargs) in a worker thread, returning `default` if it
+    doesn't finish within timeout_seconds or raises. Never raises itself -
+    telemetry must never be the reason a chat response fails or hangs."""
+    try:
+        future = _telemetry_executor.submit(fn, *args, **kwargs)
+        return future.result(timeout=timeout_seconds)
+    except FutureTimeoutError:
+        logger.warning(f"{getattr(fn, '__name__', fn)} exceeded {timeout_seconds}s timeout, continuing without it")
+        return default
+    except Exception as e:
+        logger.warning(f"{getattr(fn, '__name__', fn)} failed: {e}")
+        return default
 
 
 def _build_system_prompt(meraki_org_id=None):
@@ -877,7 +907,8 @@ def chat():
         # added around the Bedrock call and each MCP tool call below. Fully
         # no-op (gl_logger is None) if GALILEO_API_KEY isn't configured.
         gl_logger = galileo_telemetry.new_logger()
-        gl_trace_id = galileo_telemetry.start_trace(
+        gl_trace_id = _run_with_timeout(
+            galileo_telemetry.start_trace, TELEMETRY_CALL_TIMEOUT_SECONDS, None,
             gl_logger, email, user_message, labs_matched, is_proctor=_is_proctor(email)
         )
 
@@ -887,7 +918,8 @@ def chat():
         # No-op (ao_logger is None) if SPLUNK_AO_REALM/SPLUNK_AO_O11Y_TOKEN
         # aren't configured.
         ao_logger = splunk_ao_telemetry.new_logger()
-        splunk_ao_telemetry.start_trace(
+        _run_with_timeout(
+            splunk_ao_telemetry.start_trace, TELEMETRY_CALL_TIMEOUT_SECONDS, None,
             ao_logger, email, user_message, labs_matched, is_proctor=_is_proctor(email)
         )
 
@@ -1039,8 +1071,14 @@ def chat():
         except Exception as e:
             logger.warning(f"Failed to record lab activity for {email}: {e}")
 
-        galileo_telemetry.conclude_and_flush(gl_logger, assistant_message)
-        splunk_ao_telemetry.conclude_and_flush(ao_logger, assistant_message)
+        _run_with_timeout(
+            galileo_telemetry.conclude_and_flush, TELEMETRY_CALL_TIMEOUT_SECONDS, None,
+            gl_logger, assistant_message
+        )
+        _run_with_timeout(
+            splunk_ao_telemetry.conclude_and_flush, TELEMETRY_CALL_TIMEOUT_SECONDS, None,
+            ao_logger, assistant_message
+        )
 
         if prospect_info:
             try:
