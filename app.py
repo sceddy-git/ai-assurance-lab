@@ -897,11 +897,32 @@ def chat():
         # search call followed by an execute call). Cap iterations to avoid
         # runaway loops while still allowing multi-step tool use.
         MAX_TOOL_ITERATIONS = 6
+
+        # Hard wall-clock budget for the whole tool-calling loop, independent
+        # of MAX_TOOL_ITERATIONS. Each individual MCP/Bedrock call responds
+        # quickly on its own (seconds), but mcp_client.py opens a brand-new
+        # connection and does a full protocol handshake per tool call (no
+        # session reuse across calls yet), so a turn needing many tool calls
+        # can legitimately accumulate well past nginx/gunicorn's 180s proxy
+        # timeout even with nothing actually "stuck." Discovered 2026-10-13
+        # via py-spy + log timeline during a live session: a single request
+        # kept a worker continuously busy making dozens of sequential MCP
+        # calls for 90+ seconds. Stopping with a graceful partial answer
+        # before the proxy timeout is far better UX than a silent 504.
+        CHAT_WALL_CLOCK_BUDGET_SECONDS = 140
+        chat_loop_started_at = time.monotonic()
         total_tools_used = 0
         content = []
         system_prompt = _build_system_prompt(meraki_org_id)
 
         for iteration in range(MAX_TOOL_ITERATIONS):
+            if time.monotonic() - chat_loop_started_at > CHAT_WALL_CLOCK_BUDGET_SECONDS:
+                logger.warning(
+                    f"Chat wall-clock budget ({CHAT_WALL_CLOCK_BUDGET_SECONDS}s) exceeded "
+                    f"for {email} after {iteration} iteration(s)/{total_tools_used} tool call(s); "
+                    "returning early instead of risking a proxy timeout"
+                )
+                break
             messages = _cap_messages_for_bedrock(messages)
             request_body = {
                 "anthropic_version": "bedrock-2023-05-31",
