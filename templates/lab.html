@@ -1249,8 +1249,9 @@
             });
         }
 
-        document.getElementById('file-input').addEventListener('change', (e) => {
-            const newFiles = Array.from(e.target.files || []);
+        // Shared by the 📎 file picker and paste-to-attach below, so both
+        // paths enforce the exact same per-message limits.
+        function addAttachmentFiles(newFiles) {
             for (const file of newFiles) {
                 if (selectedFiles.length >= MAX_ATTACH_FILES) {
                     addMessage(`Error: You can attach at most ${MAX_ATTACH_FILES} files per message.`, false);
@@ -1262,8 +1263,39 @@
                 }
                 selectedFiles.push(file);
             }
-            e.target.value = ''; // allow re-selecting the same file later
             renderAttachmentChips();
+        }
+
+        document.getElementById('file-input').addEventListener('change', (e) => {
+            addAttachmentFiles(Array.from(e.target.files || []));
+            e.target.value = ''; // allow re-selecting the same file later
+        });
+
+        // Paste-to-attach: screenshots and copied files (Cmd/Ctrl+V) in the
+        // message box attach the same way the 📎 picker does. Clipboard
+        // image data (e.g. a screenshot) arrives as a file-kind clipboard
+        // item with no real filename, so give it one. Plain pasted text is
+        // left completely alone - only actual file/image clipboard items
+        // are intercepted here, so normal text paste behavior is unaffected.
+        messageInput.addEventListener('paste', (e) => {
+            const items = Array.from(e.clipboardData && e.clipboardData.items || []);
+            const pastedFiles = [];
+            for (const item of items) {
+                if (item.kind !== 'file') continue;
+                const file = item.getAsFile();
+                if (!file) continue;
+                if (!file.name || file.name === 'image.png') {
+                    const ext = (file.type.split('/')[1] || 'png').split('+')[0];
+                    const pastedName = `pasted-${Date.now()}.${ext}`;
+                    pastedFiles.push(new File([file], pastedName, { type: file.type }));
+                } else {
+                    pastedFiles.push(file);
+                }
+            }
+            if (pastedFiles.length > 0) {
+                e.preventDefault(); // these are files, not text - don't also paste anything into the textbox
+                addAttachmentFiles(pastedFiles);
+            }
         });
 
         function showLoadingIndicator() {
