@@ -19,6 +19,7 @@ from flask import Flask, render_template, session, request, redirect, url_for, j
 from flask_cors import CORS
 import requests
 import boto3
+from botocore.config import Config as BotoConfig
 import jwt
 from jwt import PyJWKClient
 
@@ -344,8 +345,15 @@ BEDROCK_REGION = os.getenv('BEDROCK_REGION', 'us-east-1')
 MERAKI_SHARED_TOKEN = os.getenv('MERAKI_SHARED_API_KEY')
 MERAKI_SHARED_ORG_ID = os.getenv('MERAKI_SHARED_ORG_ID')
 
-# Initialize Bedrock client
-bedrock_client = boto3.client('bedrock-runtime', region_name=BEDROCK_REGION)
+# Initialize Bedrock client. Explicit timeouts/retries (rather than
+# botocore's defaults) so a slow/throttled Bedrock call fails predictably
+# instead of silently eating most of gunicorn's 180s worker timeout -
+# added 2026-10-13 alongside the matching MCP_CALL_TIMEOUT_SECONDS fix in
+# mcp_client.py, after a string of /api/chat 504s with no app-level error.
+bedrock_client = boto3.client(
+    'bedrock-runtime', region_name=BEDROCK_REGION,
+    config=BotoConfig(connect_timeout=10, read_timeout=45, retries={'max_attempts': 2})
+)
 
 # Claude Haiku 4.5 - chosen for cost/latency over Sonnet across 40 concurrent
 # students running many small tool-calling turns per lab. Override via env

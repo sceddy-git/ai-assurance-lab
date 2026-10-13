@@ -98,10 +98,33 @@ def _unwrap(e: BaseException) -> BaseException:
     return e
 
 
+# Hard wall-clock ceiling for an entire MCP call (connect + initialize +
+# tool execution), independent of the transport-level httpx timeout.
+#
+# Why this is needed: _httpx_client_factory() sets a 30s httpx timeout, but
+# that only bounds the gap *between* bytes on a streaming connection - a
+# vendor MCP server that trickles data slowly (without ever going fully
+# silent for 30s straight) can hold this open far longer than 30s, with no
+# exception ever raised. Since app.py calls this synchronously from a
+# gunicorn gthread worker (--timeout 180), a hang like that ties up the
+# thread for the full 180s with zero app-level error logged, and worse,
+# gunicorn's --timeout is a per-WORKER watchdog, not per-thread: if it
+# fires, the entire worker process (and every other request it happened to
+# be concurrently serving) gets killed. Discovered 2026-10-13 from a string
+# of /api/chat 504s with no corresponding exception in the app logs.
+MCP_CALL_TIMEOUT_SECONDS = 25
+
+
 def _run(coro):
-    """Run an async MCP coroutine from sync Flask request handlers."""
+    """Run an async MCP coroutine from sync Flask request handlers, bounded
+    by MCP_CALL_TIMEOUT_SECONDS regardless of how the transport behaves."""
     try:
-        return asyncio.run(coro)
+        return asyncio.run(asyncio.wait_for(coro, timeout=MCP_CALL_TIMEOUT_SECONDS))
+    except asyncio.TimeoutError:
+        logger.error(f"MCP client error: call exceeded {MCP_CALL_TIMEOUT_SECONDS}s hard timeout")
+        raise MCPClientError(
+            f"MCP server did not respond within {MCP_CALL_TIMEOUT_SECONDS}s"
+        )
     except Exception as e:
         real_error = _unwrap(e)
         logger.error(f"MCP client error: {type(real_error).__name__} - {real_error}")
