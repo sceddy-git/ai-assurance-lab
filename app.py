@@ -1070,13 +1070,17 @@ def chat():
         # one-line "Now let me get X..." with the actual tool_use block
         # silently dropped by the extraction above. Left as-is, that reads
         # to a student as the AI randomly cutting itself off mid-sentence
-        # with the conversation then stuck - reported 2026-10-14. Make the
-        # cutoff explicit and actionable instead of silent.
-        if any(c.get('type') == 'tool_use' for c in content):
-            assistant_message = (assistant_message or "Still working on this...") + (
-                "\n\n_I ran out of time for this turn before finishing - just send another "
-                "message (e.g. \"continue\") and I'll pick up where I left off._"
-            )
+        # with the conversation then stuck - reported 2026-10-14.
+        #
+        # Rather than ask the student to type "continue" themselves, expose
+        # this as a `truncated` flag and let the frontend auto-fire a hidden
+        # continuation request behind the loading indicator (see lab.html),
+        # up to its own retry cap. Each individual request still stays
+        # safely under the wall-clock budget; chaining them client-side is
+        # what lets a turn that genuinely needs more tool calls than fit in
+        # one request keep going without the student noticing anything but
+        # a slightly longer wait.
+        truncated = any(c.get('type') == 'tool_use' for c in content)
 
         # Best-effort progress recording for the proctor dashboard - must
         # never break the chat response if it fails.
@@ -1108,7 +1112,12 @@ def chat():
             "splunk_available": bool(splunk_url),
             # None if Galileo telemetry is disabled/unavailable - frontend
             # must hide the feedback buttons in that case.
-            "trace_id": gl_trace_id
+            "trace_id": gl_trace_id,
+            # True if this turn hit the wall-clock budget or iteration cap
+            # with a tool call still pending. Frontend auto-continues (see
+            # lab.html) rather than showing this as a dead end to the
+            # student.
+            "truncated": truncated
         })
     
     except Exception as e:

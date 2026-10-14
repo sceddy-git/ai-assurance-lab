@@ -1328,6 +1328,34 @@
             }
         }
 
+        // Posts one /api/chat turn. `files` only applies to the first call in
+        // an auto-continue chain; hidden continuation calls never carry files.
+        async function postChatMessage(message, history, files) {
+            if (files && files.length > 0) {
+                const formData = new FormData();
+                formData.append('message', message);
+                formData.append('history', JSON.stringify(history));
+                files.forEach(file => formData.append('files', file));
+                return fetch('/api/chat', { method: 'POST', body: formData });
+            }
+            return fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: message, history: history })
+            });
+        }
+
+        // A turn can come back `truncated` (wall-clock budget or tool-iteration
+        // cap hit with a tool call still pending - see app.py). Rather than
+        // show that dead end to the student and make them type "continue"
+        // themselves (reported 2026-10-14), silently re-post a continuation
+        // behind the same loading indicator, up to MAX_AUTO_CONTINUES times.
+        // Each individual request still stays within its own wall-clock
+        // budget; this just chains several of them client-side so a turn
+        // that genuinely needs more tool calls than fit in one request keeps
+        // going without the student noticing more than a longer wait.
+        const MAX_AUTO_CONTINUES = 4;
+
         async function sendMessage() {
             const message = messageInput.value.trim();
             const filesToSend = selectedFiles.slice();
@@ -1352,36 +1380,41 @@
                 // Show loading indicator
                 showLoadingIndicator();
 
-                let response;
-                if (filesToSend.length > 0) {
-                    const formData = new FormData();
-                    formData.append('message', message);
-                    formData.append('history', JSON.stringify(conversationHistory.slice(0, -1)));
-                    filesToSend.forEach(file => formData.append('files', file));
+                // workingHistory accumulates any hidden continuation hops on
+                // top of the real history; conversationHistory (the
+                // persisted/displayed one) only gets the final assistant
+                // result appended below, so auto-continue round-trips never
+                // show up in saved chat history or on screen.
+                let workingHistory = conversationHistory.slice(0, -1);
+                let nextMessage = message || '[Attached file(s)]';
+                let files = filesToSend;
+                let data = null;
+                let continues = 0;
 
-                    response = await fetch('/api/chat', {
-                        method: 'POST',
-                        body: formData
-                    });
-                } else {
-                    response = await fetch('/api/chat', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            message: message,
-                            history: conversationHistory.slice(0, -1)
-                        })
-                    });
+                while (true) {
+                    const response = await postChatMessage(nextMessage, workingHistory, files);
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        removeLoadingIndicator();
+                        addMessage(`Error: ${error.error || 'Unknown error'}`, false);
+                        return;
+                    }
+
+                    data = await response.json();
+
+                    if (!data.truncated || continues >= MAX_AUTO_CONTINUES) {
+                        break;
+                    }
+                    continues++;
+                    workingHistory = workingHistory.concat([
+                        { role: 'user', content: nextMessage },
+                        { role: 'assistant', content: data.response }
+                    ]);
+                    nextMessage = 'Please continue.';
+                    files = []; // never resend attachments on a hidden continuation
                 }
 
-                if (!response.ok) {
-                    const error = await response.json();
-                    removeLoadingIndicator();
-                    addMessage(`Error: ${error.error || 'Unknown error'}`, false);
-                    return;
-                }
-
-                const data = await response.json();
                 removeLoadingIndicator();
 
                 // Add assistant response
