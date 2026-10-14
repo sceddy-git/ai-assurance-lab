@@ -1064,6 +1064,20 @@ def chat():
             'The assistant used tools but did not return a final text response. Please try rephrasing your question.'
         )
 
+        # If we stopped (wall-clock budget or MAX_TOOL_ITERATIONS) while
+        # Claude's last response still had a tool call it never got to
+        # execute, `content` here is that half-finished turn: often just a
+        # one-line "Now let me get X..." with the actual tool_use block
+        # silently dropped by the extraction above. Left as-is, that reads
+        # to a student as the AI randomly cutting itself off mid-sentence
+        # with the conversation then stuck - reported 2026-10-14. Make the
+        # cutoff explicit and actionable instead of silent.
+        if any(c.get('type') == 'tool_use' for c in content):
+            assistant_message = (assistant_message or "Still working on this...") + (
+                "\n\n_I ran out of time for this turn before finishing - just send another "
+                "message (e.g. \"continue\") and I'll pick up where I left off._"
+            )
+
         # Best-effort progress recording for the proctor dashboard - must
         # never break the chat response if it fails.
         try:
