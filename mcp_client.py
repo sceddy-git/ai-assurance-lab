@@ -9,7 +9,9 @@ limits are enforced exactly as they are for the vendor's official clients.
 """
 
 import asyncio
+import concurrent.futures
 import logging
+import threading
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -114,13 +116,65 @@ def _unwrap(e: BaseException) -> BaseException:
 # of /api/chat 504s with no corresponding exception in the app logs.
 MCP_CALL_TIMEOUT_SECONDS = 25
 
+# Persistent background event loop, one per gunicorn worker process, used for
+# every MCP call made by any of that worker's request-handling threads.
+#
+# Previously _run() called asyncio.run() fresh for every single MCP call -
+# each one spinning up a brand-new event loop (and the anyio thread pool
+# streamablehttp_client/httpx offload blocking work like DNS/TLS onto). When
+# a call was cancelled mid-flight by the MCP_CALL_TIMEOUT_SECONDS wait_for
+# (or the underlying blocking op just never returned), the orphaned OS
+# thread had no event loop left to rejoin and just sat there - over a long
+# enough uptime and high enough call volume, this accumulated into 50-70+
+# leaked threads on the busiest worker, exhausting memory and causing 504s
+# even on trivial static-asset requests. Root-caused 2026-10-14 via thread
+# counts correlating with per-worker request volume.
+#
+# Using one long-lived loop/thread pool for the whole process lifetime
+# means anyio's thread offload pool is created once and properly reused
+# instead of being torn down and recreated (potentially incompletely) on
+# every call.
+_loop: Optional[asyncio.AbstractEventLoop] = None
+_loop_thread: Optional[threading.Thread] = None
+_loop_lock = threading.Lock()
+
+
+def _get_loop() -> asyncio.AbstractEventLoop:
+    """Return this process's persistent MCP event loop, starting it (once)
+    on first use. Thread-safe - multiple gthread request threads in the same
+    worker call this concurrently."""
+    global _loop, _loop_thread
+    with _loop_lock:
+        if _loop is None or not _loop_thread.is_alive():
+            _loop = asyncio.new_event_loop()
+
+            def _run_forever(loop: asyncio.AbstractEventLoop):
+                asyncio.set_event_loop(loop)
+                loop.run_forever()
+
+            _loop_thread = threading.Thread(
+                target=_run_forever, args=(_loop,), daemon=True, name="mcp-event-loop"
+            )
+            _loop_thread.start()
+        return _loop
+
 
 def _run(coro):
     """Run an async MCP coroutine from sync Flask request handlers, bounded
-    by MCP_CALL_TIMEOUT_SECONDS regardless of how the transport behaves."""
+    by MCP_CALL_TIMEOUT_SECONDS regardless of how the transport behaves.
+
+    Dispatches onto the persistent per-process loop (see _get_loop) instead
+    of asyncio.run()'ing a fresh one each call. On timeout, explicitly
+    cancels the in-flight task - this is the documented pattern for
+    run_coroutine_threadsafe (concurrent.futures.Future.cancel() after a
+    TimeoutError propagates the cancellation back into the coroutine running
+    on the loop), so a hung call gets torn down instead of continuing to
+    occupy the loop/thread pool in the background indefinitely."""
+    future = asyncio.run_coroutine_threadsafe(coro, _get_loop())
     try:
-        return asyncio.run(asyncio.wait_for(coro, timeout=MCP_CALL_TIMEOUT_SECONDS))
-    except asyncio.TimeoutError:
+        return future.result(timeout=MCP_CALL_TIMEOUT_SECONDS)
+    except concurrent.futures.TimeoutError:
+        future.cancel()
         logger.error(f"MCP client error: call exceeded {MCP_CALL_TIMEOUT_SECONDS}s hard timeout")
         raise MCPClientError(
             f"MCP server did not respond within {MCP_CALL_TIMEOUT_SECONDS}s"
