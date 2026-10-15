@@ -1499,9 +1499,19 @@
 
                 removeLoadingIndicator();
 
+                // If we're still truncated after exhausting every hidden
+                // auto-continue hop, the request is too complex to finish
+                // invisibly. Rather than silently show a response that may
+                // cut off mid-sentence, append a short explanatory note so
+                // the student knows what happened and how to move forward.
+                let displayResponse = data.response;
+                if (data.truncated && continues >= MAX_AUTO_CONTINUES) {
+                    displayResponse += '\n\n_This question needed more steps than I could finish automatically. Try breaking it into smaller questions, or ask me to continue with the next part._';
+                }
+
                 // Add assistant response
-                addMessage(data.response, false, null, data.trace_id);
-                conversationHistory.push({ role: 'assistant', content: data.response, trace_id: data.trace_id });
+                addMessage(displayResponse, false, null, data.trace_id);
+                conversationHistory.push({ role: 'assistant', content: displayResponse, trace_id: data.trace_id });
                 saveChatHistory();
 
                 // Reload credential status (may have changed)
