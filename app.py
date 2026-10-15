@@ -16,7 +16,7 @@ from typing import Dict, Optional
 from urllib.parse import urlencode, parse_qs
 from urllib.request import urlopen
 
-from flask import Flask, render_template, session, request, redirect, url_for, jsonify, send_file
+from flask import Flask, render_template, session, request, redirect, url_for, jsonify, send_file, Response, stream_with_context
 from flask_cors import CORS
 import requests
 import boto3
@@ -779,6 +779,52 @@ def chat_feedback():
     return jsonify({'recorded': ok})
 
 
+# Keyword -> short progress phrase shown in the chat UI while a tool call is
+# in flight (see the STATUS lines streamed by chat() below). Matched against
+# tool_name.lower() in order, first match wins. There are 50+ TE/Meraki/
+# Splunk tools and the exact set can change server-side (we discover them
+# live via list_mcp_tools), so this is a best-effort keyword heuristic
+# rather than an exhaustive per-tool-name mapping - good enough to turn
+# "silent multi-second pause" into "visible progress" for the common cases,
+# with a readable fallback for anything unmatched.
+TOOL_PROGRESS_LABELS = [
+    ("alert", "Correlating alerts..."),
+    ("outage", "Checking for outages..."),
+    ("anomal", "Detecting anomalies..."),
+    ("path", "Tracing network paths..."),
+    ("visualiz", "Tracing network paths..."),
+    ("bgp", "Checking BGP routes..."),
+    ("test", "Gathering tests..."),
+    ("agent", "Checking agents..."),
+    ("firewall", "Reviewing firewall rules..."),
+    ("ssid", "Checking wireless settings..."),
+    ("wireless", "Checking wireless settings..."),
+    ("wifi", "Checking wireless settings..."),
+    ("client", "Looking up clients..."),
+    ("device", "Checking devices..."),
+    ("network", "Checking networks..."),
+    ("organization", "Checking your account..."),
+    ("account", "Checking your account..."),
+    ("tag", "Checking tags..."),
+    ("dashboard", "Loading dashboard data..."),
+    ("search", "Searching..."),
+    ("spl", "Querying Splunk..."),
+    ("splunk", "Querying Splunk..."),
+    ("execute", "Running the request..."),
+]
+
+
+def _tool_progress_label(tool_name: str) -> str:
+    """Short human-readable status line for a tool call, shown live in the
+    chat UI (see TOOL_PROGRESS_LABELS above). Falls back to a humanized
+    version of the raw tool name if nothing matches."""
+    name_lower = (tool_name or "").lower()
+    for keyword, label in TOOL_PROGRESS_LABELS:
+        if keyword in name_lower:
+            return label
+    return f"Running {tool_name.replace('_', ' ')}..." if tool_name else "Working..."
+
+
 @app.route('/api/chat', methods=['POST'])
 @login_required
 def chat():
@@ -947,179 +993,209 @@ def chat():
         content = []
         system_prompt = _build_system_prompt(meraki_org_id)
 
-        for iteration in range(MAX_TOOL_ITERATIONS):
-            if time.monotonic() - chat_loop_started_at > CHAT_WALL_CLOCK_BUDGET_SECONDS:
-                logger.warning(
-                    f"Chat wall-clock budget ({CHAT_WALL_CLOCK_BUDGET_SECONDS}s) exceeded "
-                    f"for {email} after {iteration} iteration(s)/{total_tools_used} tool call(s); "
-                    "returning early instead of risking a proxy timeout"
-                )
-                break
-            messages = _cap_messages_for_bedrock(messages)
-            request_body = {
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 4096,
-                "system": system_prompt,
-                "messages": messages
-            }
-            if available_tools:
-                request_body["tools"] = available_tools
+        def generate():
+            """Streams newline-delimited progress lines (`STATUS:<text>`)
+            while the tool-calling loop below runs, ending with exactly one
+            `FINAL:<json>` or `ERROR:<json>` line carrying the same payload
+            chat() used to return directly as a single JSON response before
+            this was added. Students asked (2026-10-14) for visible feedback
+            on what the AI is doing during multi-tool-call turns instead of
+            a generic spinner the whole time - see _tool_progress_label().
 
+            Runs inside a Response(stream_with_context(...)) below, with
+            X-Accel-Buffering: no so nginx forwards each line immediately
+            instead of buffering the whole response until it's complete.
+            Any exception here can't be caught by chat()'s outer try/except
+            (that only covers code before streaming starts, which is why
+            this has its own try/except yielding an ERROR: line)."""
+            nonlocal content, total_tools_used, messages
             try:
-                response = bedrock_client.invoke_model(
-                    modelId=CLAUDE_MODEL_ID,
-                    body=json.dumps(request_body)
+                for iteration in range(MAX_TOOL_ITERATIONS):
+                    if time.monotonic() - chat_loop_started_at > CHAT_WALL_CLOCK_BUDGET_SECONDS:
+                        logger.warning(
+                            f"Chat wall-clock budget ({CHAT_WALL_CLOCK_BUDGET_SECONDS}s) exceeded "
+                            f"for {email} after {iteration} iteration(s)/{total_tools_used} tool call(s); "
+                            "returning early instead of risking a proxy timeout"
+                        )
+                        break
+                    messages = _cap_messages_for_bedrock(messages)
+                    request_body = {
+                        "anthropic_version": "bedrock-2023-05-31",
+                        "max_tokens": 4096,
+                        "system": system_prompt,
+                        "messages": messages
+                    }
+                    if available_tools:
+                        request_body["tools"] = available_tools
+
+                    try:
+                        response = bedrock_client.invoke_model(
+                            modelId=CLAUDE_MODEL_ID,
+                            body=json.dumps(request_body)
+                        )
+                        result = json.loads(response['body'].read())
+                        content = result.get('content', [])
+                        galileo_telemetry.add_llm_span(
+                            gl_logger, request_body, result,
+                            model_id=CLAUDE_MODEL_ID
+                        )
+                        splunk_ao_telemetry.add_llm_span(
+                            ao_logger, request_body, result,
+                            model_id=CLAUDE_MODEL_ID
+                        )
+                    except Exception as e:
+                        logger.error(f"Bedrock invocation failed: {e}")
+                        galileo_telemetry.conclude_and_flush(gl_logger, f"[error] Bedrock invocation failed: {e}")
+                        splunk_ao_telemetry.conclude_and_flush(ao_logger, f"[error] Bedrock invocation failed: {e}")
+                        error_str = str(e)
+                        if 'ValidationException' in error_str and 'too long' in error_str.lower():
+                            # Belt-and-suspenders: the proactive caps above should
+                            # prevent this, but if something still slips through
+                            # (e.g. a single tool result right at the cap plus a
+                            # long user message), tell the student what to actually
+                            # do instead of a bare, unexplained failure.
+                            yield "ERROR:" + json.dumps({'error': (
+                                'This conversation has grown too large for the AI model to '
+                                'process (usually from one or more very large tool results). '
+                                'Please start a new conversation, or ask a narrower question '
+                                '(fewer devices/networks, or a shorter time window).'
+                            )}) + "\n"
+                        else:
+                            yield "ERROR:" + json.dumps({'error': 'Failed to invoke AI model'}) + "\n"
+                        return
+
+                    tool_calls = [c for c in content if c.get('type') == 'tool_use']
+
+                    if not tool_calls:
+                        # Claude is done calling tools; this is the final answer.
+                        break
+
+                    total_tools_used += len(tool_calls)
+                    tool_results = []
+
+                    for tool_call in tool_calls:
+                        tool_name = tool_call.get('name', '')
+                        tool_input = tool_call.get('input', {})
+                        tool_use_id = tool_call.get('id', '')
+
+                        yield "STATUS:" + _tool_progress_label(tool_name) + "\n"
+
+                        # Route to the MCP server (ThousandEyes or Meraki) that advertised this tool
+                        tool_module = None
+                        try:
+                            routing = tool_routing.get(tool_name)
+                            if not routing:
+                                tool_result = {"error": f"Unknown tool: {tool_name}"}
+                            else:
+                                mcp_url, mcp_token, require_token, verify_tls = routing
+                                if mcp_url == THOUSANDEYES_MCP_URL:
+                                    tool_module = 'te'
+                                elif mcp_url == MERAKI_MCP_URL:
+                                    tool_module = 'meraki'
+                                elif splunk_url and mcp_url == splunk_url:
+                                    tool_module = 'splunk'
+                                if tool_module:
+                                    modules_used.add(tool_module)
+                                tool_result = call_mcp_tool(mcp_url, mcp_token, tool_name, tool_input, require_token=require_token, verify_tls=verify_tls)
+                        except MCPClientError as e:
+                            logger.error(f"Tool execution error for {tool_name}: {e}")
+                            tool_result = {"error": f"Tool execution failed: {str(e)}"}
+                        except Exception as e:
+                            logger.error(f"Tool execution error for {tool_name}: {e}")
+                            tool_result = {"error": f"Tool execution failed: {str(e)}"}
+
+                        galileo_telemetry.add_tool_span(
+                            gl_logger, tool_name, tool_input, tool_result, tool_use_id,
+                            module=tool_module, had_error=bool(isinstance(tool_result, dict) and tool_result.get('error'))
+                        )
+                        splunk_ao_telemetry.add_tool_span(
+                            ao_logger, tool_name, tool_input, tool_result, tool_use_id,
+                            module=tool_module, had_error=bool(isinstance(tool_result, dict) and tool_result.get('error'))
+                        )
+
+                        tool_result_text = json.dumps(tool_result) if not isinstance(tool_result, str) else tool_result
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": tool_use_id,
+                            "content": _cap_tool_result_text(tool_result_text)
+                        })
+
+                    # Feed the tool results back and let Claude continue (may call more tools)
+                    messages.append({"role": "assistant", "content": content})
+                    messages.append({"role": "user", "content": tool_results})
+                else:
+                    logger.warning(f"Hit max tool iterations ({MAX_TOOL_ITERATIONS}) for {email}")
+
+                assistant_message = next(
+                    (c.get('text', '') for c in content if c.get('type') == 'text'),
+                    'The assistant used tools but did not return a final text response. Please try rephrasing your question.'
                 )
-                result = json.loads(response['body'].read())
-                content = result.get('content', [])
-                galileo_telemetry.add_llm_span(
-                    gl_logger, request_body, result,
-                    model_id=CLAUDE_MODEL_ID
-                )
-                splunk_ao_telemetry.add_llm_span(
-                    ao_logger, request_body, result,
-                    model_id=CLAUDE_MODEL_ID
-                )
-            except Exception as e:
-                logger.error(f"Bedrock invocation failed: {e}")
-                galileo_telemetry.conclude_and_flush(gl_logger, f"[error] Bedrock invocation failed: {e}")
-                splunk_ao_telemetry.conclude_and_flush(ao_logger, f"[error] Bedrock invocation failed: {e}")
-                error_str = str(e)
-                if 'ValidationException' in error_str and 'too long' in error_str.lower():
-                    # Belt-and-suspenders: the proactive caps above should
-                    # prevent this, but if something still slips through
-                    # (e.g. a single tool result right at the cap plus a
-                    # long user message), tell the student what to actually
-                    # do instead of a bare, unexplained failure.
-                    return jsonify({'error': (
-                        'This conversation has grown too large for the AI model to '
-                        'process (usually from one or more very large tool results). '
-                        'Please start a new conversation, or ask a narrower question '
-                        '(fewer devices/networks, or a shorter time window).'
-                    )}), 413
-                return jsonify({'error': 'Failed to invoke AI model'}), 500
 
-            tool_calls = [c for c in content if c.get('type') == 'tool_use']
+                # If we stopped (wall-clock budget or MAX_TOOL_ITERATIONS) while
+                # Claude's last response still had a tool call it never got to
+                # execute, `content` here is that half-finished turn: often just a
+                # one-line "Now let me get X..." with the actual tool_use block
+                # silently dropped by the extraction above. Left as-is, that reads
+                # to a student as the AI randomly cutting itself off mid-sentence
+                # with the conversation then stuck - reported 2026-10-14.
+                #
+                # Rather than ask the student to type "continue" themselves, expose
+                # this as a `truncated` flag and let the frontend auto-fire a hidden
+                # continuation request behind the loading indicator (see lab.html),
+                # up to its own retry cap. Each individual request still stays
+                # safely under the wall-clock budget; chaining them client-side is
+                # what lets a turn that genuinely needs more tool calls than fit in
+                # one request keep going without the student noticing anything but
+                # a slightly longer wait.
+                truncated = any(c.get('type') == 'tool_use' for c in content)
 
-            if not tool_calls:
-                # Claude is done calling tools; this is the final answer.
-                break
-
-            total_tools_used += len(tool_calls)
-            tool_results = []
-
-            for tool_call in tool_calls:
-                tool_name = tool_call.get('name', '')
-                tool_input = tool_call.get('input', {})
-                tool_use_id = tool_call.get('id', '')
-
-                # Route to the MCP server (ThousandEyes or Meraki) that advertised this tool
-                tool_module = None
+                # Best-effort progress recording for the proctor dashboard - must
+                # never break the chat response if it fails.
                 try:
-                    routing = tool_routing.get(tool_name)
-                    if not routing:
-                        tool_result = {"error": f"Unknown tool: {tool_name}"}
-                    else:
-                        mcp_url, mcp_token, require_token, verify_tls = routing
-                        if mcp_url == THOUSANDEYES_MCP_URL:
-                            tool_module = 'te'
-                        elif mcp_url == MERAKI_MCP_URL:
-                            tool_module = 'meraki'
-                        elif splunk_url and mcp_url == splunk_url:
-                            tool_module = 'splunk'
-                        if tool_module:
-                            modules_used.add(tool_module)
-                        tool_result = call_mcp_tool(mcp_url, mcp_token, tool_name, tool_input, require_token=require_token, verify_tls=verify_tls)
-                except MCPClientError as e:
-                    logger.error(f"Tool execution error for {tool_name}: {e}")
-                    tool_result = {"error": f"Tool execution failed: {str(e)}"}
+                    record_lab_activity(email, labs_matched, modules_used)
                 except Exception as e:
-                    logger.error(f"Tool execution error for {tool_name}: {e}")
-                    tool_result = {"error": f"Tool execution failed: {str(e)}"}
+                    logger.warning(f"Failed to record lab activity for {email}: {e}")
 
-                galileo_telemetry.add_tool_span(
-                    gl_logger, tool_name, tool_input, tool_result, tool_use_id,
-                    module=tool_module, had_error=bool(isinstance(tool_result, dict) and tool_result.get('error'))
+                _run_with_timeout(
+                    galileo_telemetry.conclude_and_flush, TELEMETRY_CALL_TIMEOUT_SECONDS, None,
+                    gl_logger, assistant_message
                 )
-                splunk_ao_telemetry.add_tool_span(
-                    ao_logger, tool_name, tool_input, tool_result, tool_use_id,
-                    module=tool_module, had_error=bool(isinstance(tool_result, dict) and tool_result.get('error'))
+                _run_with_timeout(
+                    splunk_ao_telemetry.conclude_and_flush, TELEMETRY_CALL_TIMEOUT_SECONDS, None,
+                    ao_logger, assistant_message
                 )
 
-                tool_result_text = json.dumps(tool_result) if not isinstance(tool_result, str) else tool_result
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": tool_use_id,
-                    "content": _cap_tool_result_text(tool_result_text)
-                })
+                if prospect_info:
+                    try:
+                        record_prospect(email, prospect_info['name'], prospect_info['urls'])
+                    except Exception as e:
+                        logger.warning(f"Failed to record prospect info for {email}: {e}")
 
-            # Feed the tool results back and let Claude continue (may call more tools)
-            messages.append({"role": "assistant", "content": content})
-            messages.append({"role": "user", "content": tool_results})
-        else:
-            logger.warning(f"Hit max tool iterations ({MAX_TOOL_ITERATIONS}) for {email}")
-
-        assistant_message = next(
-            (c.get('text', '') for c in content if c.get('type') == 'text'),
-            'The assistant used tools but did not return a final text response. Please try rephrasing your question.'
-        )
-
-        # If we stopped (wall-clock budget or MAX_TOOL_ITERATIONS) while
-        # Claude's last response still had a tool call it never got to
-        # execute, `content` here is that half-finished turn: often just a
-        # one-line "Now let me get X..." with the actual tool_use block
-        # silently dropped by the extraction above. Left as-is, that reads
-        # to a student as the AI randomly cutting itself off mid-sentence
-        # with the conversation then stuck - reported 2026-10-14.
-        #
-        # Rather than ask the student to type "continue" themselves, expose
-        # this as a `truncated` flag and let the frontend auto-fire a hidden
-        # continuation request behind the loading indicator (see lab.html),
-        # up to its own retry cap. Each individual request still stays
-        # safely under the wall-clock budget; chaining them client-side is
-        # what lets a turn that genuinely needs more tool calls than fit in
-        # one request keep going without the student noticing anything but
-        # a slightly longer wait.
-        truncated = any(c.get('type') == 'tool_use' for c in content)
-
-        # Best-effort progress recording for the proctor dashboard - must
-        # never break the chat response if it fails.
-        try:
-            record_lab_activity(email, labs_matched, modules_used)
-        except Exception as e:
-            logger.warning(f"Failed to record lab activity for {email}: {e}")
-
-        _run_with_timeout(
-            galileo_telemetry.conclude_and_flush, TELEMETRY_CALL_TIMEOUT_SECONDS, None,
-            gl_logger, assistant_message
-        )
-        _run_with_timeout(
-            splunk_ao_telemetry.conclude_and_flush, TELEMETRY_CALL_TIMEOUT_SECONDS, None,
-            ao_logger, assistant_message
-        )
-
-        if prospect_info:
-            try:
-                record_prospect(email, prospect_info['name'], prospect_info['urls'])
+                yield "FINAL:" + json.dumps({
+                    "response": assistant_message,
+                    "tools_used": total_tools_used,
+                    "te_available": bool(te_token),
+                    "meraki_available": bool(meraki_token),
+                    "splunk_available": bool(splunk_url),
+                    # None if Galileo telemetry is disabled/unavailable - frontend
+                    # must hide the feedback buttons in that case.
+                    "trace_id": gl_trace_id,
+                    # True if this turn hit the wall-clock budget or iteration cap
+                    # with a tool call still pending. Frontend auto-continues (see
+                    # lab.html) rather than showing this as a dead end to the
+                    # student.
+                    "truncated": truncated
+                }) + "\n"
             except Exception as e:
-                logger.warning(f"Failed to record prospect info for {email}: {e}")
+                logger.error(f"Error streaming chat response for {email}: {e}")
+                yield "ERROR:" + json.dumps({'error': 'Internal server error'}) + "\n"
 
-        return jsonify({
-            "response": assistant_message,
-            "tools_used": total_tools_used,
-            "te_available": bool(te_token),
-            "meraki_available": bool(meraki_token),
-            "splunk_available": bool(splunk_url),
-            # None if Galileo telemetry is disabled/unavailable - frontend
-            # must hide the feedback buttons in that case.
-            "trace_id": gl_trace_id,
-            # True if this turn hit the wall-clock budget or iteration cap
-            # with a tool call still pending. Frontend auto-continues (see
-            # lab.html) rather than showing this as a dead end to the
-            # student.
-            "truncated": truncated
-        })
-    
+        return Response(
+            stream_with_context(generate()),
+            mimetype='text/plain',
+            headers={'X-Accel-Buffering': 'no', 'Cache-Control': 'no-cache'}
+        )
+
     except Exception as e:
         logger.error(f"Error in chat endpoint: {e}")
         return jsonify({'error': 'Internal server error'}), 500

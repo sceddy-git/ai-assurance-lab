@@ -403,8 +403,19 @@
 
         .loading-indicator {
             display: flex;
-            gap: 4px;
+            align-items: center;
+            gap: 8px;
             padding: 6px 0;
+        }
+
+        .loading-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .loading-status-text {
+            font-size: 13px;
+            color: var(--text-secondary, #666);
         }
 
         .loading-dot {
@@ -1312,7 +1323,7 @@
 
             const content = document.createElement('div');
             content.className = 'loading-indicator';
-            content.innerHTML = '<div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div>';
+            content.innerHTML = '<div class="loading-dots"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div><span class="loading-status-text" id="loading-status-text"></span>';
 
             messageDiv.appendChild(avatar);
             messageDiv.appendChild(content);
@@ -1321,11 +1332,67 @@
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
 
+        // Updates the one-line status text next to the bouncing dots (e.g.
+        // "Gathering tests...") as /api/chat streams STATUS: lines for each
+        // tool call it makes - added 2026-10-14 so students see what's
+        // actually happening during multi-tool-call turns instead of a
+        // generic spinner the whole time. No-op if the loading indicator
+        // isn't showing (e.g. status line arrives after removal - shouldn't
+        // happen, but harmless either way).
+        function updateLoadingStatus(text) {
+            const el = document.getElementById('loading-status-text');
+            if (el) {
+                el.textContent = text;
+            }
+            const messagesContainer = document.getElementById('messages');
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
         function removeLoadingIndicator() {
             const loadingMessage = document.getElementById('loading-message');
             if (loadingMessage) {
                 loadingMessage.remove();
             }
+        }
+
+        // Reads a streamed /api/chat response: zero or more "STATUS:<text>"
+        // lines (fed live into the loading indicator as each tool call
+        // happens - see app.py's generate()/_tool_progress_label()),
+        // followed by exactly one "FINAL:<json>" or "ERROR:<json>" line.
+        // Returns { finalData, errorData } (exactly one of which is set).
+        async function parseChatStream(response) {
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let finalData = null;
+            let errorData = null;
+
+            function handleLine(line) {
+                if (!line) return;
+                if (line.startsWith('STATUS:')) {
+                    updateLoadingStatus(line.slice('STATUS:'.length));
+                } else if (line.startsWith('FINAL:')) {
+                    finalData = JSON.parse(line.slice('FINAL:'.length));
+                } else if (line.startsWith('ERROR:')) {
+                    errorData = JSON.parse(line.slice('ERROR:'.length));
+                }
+            }
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (value) {
+                    buffer += decoder.decode(value, { stream: true });
+                    let newlineIndex;
+                    while ((newlineIndex = buffer.indexOf('\n')) >= 0) {
+                        handleLine(buffer.slice(0, newlineIndex));
+                        buffer = buffer.slice(newlineIndex + 1);
+                    }
+                }
+                if (done) break;
+            }
+            handleLine(buffer); // any trailing unterminated line
+
+            return { finalData, errorData };
         }
 
         // Posts one /api/chat turn. `files` only applies to the first call in
@@ -1392,16 +1459,31 @@
                 let continues = 0;
 
                 while (true) {
+                    updateLoadingStatus('');
                     const response = await postChatMessage(nextMessage, workingHistory, files);
 
                     if (!response.ok) {
+                        // Early (pre-stream) failures - bad request, missing
+                        // credentials, etc. - still come back as plain JSON
+                        // with a non-200 status, not a stream.
                         const error = await response.json();
                         removeLoadingIndicator();
                         addMessage(`Error: ${error.error || 'Unknown error'}`, false);
                         return;
                     }
 
-                    data = await response.json();
+                    const { finalData, errorData } = await parseChatStream(response);
+                    if (errorData) {
+                        removeLoadingIndicator();
+                        addMessage(`Error: ${errorData.error || 'Unknown error'}`, false);
+                        return;
+                    }
+                    if (!finalData) {
+                        removeLoadingIndicator();
+                        addMessage('Error: Unexpected empty response from server', false);
+                        return;
+                    }
+                    data = finalData;
 
                     if (!data.truncated || continues >= MAX_AUTO_CONTINUES) {
                         break;
