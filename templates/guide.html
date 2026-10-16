@@ -219,20 +219,48 @@
       <div class="lab-b">
         <div class="sub">The flagship sales-engineering workflow. ~15–20 minutes, start to finish.</div>
         <h4>Step 1 — Discover the prospect's internet services</h4>
-        <p>Open <a href="https://servicefinder.thousandeyesresearch.com" target="_blank" rel="noopener"><code>servicefinder.thousandeyesresearch.com</code></a>, search the prospect's primary domain (a real prospect, or a well-known brand), and take a screenshot of the results. Pick 5–10 meaningful URLs — homepage, login, API, CDN.</p>
+        <p>Open <a href="https://servicefinder.thousandeyesresearch.com" target="_blank" rel="noopener"><code>servicefinder.thousandeyesresearch.com</code></a>, search the prospect's primary domain (a real prospect, or a well-known brand), and take a screenshot of the full "Results for domain" list. Claude will do the hostname extraction and selection for you in the next step — no need to pre-pick URLs yourself.</p>
         <h4>Step 2 — Ask Claude to create the tests</h4>
         <p>In Claude, attach your screenshot, then send:</p>
-        <div class="prompt">Here is a screenshot of ServiceFinder results for a prospect called [PROSPECT].
-Please create a ThousandEyes page load test for each of these URLs:
-[paste 5–10 URLs, one per line]
+        <div class="prompt">Attached is a screenshot of a "Results for domain" list. Each tile is a
+hostname with its hosting provider underneath. Extract every tile using only
+what's visible. Flag any hostname that looks truncated or misread.
 
-For each test:
-1. Label it with the prefix "[PROSPECT] — " (e.g. "Acme — Homepage")
-2. Assign it to our closest available Enterprise Agent
-3. Use a 5-minute interval
-4. Confirm each test's name and ID once created</div>
+GOAL: pick the 4-5 best ThousandEyes tests to show this customer, to get
+them interested in the product. Then create them with the ThousandEyes MCP
+server. No questions; be conservative if anything is ambiguous.
+
+1. CLASSIFY each hostname as Customer-Facing, Employee Productivity (SaaS,
+   collaboration, CRM, internal tools), or Other. Use the name and provider
+   as clues. Third-party SaaS such as Salesforce and Zoom is in scope.
+   Exclude dev/beta/qa/sandbox hosts and Target-owned private hosts
+   (e.g., guestwifi.ewips).
+
+2. SELECT 5 hosts, favoring:
+   - A mix of both categories (at least 2 of each)
+   - A mix of providers (Fastly, Cloudflare, Salesforce, etc.), since showing
+     how many third parties sit in their delivery path is the story
+   - Business-critical names (storefront, loyalty, support, CRM, meetings)
+   Show me the 5 picks with a one-line reason each, then continue.
+
+3. BASELINE each pick with create_and_run_instant_test (HTTP Server,
+   https://&lt;host&gt;) from one US Cloud Agent. If a pick fails to connect or
+   times out, replace it with the next-best candidate.
+
+4. CREATE with create_synthetic_test: one HTTP Server test per pick,
+   5-minute interval, 4 geographically diverse US Cloud Agents
+   (list_cloud_enterprise_agents), named "DEMO | &lt;host&gt; | &lt;category&gt;".
+   If the baseline returned a redirect or login page (3xx/401/403), set the
+   expected status to match so it doesn't alert as an outage. Skip any host
+   that already has a test (list_tests).
+
+5. TAG all tests "customer-demo" (create_tag if needed).
+
+6. OUTPUT a table: test name, ID, target, provider, category, baseline
+   status, and why it makes a good demo story. Then list the hosts you
+   skipped and why.</div>
         <h4>Step 3 — Pull the results (after ~5 minutes)</h4>
-        <div class="prompt">The tests for [PROSPECT] should have their first results now. Retrieve the latest metrics for every test you created. For each URL show: page load time, HTTP response code, pass/fail, any errors, and which agent ran it. Summarize as a table.</div>
+        <div class="prompt">The tests tagged "customer-demo" should have their first results now. Retrieve the latest metrics for every test with that tag. For each show: page load time, HTTP response code, pass/fail, any errors, and which agent ran it. Summarize as a table.</div>
         <h4>Step 4 — Generate the customer report ★</h4>
         <div class="prompt">Using those results, write a professional customer-facing performance report for [PROSPECT] with: 1) Executive summary, 2) Test coverage table, 3) Key findings, 4) What this means for their business, 5) How ThousandEyes solves it, 6) Recommended next steps (a 30-day trial). Tone: trusted advisor, reference real numbers, not too technical. Audience: a Network Manager / IT Director.</div>
         <div class="plabel">Push it further</div>
