@@ -349,33 +349,57 @@ Note: anomaly detection needs an established baseline, so on tests this new a cl
     <h3 style="color:var(--meraki)">Meraki Labs</h3>
     <div class="note"><span class="i">🔑</span><div>A default shared Meraki organization is already connected for everyone — you don't need to add your own API key or Org ID to do these labs. If you'd rather use your own Meraki organization, go to the <strong>Credentials</strong> page and add your own API key and Org ID; your personal credentials will automatically take priority over the shared default. Delete your personal key later and you'll fall back to the shared default automatically.</div></div>
     <div class="note"><span class="i">✏️</span><div>Prompts below with a <code>[network]</code>, <code>[MX model]</code>, or <code>[switch model]</code> placeholder need that replaced with a real name from your org before you send it — e.g. <code>[network]</code> → <code>API-Branch</code>. If you paste one verbatim, Claude will just ask you which one you meant, costing you a round trip.</div></div>
+    <div class="note"><span class="i">📖</span><div><b>One network, one story.</b> The chapters below build on each other — Lab 2 investigates a real historical incident on this customer's network using actual connection and latency history (not simulated data), and every chapter after that either proves it's resolved or builds the customer-ready story around it. All of it happens in this chat — you never need to open the Meraki dashboard to tell this story.</div></div>
     <div class="mk">
 
-    <div class="lab"><div class="lab-h"><span class="n">LAB 1</span> Overview &amp; device health</div><div class="lab-b">
+    <div class="lab"><div class="lab-h"><span class="n">LAB 1</span> Meet the Network</div><div class="lab-b">
+      <div class="sub">Before you can tell this customer's story, see what you're working with.</div>
       <div class="prompt">Give me a health snapshot of my Meraki organization — how many networks, devices online vs offline, and any active alerts I should know about.</div>
       <div class="prompt">Draw me a physical diagram of my [network] — show every device, how they connect, and what model they are.</div>
       <div class="prompt">Summarize the IP schema for my organization — networks, VLANs, subnet ranges, and the default gateway for each subnet.</div>
       <div class="prompt">Check all switch ports on my [switch model] — which are active, and are any showing errors, drops, or a duplex mismatch?</div>
     </div></div>
 
-    <div class="lab"><div class="lab-h"><span class="n">LAB 2</span> Security &amp; visibility</div><div class="lab-b">
+    <div class="lab"><div class="lab-h"><span class="n">LAB 2</span> The Trouble Ticket</div><div class="lab-b">
+      <div class="sub">Users have been complaining about flaky Wi-Fi this past week. Investigate it with real historical data — not guesses.</div>
+      <div class="prompt">Over the last 7 days on [network], pull wireless connection stats and failed-connection history. Identify the worst day and time window, and which band, SSID, or access point shows the most failures.
+
+If the data actually looks clean with nothing notable, say so explicitly — don't manufacture an incident that isn't there.</div>
+      <div class="prompt">For the worst window you just found, pull client latency history for a few affected clients on that access point/band. Does latency spike too, or is it purely a connection/auth problem? What does that distinction suggest about root cause (RF interference, authentication, capacity, DHCP, etc.)?</div>
+      <div class="prompt">Pull client count history for [network] over the last 7 days — was the network simply over capacity during the worst window, or were there plenty of free client slots? Rule a capacity issue in or out.</div>
+      <div class="prompt">Summarize this for a Network Manager who doesn't look at a dashboard every day: what happened, when, roughly how many users it affected, and your best-supported root cause theory. This is the trouble ticket writeup.</div>
+    </div></div>
+
+    <div class="lab"><div class="lab-h"><span class="n">LAB 3</span> The Risk Review</div><div class="lab-b">
+      <div class="sub">Now that the immediate fire is out, prove this network is secure enough to trust with their business.</div>
       <div class="prompt">Show all firewall rules on my [MX model] and flag any that allow unrestricted inbound traffic from 0.0.0.0/0. Rank by risk and suggest which to tighten.</div>
       <div class="prompt">Conduct a full security audit of my Meraki organization: risky firewall rules, SSID auth modes, and rogue APs (last 7 days). Give each finding a High/Medium/Low risk and a remediation for the top 3.</div>
     </div></div>
     <p class="tip">💡 On the last prompt: if your org has no VPN peers or firmware CVE data configured, a good answer says so explicitly instead of inventing findings — that's Claude staying grounded in real tool output rather than guessing.</p>
 
-    <div class="lab"><div class="lab-h"><span class="n">LAB 3</span> Performance &amp; usage</div><div class="lab-b">
-      <div class="prompt">Draw a performance dashboard for my network — client count per AP, top bandwidth consumers, WAN uplink health, and any high-error devices.</div>
+    <div class="lab"><div class="lab-h"><span class="n">LAB 4</span> Proving It's Fixed</div><div class="lab-b">
+      <div class="sub">Show the customer things are healthy now — and tie it back to what you found in Lab 2.</div>
+      <div class="prompt">Draw a performance dashboard for my network — client count per AP, top bandwidth consumers, WAN uplink health, and any high-error devices. Note whether the access point from the Lab 2 trouble ticket looks healthy now.</div>
       <div class="prompt">Show the top 10 bandwidth consumers this week, broken down by device and application. Flag anyone over 10GB.</div>
-      <div class="prompt">Pull channel utilization for all my APs — are any congested on 2.4GHz or 5GHz? Identify co-channel interference and suggest changes.</div>
+      <div class="prompt">Pull channel utilization for all my APs — are any congested on 2.4GHz or 5GHz? Identify co-channel interference and suggest changes. If this lines up with the root cause from Lab 2, call that out explicitly.</div>
     </div></div>
 
-    <div class="lab"><div class="lab-h"><span class="n">LAB 4</span> Config &amp; optimization</div><div class="lab-b">
+    <div class="lab"><div class="lab-h"><span class="n">LAB 5</span> The Handoff</div><div class="lab-b">
+      <div class="sub">Leave this customer with clean documentation, not tribal knowledge.</div>
       <div class="prompt">Show the VLAN configuration on all switch ports in [network] and flag anything misconfigured — wrong access VLANs, untagged where tagged should be, inconsistencies. Suggest tidy-ups.</div>
       <div class="prompt">Is 802.11r fast roaming enabled on my APs? If not, what are the steps and caveats to turn it on?</div>
       <div class="prompt">Generate a configuration audit of my [network] — devices &amp; serials, SSIDs &amp; security, firewall rules, and firmware status. Format it as a report I could hand to a customer. If any section isn't available for this network, say so rather than guessing.</div>
     </div></div>
     <p class="tip">💡 The Meraki demo org used in this lab doesn't have routed VLANs or a WAN VPN configured on every network, so questions about them may come back "not configured" — that's expected, and a good sign the AI isn't fabricating an answer.</p>
+
+    <div class="lab"><div class="lab-h"><span class="n">LAB 6 ★</span> The Story</div><div class="lab-b">
+      <div class="sub">Bring it all together. One narrative, built entirely from this chat — no dashboard, no manual copy-paste between tools.</div>
+      <div class="prompt">Pull together everything from this session on this customer's network: the trouble ticket from Lab 2 (what broke and why), the risk review findings, the performance proof that it's fixed, and the config/handoff state. Write one cohesive executive narrative (under 400 words) that tells the story: what we found, what we fixed, what we secured, and why that matters for their business. Tone: confident, data-backed, written for a Network Manager / IT Director deciding whether to expand this engagement.</div>
+      <div class="plabel">Push it further</div>
+      <div class="prompt">Turn that narrative into 5 slide talking points I could present live, each with a one-line "so what" for the business.</div>
+      <div class="prompt">What's the one number or finding from this whole session that would make the strongest case for expanding this engagement? Make the case in two sentences.</div>
+      <div class="note" style="margin-top:10px"><span class="i">🏆</span><div>Notice what you just did: reviewed the network, investigated a real incident, proved it was fixed, audited security, cleaned up configuration, and wrote an executive narrative — all without opening the Meraki dashboard once.</div></div>
+    </div></div>
 
     </div>
   </section>
