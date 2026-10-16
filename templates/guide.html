@@ -330,6 +330,7 @@ Note: anomaly detection needs an established baseline, so on tests this new a cl
       <div class="sec-desc">Cisco's official Meraki MCP server, already connected for you — no key, no setup, nothing to install.</div></div>
 
     <div class="note"><span class="i">✅</span><div>Nothing to set up — we've already connected a shared Meraki organization for everyone in this lab. No API key, no Organization ID, no Credentials page needed. If you'd rather use your own Meraki organization instead, you can add your own API key and Org ID on the <strong>Credentials</strong> page and it will automatically take priority.</div></div>
+    <div class="note"><span class="i">🔒</span><div>The shared key is <b>read-only</b> — on purpose. You have full visibility into every network, device, client, and alert, but no prompt in these labs can change a config, so there's nothing to accidentally break. If Claude ever says it can't make a change, that's the read-only key doing its job, not a tool failure.</div></div>
 
     <h4>Verify it's connected</h4>
     <div class="mk"><div class="prompt">What Meraki MCP tools are available to you? List them all.</div></div>
@@ -338,6 +339,8 @@ Note: anomaly detection needs an established baseline, so on tests this new a cl
     <h3 style="color:var(--meraki)">Meraki Labs</h3>
     <div class="note"><span class="i">✏️</span><div>Prompts below with a <code>[network]</code>, <code>[MX model]</code>, or <code>[switch model]</code> placeholder need that replaced with a real name from your org before you send it — e.g. <code>[network]</code> → <code>API-Branch</code>. If you paste one verbatim, Claude will just ask you which one you meant, costing you a round trip.</div></div>
     <div class="note"><span class="i">📖</span><div><b>One network, one story.</b> The chapters below build on each other — Lab 2 investigates a real historical incident on this customer's network using actual connection and latency history (not simulated data), and every chapter after that either proves it's resolved or builds the customer-ready story around it. All of it happens in this chat — you never need to open the Meraki dashboard to tell this story.</div></div>
+    <div class="note"><span class="i">🎯</span><div>For the best results in Lab 2, point Claude at the <code>BR03-Munich</code> network — it currently has the most interesting real activity (an active device alert plus real connection history) to build a story around. You're not limited to it, though — this is a real multi-site org with 6+ branch and hub networks, so feel free to explore others and see what you find.</div></div>
+    <div class="note"><span class="i">🧪</span><div>These prompts are a starting point, not a script. You're encouraged to tweak them, combine them, or write your own entirely — ask follow-up questions, dig into something that looks interesting, or try a network/device the prompts don't mention. That experimentation is part of the lab, not a detour from it.</div></div>
     <div class="mk">
 
     <div class="lab"><div class="lab-h"><span class="n">LAB 1</span> Meet the Network</div><div class="lab-b">
