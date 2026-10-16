@@ -327,27 +327,15 @@ Note: anomaly detection needs an established baseline, so on tests this new a cl
   <section id="sec-meraki">
     <div class="sec-head mk"><div class="sec-tag">Module 2 · Required<a href="#">↑ back to top</a></div>
       <h2>Meraki MCP</h2>
-      <div class="sec-desc">Connect this web app to Cisco's official Meraki MCP server — one API key, pasted once, no install.</div></div>
+      <div class="sec-desc">Cisco's official Meraki MCP server, already connected for you — no key, no setup, nothing to install.</div></div>
 
-    <div class="note"><span class="i">🎟️</span><div>You'll need a <b>Meraki Dashboard API key</b> and your <b>Organization ID</b>. No key today? See the proctor for a demo key, or follow along with the live demo.</div></div>
-
-    <h3>Connect Meraki (2 minutes, in this app)</h3>
-    <p class="lead">The Meraki MCP server is cloud-hosted by Cisco. This lab platform talks to it on your behalf using your own personal API key — nothing to install, nothing to configure locally, no Claude Desktop needed.</p>
-    <div class="mk">
-    <ol class="steps">
-      <li><div><div class="st-t">Get your Meraki API key and Organization ID</div><div class="st-d">In the Meraki Dashboard, go to <b>Organization → Settings → Dashboard API access</b> and generate an API key (or ask your proctor for the demo key). Your <b>Organization ID</b> is the numeric value in the dashboard URL, or ask your proctor.</div></div></li>
-      <li><div><div class="st-t">Open Credentials in this app</div><div class="st-d">Click <b>⚙️ Credentials</b> in the header of the chat page.</div></div></li>
-      <li><div><div class="st-t">Paste your key and Organization ID, then save</div><div class="st-d">Paste the key into the <b>Meraki</b> field, paste your <b>Organization ID</b> into the field below it, and click <b>Save Token</b>. Almost every Meraki tool call needs the Organization ID — saving it here means Claude will use it automatically instead of asking you for it in every message.</div></div></li>
-      <li><div><div class="st-t">Test the connection</div><div class="st-d">Click <b>Test Connection</b>. You should see <b>Connected ✓</b> — that's it, you're done. The header status dot next to "Meraki" will also turn green.</div></div></li>
-    </ol>
-    </div>
+    <div class="note"><span class="i">✅</span><div>Nothing to set up — we've already connected a shared Meraki organization for everyone in this lab. No API key, no Organization ID, no Credentials page needed. If you'd rather use your own Meraki organization instead, you can add your own API key and Org ID on the <strong>Credentials</strong> page and it will automatically take priority.</div></div>
 
     <h4>Verify it's connected</h4>
     <div class="mk"><div class="prompt">What Meraki MCP tools are available to you? List them all.</div></div>
-    <p>If Claude says it has no Meraki tools, go back to <b>Credentials</b> and re-check the key and Test Connection result. If Claude asks you for an Organization ID when running a lab prompt, go back to <b>Credentials</b> and make sure it's saved in the Meraki card.</p>
+    <p>If Claude says it has no Meraki tools, let your proctor know — that would mean something's off with the shared connection, not something you need to fix.</p>
 
     <h3 style="color:var(--meraki)">Meraki Labs</h3>
-    <div class="note"><span class="i">🔑</span><div>A default shared Meraki organization is already connected for everyone — you don't need to add your own API key or Org ID to do these labs. If you'd rather use your own Meraki organization, go to the <strong>Credentials</strong> page and add your own API key and Org ID; your personal credentials will automatically take priority over the shared default. Delete your personal key later and you'll fall back to the shared default automatically.</div></div>
     <div class="note"><span class="i">✏️</span><div>Prompts below with a <code>[network]</code>, <code>[MX model]</code>, or <code>[switch model]</code> placeholder need that replaced with a real name from your org before you send it — e.g. <code>[network]</code> → <code>API-Branch</code>. If you paste one verbatim, Claude will just ask you which one you meant, costing you a round trip.</div></div>
     <div class="note"><span class="i">📖</span><div><b>One network, one story.</b> The chapters below build on each other — Lab 2 investigates a real historical incident on this customer's network using actual connection and latency history (not simulated data), and every chapter after that either proves it's resolved or builds the customer-ready story around it. All of it happens in this chat — you never need to open the Meraki dashboard to tell this story.</div></div>
     <div class="mk">
