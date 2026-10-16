@@ -255,7 +255,9 @@ server. No questions; be conservative if anything is ambiguous.
    expected status to match so it doesn't alert as an outage. Skip any host
    that already has a test (list_tests).
 
-5. TAG all tests "customer-demo" (create_tag if needed).
+5. TAG all tests with key "demo" / value "customer-demo" (create_tag if
+   needed — ThousandEyes tags are key:value pairs, and creating one requires
+   setting access_type to "all"). Then assign that tag to all 5 tests.
 
 6. OUTPUT a table: test name, ID, target, provider, category, baseline
    status, and why it makes a good demo story. Then list the hosts you
@@ -284,10 +286,12 @@ server. No questions; be conservative if anything is ambiguous.
     <div class="lab">
       <div class="lab-h"><span class="n">LAB 3</span> Proving the SLA</div>
       <div class="lab-b">
-        <div class="sub">Your customer's champion needs to go to their boss with proof the trial is working. Build it from data, not vibes.</div>
-        <div class="prompt">Pull historical results for every test tagged "customer-demo" since they were created. For each one show: uptime %, average time-to-first-byte, and average response time. Rank the 5 hosts best to worst.</div>
+        <div class="sub">Your customer's champion needs to go to their boss with proof the trial is working — starting from day one, even with just a few minutes of data.</div>
+        <div class="prompt">Find the test IDs for every test tagged "demo"="customer-demo" (look them up directly rather than filtering metrics by tag, since tag-based metric filters can silently return nothing). Then pull results for those test IDs since they were created. For each show: uptime %, average time-to-first-byte, and average response time. Rank the 5 hosts best to worst.
+
+Be honest about the data window: if it's only been a few minutes, say so explicitly and frame this as "Day 1 baseline" rather than a long-term trend — that's a real and useful thing to show a customer on day one of a trial.</div>
         <div class="prompt">Call out anything that dropped below a 99.5% uptime SLA or had a noticeably slow TTFB compared to the rest. If nothing did, say so clearly — don't manufacture a problem.</div>
-        <div class="prompt">Write a short, 3-4 sentence "proof point" paragraph I could paste into an email to the customer's IT Director, citing the specific numbers above.</div>
+        <div class="prompt">Write a short, 3-4 sentence "proof point" paragraph I could paste into an email to the customer's IT Director, citing the specific numbers above and framing it as "here's what we're already seeing on day one — here's what a full week will show."</div>
       </div>
     </div>
 
@@ -295,9 +299,11 @@ server. No questions; be conservative if anything is ambiguous.
       <div class="lab-h"><span class="n">LAB 4</span> Catching It Before They Do</div>
       <div class="lab-b">
         <div class="sub">The real sales pitch isn't "it works" — it's "we'll know before you do." Prove it on the customer's own tests.</div>
-        <div class="prompt">Analyze the tests tagged "customer-demo" for metric anomalies in the time since they were created. Flag anything statistically unusual, even if it hasn't breached an alert threshold.</div>
+        <div class="prompt">Find the test IDs for every test tagged "demo"="customer-demo" (look them up directly rather than filtering by tag, since tag-based filters can silently return nothing), then analyze those tests for metric anomalies in the time since they were created. Flag anything statistically unusual, even if it hasn't breached an alert threshold.
+
+Note: anomaly detection needs an established baseline, so on tests this new a clean "no anomalies found" is the expected, correct answer — report it as a finding (clean baseline established) rather than treating it as a dead end.</div>
         <div class="prompt">Are any of the "customer-demo" tests showing no data in the last 30 minutes? List them and suggest why they might be silent.</div>
-        <div class="prompt">Pick one host from the "customer-demo" tests and run a fresh agent-to-server instant test against it from a different Cloud Agent than the one already testing it. Report the result immediately — this is the "watch me check it live, right now" moment for the customer.</div>
+        <div class="prompt">Pick one host from the "customer-demo" tests and run a fresh agent-to-server instant test against it from a different Cloud Agent than the one already testing it. This is the "watch me check it live, right now" moment for the customer — results can take up to a minute to populate, so check again if the first read comes back empty.</div>
       </div>
     </div>
 
@@ -305,7 +311,7 @@ server. No questions; be conservative if anything is ambiguous.
       <div class="lab-h"><span class="n">LAB 5 ★</span> The Story</div>
       <div class="lab-b">
         <div class="sub">Bring it all together. One narrative, built entirely from this chat — no dashboard, no slides software, no manual copy-paste between tools.</div>
-        <div class="prompt">Pull together everything from this session on my customer's "customer-demo" tests: the outage/triage check from earlier, the SLA proof numbers, and the anomaly/live-check result. Write one cohesive executive narrative (under 400 words) that tells the story of this trial: what we watched, what we proved, what we caught early, and why that matters for their business. Tone: confident, data-backed, written for a Network Manager / IT Director deciding whether to expand the trial.</div>
+        <div class="prompt">Pull together everything from this session on my customer's "customer-demo" tests: the outage/triage check from earlier, the SLA proof numbers, and the anomaly/live-check result. Write one cohesive executive narrative (under 400 words) that tells the story of this trial's Day 1: what we watched, what we proved, what we caught early, and why that matters for their business — plus one line on what a full week of data will add. Tone: confident, data-backed, written for a Network Manager / IT Director deciding whether to expand the trial.</div>
         <div class="plabel">Push it further</div>
         <div class="prompt">Turn that narrative into 5 slide talking points I could present live, each with a one-line "so what" for the business.</div>
         <div class="prompt">What's the one number or finding from this whole session that would make the strongest case for expanding this trial? Make the case in two sentences.</div>
