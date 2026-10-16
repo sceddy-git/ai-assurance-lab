@@ -212,6 +212,7 @@
 
     <!-- TE LABS -->
     <h3 style="color:var(--te)">ThousandEyes Labs</h3>
+    <div class="note"><span class="i">📖</span><div><b>One customer, one story.</b> The 5 labs below are chapters, not one-offs — Lab 1 picks a real customer and creates 5 <code>customer-demo</code>-tagged tests for them; every chapter after that (triage, SLA proof, anomaly detection, final report) works off those exact same tests. Every chapter happens entirely in this chat — you never need to open the ThousandEyes UI to tell this story.</div></div>
     <div class="te">
 
     <div class="lab">
@@ -270,32 +271,45 @@ server. No questions; be conservative if anything is ambiguous.
     </div>
 
     <div class="lab">
-      <div class="lab-h"><span class="n">LAB 2</span> Real-time outage triage</div>
+      <div class="lab-h"><span class="n">LAB 2</span> The Outage Call</div>
       <div class="lab-b">
-        <div class="sub">Interrogate an active alert in plain English.</div>
+        <div class="sub">Three weeks into the trial, your customer's NOC calls — something's alerting. Interrogate it in plain English.</div>
         <div class="prompt">List all active ThousandEyes alerts right now and tell me which have been firing for more than 15 minutes.</div>
         <div class="prompt">Troubleshoot the most critical alert. Suggest a probable fault domain and give me the supporting evidence from the test data.</div>
         <div class="prompt">Which enterprise agents are reporting packet loss greater than 1% to the affected target right now? Show me the path-visualization summary.</div>
+        <div class="prompt">Now check on my customer's own tests specifically: look at every test tagged "customer-demo" and tell me if any of them are currently showing errors, failures, or response times noticeably above their baseline. This is what I'd tell the customer if they asked "is our stuff okay right now?"</div>
       </div>
     </div>
 
     <div class="lab">
-      <div class="lab-h"><span class="n">LAB 3</span> Historical performance deep-dive</div>
+      <div class="lab-h"><span class="n">LAB 3</span> Proving the SLA</div>
       <div class="lab-b">
-        <div class="sub">Prove or disprove a reported slowdown with data.</div>
-        <div class="prompt">Show me uptime and time-to-first-byte for the Customer Portal HTTP test over the last 24 hours. Call out any drops below our 99.5% SLA.</div>
-        <div class="prompt">Which regions showed elevated page-load time between 08:00 and 10:00 UTC today? Rank them worst to best.</div>
-        <div class="prompt">Compare this week's average latency against last week for the same test. Improved or degraded, and by how much?</div>
+        <div class="sub">Your customer's champion needs to go to their boss with proof the trial is working. Build it from data, not vibes.</div>
+        <div class="prompt">Pull historical results for every test tagged "customer-demo" since they were created. For each one show: uptime %, average time-to-first-byte, and average response time. Rank the 5 hosts best to worst.</div>
+        <div class="prompt">Call out anything that dropped below a 99.5% uptime SLA or had a noticeably slow TTFB compared to the rest. If nothing did, say so clearly — don't manufacture a problem.</div>
+        <div class="prompt">Write a short, 3-4 sentence "proof point" paragraph I could paste into an email to the customer's IT Director, citing the specific numbers above.</div>
       </div>
     </div>
 
     <div class="lab">
-      <div class="lab-h"><span class="n">LAB 4</span> Anomaly detection &amp; instant tests</div>
+      <div class="lab-h"><span class="n">LAB 4</span> Catching It Before They Do</div>
       <div class="lab-b">
-        <div class="sub">Surface hidden problems before users notice.</div>
-        <div class="prompt">Analyze all ThousandEyes tests for metric anomalies in the past 2 hours. Flag anything statistically unusual even if it hasn't breached an alert threshold.</div>
-        <div class="prompt">Are there any tests with no data in the last 30 minutes? List them and suggest why they might be silent.</div>
-        <div class="prompt">Run an agent-to-server instant test from our St. Louis Enterprise Agent to api.example.com port 443 and report the result immediately.</div>
+        <div class="sub">The real sales pitch isn't "it works" — it's "we'll know before you do." Prove it on the customer's own tests.</div>
+        <div class="prompt">Analyze the tests tagged "customer-demo" for metric anomalies in the time since they were created. Flag anything statistically unusual, even if it hasn't breached an alert threshold.</div>
+        <div class="prompt">Are any of the "customer-demo" tests showing no data in the last 30 minutes? List them and suggest why they might be silent.</div>
+        <div class="prompt">Pick one host from the "customer-demo" tests and run a fresh agent-to-server instant test against it from a different Cloud Agent than the one already testing it. Report the result immediately — this is the "watch me check it live, right now" moment for the customer.</div>
+      </div>
+    </div>
+
+    <div class="lab">
+      <div class="lab-h"><span class="n">LAB 5 ★</span> The Story</div>
+      <div class="lab-b">
+        <div class="sub">Bring it all together. One narrative, built entirely from this chat — no dashboard, no slides software, no manual copy-paste between tools.</div>
+        <div class="prompt">Pull together everything from this session on my customer's "customer-demo" tests: the outage/triage check from earlier, the SLA proof numbers, and the anomaly/live-check result. Write one cohesive executive narrative (under 400 words) that tells the story of this trial: what we watched, what we proved, what we caught early, and why that matters for their business. Tone: confident, data-backed, written for a Network Manager / IT Director deciding whether to expand the trial.</div>
+        <div class="plabel">Push it further</div>
+        <div class="prompt">Turn that narrative into 5 slide talking points I could present live, each with a one-line "so what" for the business.</div>
+        <div class="prompt">What's the one number or finding from this whole session that would make the strongest case for expanding this trial? Make the case in two sentences.</div>
+        <div class="note" style="margin-top:10px"><span class="i">🏆</span><div>Notice what you just did: discovered the customer's services, created real tests, triaged an alert, proved an SLA, caught an anomaly, and wrote an executive narrative — all without opening <code>thousandeyes.com</code> once.</div></div>
       </div>
     </div>
 
@@ -480,6 +494,16 @@ by http_user_agent dest src status
     <p>Open <b>⚙️ Credentials</b> and check the status for that service. If it doesn't say <b>Connected ✓</b>, re-paste the token/key and click <b>Test Connection</b> again. Then start a new chat message — tool availability is refreshed per request.</p>
     <h4>ThousandEyes won't connect</h4>
     <p>Confirm your account has <b>API Access</b> permission and your org isn't opted out of AI features. Demo accounts from the proctor already satisfy both. Double-check you copied the full token with no extra spaces.</p>
+    <h4>How to get your ThousandEyes OAuth Bearer Token</h4>
+    <div class="te">
+    <ol class="steps">
+      <li><div><div class="st-t">Go to Users and Roles</div><div class="st-d">In ThousandEyes, go to <b>Account Settings → Users and Roles</b>.</div></div></li>
+      <li><div><div class="st-t">Find the OAuth Bearer Token control</div><div class="st-d">On the <b>Profile</b> tab, scroll to the bottom and click <b>Create</b> next to <b>OAuth Bearer Token</b> — <i>not</i> the Basic Auth token.</div></div></li>
+      <li><div><div class="st-t">Enter your 2-factor code</div><div class="st-d">A 2-factor code is emailed to you. Paste it in when prompted.</div></div></li>
+      <li><div><div class="st-t">Copy the token immediately</div><div class="st-d">Your token is shown once in a popup window. Copy it right away.</div></div></li>
+    </ol>
+    </div>
+    <div class="note"><span class="i">⚠️</span><div><b>You only get to see it once.</b> If you close the popup without copying the token, you cannot retrieve it again — you'll have to <b>revoke</b> that token and repeat the whole process to generate a new one. Copy it to somewhere safe (Notepad/TextEdit) the first time.</div></div>
     <h4>Meraki won't connect</h4>
     <p>Confirm the API key is correct and that your Meraki Organization ID matches an org that key has access to. Re-paste both in <b>⚙️ Credentials</b> and click <b>Test Connection</b>.</p>
     <h4>Splunk won't connect (bonus module)</h4>
