@@ -146,7 +146,7 @@
   <h1>AI Assurance — Partner <em>MCP</em> Day</h1>
   <div class="sub">Lab Guide — turning plain English into real network action with Claude &amp; MCP</div>
   <div class="pills">
-    <a href="#sec-te" class="pill" style="border-color:var(--te)">ThousandEyes</a><a href="#sec-meraki" class="pill" style="border-color:var(--meraki)">Meraki Magic</a>
+    <a href="#sec-te" class="pill" style="border-color:var(--te)">ThousandEyes</a><a href="#sec-meraki" class="pill" style="border-color:var(--meraki)">Meraki</a>
     <a href="#sec-splunk" class="pill" style="border-color:var(--splunk)">Splunk</a>
   </div>
 </div>
@@ -527,7 +527,7 @@ by http_user_agent dest src status
     </div>
     <div class="note"><span class="i">⚠️</span><div><b>You only get to see it once.</b> If you close the popup without copying the token, you cannot retrieve it again — you'll have to <b>revoke</b> that token and repeat the whole process to generate a new one. Copy it to somewhere safe (Notepad/TextEdit) the first time.</div></div>
     <h4>Meraki won't connect</h4>
-    <p>Confirm the API key is correct and that your Meraki Organization ID matches an org that key has access to. Re-paste both in <b>⚙️ Credentials</b> and click <b>Test Connection</b>.</p>
+    <p>The shared org is pre-connected for everyone, so this is rare. If Claude says it has no Meraki tools, let your proctor know. If you added your own Meraki API key and Org ID on <b>⚙️ Credentials</b>, confirm the key is correct and the Org ID matches an org that key has access to, then click <b>Test Connection</b> again.</p>
     <h4>Splunk won't connect (bonus module)</h4>
     <p>Confirm the MCP Server URL is reachable from the internet (this app runs in the cloud, so <code>localhost</code> URLs won't work — you need a tunnel like ngrok, or the facilitator's shared URL). If your server enforces an auth token, make sure it's entered in <b>⚙️ Credentials</b> too. If you're running your own local server, check its own Splunk host/port/credentials configuration separately — that's set up on the server side, not in this app.</p>
     <h4>Quick glossary</h4>
@@ -535,7 +535,7 @@ by http_user_agent dest src status
       <li><b>MCP</b> — Model Context Protocol; the standard that lets Claude use external tools.</li>
       <li><b>Connector</b> — how you add an MCP server to Claude (remote URL + OAuth, or a local command).</li>
       <li><b>Enterprise Agent</b> — a ThousandEyes vantage point that runs your tests.</li>
-      <li><b>Org ID / API key</b> — your Meraki Dashboard credentials, entered once in <b>⚙️ Credentials</b>.</li>
+      <li><b>Shared org</b> — the Meraki organization everyone in the lab is already connected to; no API key or Org ID needed unless you choose to use your own.</li>
     </ul>
   </section>
 
