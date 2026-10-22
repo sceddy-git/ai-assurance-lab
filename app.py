@@ -189,12 +189,26 @@ def _detect_lab_checkpoints(user_message: str) -> set:
     return matched
 
 
-# Matches the guide's LAB 1 "Prospect Demo" prompt: "...for a prospect called
-# [PROSPECT]." — students paste this verbatim, replacing only the bracketed
-# name, so this reliably pulls out the real company/prospect name they
-# researched on ServiceFinder. Proctors want this list for sales follow-up
-# and to see what real-world domains people are practicing on.
-_PROSPECT_NAME_RE = re.compile(r'prospect (?:called|named)\s+([^\n.,]{2,80})', re.IGNORECASE)
+# Matches the guide's LAB 1 "Prospect Demo" prompt so we can pull out the
+# real company/prospect name a student researched on ServiceFinder. Proctors
+# want this list for sales follow-up and to see what real-world domains
+# people are practicing on.
+#
+# Two patterns, tried in order:
+#   1. Current guide wording (Step 4, "Generate the customer report"):
+#      "...write a professional customer-facing performance report for
+#      [PROSPECT] with: 1) Executive summary..." - the name sits between
+#      "report for" and "with:", since the Step 1-2 prompts no longer name
+#      the prospect in text at all (students attach a ServiceFinder
+#      screenshot instead - see _extract_prospect_info's docstring).
+#   2. Older guide wording (kept for backward compatibility with students
+#      referencing a cached/printed copy of a previous guide revision):
+#      "...for a prospect called [PROSPECT]."
+_PROSPECT_NAME_RE = re.compile(
+    r'(?:customer-facing\s+)?(?:performance\s+)?report for\s+([^\n,:]{2,80}?)\s+with\b'
+    r'|prospect (?:called|named)\s+([^\n.,]{2,80})',
+    re.IGNORECASE,
+)
 # Loose URL/domain matcher for the block of URLs students paste under the
 # same prompt (one per line, may or may not include a scheme).
 _URL_RE = re.compile(r'\b(?:https?://)?(?:www\.)?[a-zA-Z0-9][a-zA-Z0-9-]*(?:\.[a-zA-Z0-9-]+)+(?:/[^\s,]*)?\b')
@@ -209,7 +223,10 @@ def _extract_prospect_info(user_message: str) -> Optional[dict]:
     name_match = _PROSPECT_NAME_RE.search(user_message)
     if not name_match:
         return None
-    name = name_match.group(1).strip().strip('*_"\'')
+    # Group 1 = current "report for X with:" wording, group 2 = older
+    # "prospect called/named X" wording - exactly one will be populated
+    # depending on which alternative matched.
+    name = (name_match.group(1) or name_match.group(2) or '').strip().strip('*_"\'')
     if not name:
         return None
 
