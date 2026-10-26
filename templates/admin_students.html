@@ -709,7 +709,7 @@
                                 <td>${escapeHtml(student.first_name)}</td>
                                 <td>${escapeHtml(student.last_name)}</td>
                                 <td>${escapeHtml(student.company)}</td>
-                                <td>${escapeHtml(student.class_id)}</td>
+                                <td>${escapeHtml(student.class_name)}</td>
                                 <td>${new Date(student.created).toLocaleDateString()}</td>
                                 <td><span style="color: ${statusColor}; font-weight: 600;">${statusText}</span></td>
                                 <td>${tokenBadges(student)}</td>
@@ -719,21 +719,25 @@
                             // crafted email/company value from the public self-signup
                             // form can never break out of an inline handler string.
                             const actionsCell = row.cells[row.cells.length - 1];
-                            actionsCell.style.whiteSpace = 'nowrap';
+                            actionsCell.style.display = 'flex';
+                            actionsCell.style.flexWrap = 'wrap';
+                            actionsCell.style.gap = '6px';
+                            actionsCell.style.minWidth = '80px';
 
                             const toggleBtn = document.createElement('button');
                             toggleBtn.className = `button ${isEnabled ? 'danger' : 'secondary'}`;
-                            toggleBtn.style.padding = '6px 12px';
+                            toggleBtn.style.padding = '6px 10px';
                             toggleBtn.style.fontSize = '12px';
-                            toggleBtn.style.marginRight = '6px';
+                            toggleBtn.style.whiteSpace = 'nowrap';
                             toggleBtn.textContent = isEnabled ? 'Disable' : 'Enable';
                             toggleBtn.addEventListener('click', () => toggleStudent(student.email, !isEnabled));
                             actionsCell.appendChild(toggleBtn);
 
                             const deleteBtn = document.createElement('button');
                             deleteBtn.className = 'button danger';
-                            deleteBtn.style.padding = '6px 12px';
+                            deleteBtn.style.padding = '6px 10px';
                             deleteBtn.style.fontSize = '12px';
+                            deleteBtn.style.whiteSpace = 'nowrap';
                             deleteBtn.textContent = 'Delete';
                             deleteBtn.addEventListener('click', () => deleteStudent(student.email));
                             actionsCell.appendChild(deleteBtn);

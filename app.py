@@ -1625,6 +1625,14 @@ def list_students():
             if not pagination_token:
                 break
 
+        # Build a class_id -> human-readable name lookup once, rather than
+        # hitting the small Classes table per-student.
+        try:
+            class_names = {c['class_id']: c.get('name') or c['class_id'] for c in list_classes()}
+        except Exception as e:
+            logger.warning(f"Could not load class names: {e}")
+            class_names = {}
+
         students = []
         for user in users:
             email = next((attr['Value'] for attr in user['Attributes'] if attr['Name'] == 'email'), '')
@@ -1639,6 +1647,8 @@ def list_students():
                 logger.warning(f"Could not load credential status for {email}: {e}")
                 creds = {}
 
+            class_id = creds.get('class_id')
+
             students.append({
                 'email': email,
                 'first_name': first_name,
@@ -1650,7 +1660,8 @@ def list_students():
                 'meraki_connected': bool(creds.get('meraki_connected')),
                 'splunk_connected': bool(creds.get('splunk_connected')),
                 'company': creds.get('company'),
-                'class_id': creds.get('class_id')
+                'class_id': class_id,
+                'class_name': class_names.get(class_id, class_id) if class_id else ''
             })
         
         return jsonify({
