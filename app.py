@@ -1715,6 +1715,63 @@ def delete_all_students():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/admin/students/disable-all', methods=['POST'])
+@login_required
+def disable_all_students():
+    """Soft-disable Cognito login for every current student. Proctors (and
+    the super admin) are never touched by this. Unlike delete-all, this
+    keeps every student's Cognito account, credentials, and activity
+    history intact - it only blocks sign-in, and can be undone per-student
+    (or by re-running this) at any time."""
+    user_email = session.get('user_email', '')
+    if not _is_proctor(user_email):
+        return jsonify({'error': 'Access denied'}), 403
+
+    proctor_emails = set(_get_proctor_emails())
+
+    try:
+        users = []
+        pagination_token = None
+        while True:
+            kwargs = {'UserPoolId': os.getenv('COGNITO_USER_POOL_ID'), 'Limit': 60}
+            if pagination_token:
+                kwargs['PaginationToken'] = pagination_token
+            response = cognito_client.list_users(**kwargs)
+            users.extend(response.get('Users', []))
+            pagination_token = response.get('PaginationToken')
+            if not pagination_token:
+                break
+
+        disabled = 0
+        skipped = 0
+        failed = []
+        for user in users:
+            email = next((attr['Value'] for attr in user['Attributes'] if attr['Name'] == 'email'), '')
+            if not email:
+                continue
+            if email.strip().lower() in proctor_emails:
+                skipped += 1
+                continue
+            try:
+                _disable_cognito_user(email)
+                set_disabled(email, True)
+                disabled += 1
+            except Exception as e:
+                logger.warning(f"Failed to disable user {email}: {str(e)}")
+                failed.append(email)
+
+        return jsonify({
+            'status': 'success',
+            'disabled': disabled,
+            'skipped_proctors': skipped,
+            'failed': failed,
+        })
+
+    except Exception as e:
+        logger.error(f"Error disabling all students: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
 # ============================================================================
 # Proctor Management Routes (proctors only)
 # ============================================================================
@@ -1850,6 +1907,35 @@ def enable_student(target_email):
         return jsonify({'status': 'success'})
     except Exception as e:
         logger.error(f"Error enabling student {target_email}: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/students/<path:target_email>/delete', methods=['POST'])
+@login_required
+def delete_student(target_email):
+    """Permanently delete one student's Cognito login. Their encrypted
+    credentials row in DynamoDB is left as-is (keyed by email, harmless if
+    orphaned - re-adding the same email later just re-enters it normally),
+    matching how Delete All Students has always behaved. Proctors (and the
+    super admin) can never be deleted through this route - remove proctor
+    status first via the Proctors section if that's really the intent."""
+    user_email = session.get('user_email', '')
+    if not _is_proctor(user_email):
+        return jsonify({'error': 'Access denied'}), 403
+
+    if target_email.strip().lower() in set(_get_proctor_emails()):
+        return jsonify({'error': 'This account is a proctor - remove proctor status first in the Proctors section below.'}), 403
+
+    try:
+        cognito_client.admin_delete_user(
+            UserPoolId=os.getenv('COGNITO_USER_POOL_ID'),
+            Username=target_email
+        )
+        return jsonify({'status': 'success'})
+    except cognito_client.exceptions.UserNotFoundException:
+        return jsonify({'error': 'Student not found'}), 404
+    except Exception as e:
+        logger.error(f"Error deleting student {target_email}: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 

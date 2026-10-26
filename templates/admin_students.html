@@ -401,15 +401,17 @@
                 </button>
             </div>
 
-            <!-- Delete All Section -->
+            <!-- Disable All Section -->
             <div class="section">
                 <h2><span class="icon">🔄</span> Reset Students</h2>
                 <p style="color: #666; margin-bottom: 15px; font-size: 14px;">
-                    Delete all current students to prepare for a new cohort. This cannot be undone.
-                    Proctors are never deleted by this — they're accounts that persist across cohorts.
+                    Disable login for all current students to close out a cohort. Their credentials,
+                    chat history, and progress are all kept — any student can be individually
+                    re-enabled (or deleted) any time below. Proctors are never affected by this —
+                    they're accounts that persist across cohorts.
                 </p>
-                <button class="button danger" onclick="deleteAllStudents()">
-                    Delete All Students
+                <button class="button danger" onclick="disableAllStudents()">
+                    Disable All Students
                 </button>
             </div>
 
@@ -714,13 +716,25 @@
                             // Built via DOM APIs (not string-interpolated HTML) so a
                             // crafted email/company value from the public self-signup
                             // form can never break out of an inline handler string.
+                            const actionsCell = row.cells[row.cells.length - 1];
+                            actionsCell.style.whiteSpace = 'nowrap';
+
                             const toggleBtn = document.createElement('button');
                             toggleBtn.className = `button ${isEnabled ? 'danger' : 'secondary'}`;
                             toggleBtn.style.padding = '6px 12px';
                             toggleBtn.style.fontSize = '12px';
+                            toggleBtn.style.marginRight = '6px';
                             toggleBtn.textContent = isEnabled ? 'Disable' : 'Enable';
                             toggleBtn.addEventListener('click', () => toggleStudent(student.email, !isEnabled));
-                            row.cells[row.cells.length - 1].appendChild(toggleBtn);
+                            actionsCell.appendChild(toggleBtn);
+
+                            const deleteBtn = document.createElement('button');
+                            deleteBtn.className = 'button danger';
+                            deleteBtn.style.padding = '6px 12px';
+                            deleteBtn.style.fontSize = '12px';
+                            deleteBtn.textContent = 'Delete';
+                            deleteBtn.addEventListener('click', () => deleteStudent(student.email));
+                            actionsCell.appendChild(deleteBtn);
                         });
                     }
                 })
@@ -747,18 +761,29 @@
                 .catch(error => alert('Error: ' + error.message));
         }
 
-        function deleteAllStudents() {
-            if (!confirm('⚠️ Are you sure? This will delete ALL students. This cannot be undone!')) {
-                return;
-            }
+        function deleteStudent(email) {
+            if (!confirm(`Permanently delete ${email}? This cannot be undone. Their chat history and credentials row is left in place but orphaned - re-adding the same email later starts them fresh.`)) return;
 
-            if (!confirm('This is permanent. Delete all students?')) {
+            fetch(`/api/admin/students/${encodeURIComponent(email)}/delete`, { method: 'POST' })
+                .then(response => response.json().then(data => ({ ok: response.ok, data })))
+                .then(({ ok, data }) => {
+                    if (ok && data.status === 'success') {
+                        loadStudents();
+                    } else {
+                        alert('Error: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => alert('Error: ' + error.message));
+        }
+
+        function disableAllStudents() {
+            if (!confirm('Disable login for ALL current students? Their credentials and history are kept, and any student can be re-enabled individually afterward.')) {
                 return;
             }
 
             loading.style.display = 'block';
 
-            fetch('/api/admin/students/delete-all', {
+            fetch('/api/admin/students/disable-all', {
                 method: 'POST'
             })
             .then(response => response.json())
@@ -768,12 +793,12 @@
                     uploadResults.classList.add('show', 'success');
                     document.getElementById('resultsContent').innerHTML = `
                         <div class="result-stat">
-                            <span class="stat-number">${data.deleted}</span>
-                            <span>Students deleted</span>
+                            <span class="stat-number">${data.disabled}</span>
+                            <span>Students disabled</span>
                         </div>
                         <div class="result-stat">
                             <span class="stat-number">${data.skipped_proctors || 0}</span>
-                            <span>Proctors kept (not deleted)</span>
+                            <span>Proctors kept active (not touched)</span>
                         </div>`;
                     setTimeout(loadStudents, 1500);
                 } else {
