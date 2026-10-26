@@ -133,6 +133,88 @@
             background: #ef4444;
         }
 
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal-box {
+            background: white;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 420px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 24px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .modal-header h3 {
+            font-size: 15px;
+            word-break: break-all;
+            padding-right: 10px;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            line-height: 1;
+            cursor: pointer;
+            color: #999;
+            padding: 0;
+        }
+
+        .modal-close:hover {
+            color: #333;
+        }
+
+        .modal-body {
+            padding: 24px;
+        }
+
+        .modal-field {
+            font-size: 14px;
+            color: #444;
+            margin-bottom: 10px;
+        }
+
+        .modal-actions {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .modal-actions .button {
+            margin: 0;
+        }
+
+        .modal-message {
+            margin-top: 14px;
+            font-size: 13px;
+            text-align: center;
+        }
+
+        .modal-message.success { color: #10b981; }
+        .modal-message.error { color: #ef4444; }
+
         .results {
             background: #f8f9fa;
             border-left: 4px solid #667eea;
@@ -225,6 +307,10 @@
             text-align: left;
             font-weight: 600;
             color: #667eea;
+        }
+
+        #studentsBody tr:hover {
+            background: #f8f9fa;
         }
 
         td {
@@ -467,6 +553,7 @@
 
                 <div id="studentsList" style="display: none;">
                     <div class="student-count" id="studentCount"></div>
+                    <p style="color: #666; font-size: 13px; margin-bottom: 10px;">Click a student row to manage their account.</p>
                     <table id="studentsTable">
                         <thead>
                             <tr>
@@ -478,7 +565,6 @@
                                 <th>Created</th>
                                 <th>Status</th>
                                 <th>API Tokens</th>
-                                <th></th>
                             </tr>
                         </thead>
                         <tbody id="studentsBody">
@@ -490,6 +576,30 @@
                     <p>No students currently enrolled.</p>
                     <p>Upload a CSV file to create student accounts.</p>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Student Management Modal -->
+
+    <div class="modal-overlay" id="studentModal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3 id="modalEmail">student@example.com</h3>
+                <button class="modal-close" onclick="closeStudentModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-field"><strong>Name:</strong> <span id="modalName"></span></div>
+                <div class="modal-field"><strong>Company:</strong> <span id="modalCompany"></span></div>
+                <div class="modal-field"><strong>Class:</strong> <span id="modalClass"></span></div>
+                <div class="modal-field"><strong>Status:</strong> <span id="modalStatus"></span></div>
+
+                <div class="modal-actions">
+                    <button class="button" id="modalToggleBtn" style="width: 100%;">Disable</button>
+                    <button class="button secondary" id="modalResetBtn" style="width: 100%; margin-left: 0;">Reset Password</button>
+                    <button class="button danger" id="modalDeleteBtn" style="width: 100%;">Delete Student</button>
+                </div>
+                <div class="modal-message" id="modalMessage"></div>
             </div>
         </div>
     </div>
@@ -704,6 +814,8 @@
                             const isEnabled = student.enabled !== false;
                             const statusColor = isEnabled ? '#10b981' : '#ef4444';
                             const statusText = isEnabled ? student.status : 'DISABLED';
+                            row.style.cursor = 'pointer';
+                            row.title = 'Click to manage this student';
                             row.innerHTML = `
                                 <td>${escapeHtml(student.email)}</td>
                                 <td>${escapeHtml(student.first_name)}</td>
@@ -713,39 +825,8 @@
                                 <td>${new Date(student.created).toLocaleDateString()}</td>
                                 <td><span style="color: ${statusColor}; font-weight: 600;">${statusText}</span></td>
                                 <td>${tokenBadges(student)}</td>
-                                <td></td>
                             `;
-                            // Built via DOM APIs (not string-interpolated HTML) so a
-                            // crafted email/company value from the public self-signup
-                            // form can never break out of an inline handler string.
-                            const actionsCell = row.cells[row.cells.length - 1];
-                            const actionsWrap = document.createElement('div');
-                            actionsWrap.style.display = 'flex';
-                            actionsWrap.style.flexWrap = 'wrap';
-                            actionsWrap.style.gap = '6px';
-                            actionsCell.appendChild(actionsWrap);
-
-                            const toggleBtn = document.createElement('button');
-                            toggleBtn.className = `button ${isEnabled ? 'danger' : 'secondary'}`;
-                            toggleBtn.style.margin = '0';
-                            toggleBtn.style.padding = '6px 10px';
-                            toggleBtn.style.fontSize = '12px';
-                            toggleBtn.style.whiteSpace = 'nowrap';
-                            toggleBtn.textContent = isEnabled ? 'Disable' : 'Enable';
-                            toggleBtn.addEventListener('click', () => toggleStudent(student.email, !isEnabled));
-                            actionsWrap.appendChild(toggleBtn);
-
-                            const deleteBtn = document.createElement('button');
-                            deleteBtn.className = 'button danger';
-                            deleteBtn.style.margin = '0';
-                            deleteBtn.style.padding = '6px 10px';
-                            deleteBtn.style.fontSize = '12px';
-                            deleteBtn.style.whiteSpace = 'nowrap';
-                            deleteBtn.style.background = '#991b1b';
-                            deleteBtn.style.border = '1px solid #7f1d1d';
-                            deleteBtn.textContent = '🗑 Delete';
-                            deleteBtn.addEventListener('click', () => deleteStudent(student.email));
-                            actionsWrap.appendChild(deleteBtn);
+                            row.addEventListener('click', () => openStudentModal(student));
                         });
                     }
                 })
@@ -756,35 +837,110 @@
                 });
         }
 
+        // ---- Student management modal ----
+        let currentModalStudent = null;
+
+        function openStudentModal(student) {
+            currentModalStudent = student;
+            const isEnabled = student.enabled !== false;
+
+            document.getElementById('modalEmail').textContent = student.email;
+            document.getElementById('modalName').textContent =
+                [student.first_name, student.last_name].filter(Boolean).join(' ') || '(no name on file)';
+            document.getElementById('modalCompany').textContent = student.company || '—';
+            document.getElementById('modalClass').textContent = student.class_name || '—';
+            document.getElementById('modalStatus').innerHTML = isEnabled
+                ? `<span style="color: #10b981; font-weight: 600;">${escapeHtml(student.status)}</span>`
+                : `<span style="color: #ef4444; font-weight: 600;">DISABLED</span>`;
+
+            const toggleBtn = document.getElementById('modalToggleBtn');
+            toggleBtn.textContent = isEnabled ? 'Disable Login' : 'Enable Login';
+            toggleBtn.className = `button ${isEnabled ? 'danger' : 'secondary'}`;
+
+            const modalMessage = document.getElementById('modalMessage');
+            modalMessage.textContent = '';
+            modalMessage.className = 'modal-message';
+
+            document.getElementById('studentModal').classList.add('show');
+        }
+
+        function closeStudentModal() {
+            document.getElementById('studentModal').classList.remove('show');
+            currentModalStudent = null;
+        }
+
+        document.getElementById('studentModal').addEventListener('click', (e) => {
+            if (e.target.id === 'studentModal') closeStudentModal();
+        });
+
+        function showModalMessage(text, isError) {
+            const modalMessage = document.getElementById('modalMessage');
+            modalMessage.textContent = text;
+            modalMessage.className = 'modal-message ' + (isError ? 'error' : 'success');
+        }
+
+        document.getElementById('modalToggleBtn').addEventListener('click', () => {
+            if (!currentModalStudent) return;
+            const email = currentModalStudent.email;
+            const enable = currentModalStudent.enabled === false;
+            if (!enable && !confirm(`Disable login for ${email}? Their data/history is kept - you can re-enable any time.`)) return;
+
+            toggleStudent(email, enable);
+        });
+
+        document.getElementById('modalResetBtn').addEventListener('click', () => {
+            if (!currentModalStudent) return;
+            const email = currentModalStudent.email;
+            if (!confirm(`Send a password reset to ${email}? They'll need to use "Forgot password" on the login page with the code Cognito emails them.`)) return;
+
+            fetch(`/api/admin/students/${encodeURIComponent(email)}/reset-password`, { method: 'POST' })
+                .then(response => response.json().then(data => ({ ok: response.ok, data })))
+                .then(({ ok, data }) => {
+                    if (ok && data.status === 'success') {
+                        showModalMessage('Password reset started - they\'ll get an email with a reset code.', false);
+                    } else {
+                        showModalMessage('Error: ' + (data.error || 'Unknown error'), true);
+                    }
+                })
+                .catch(error => showModalMessage('Error: ' + error.message, true));
+        });
+
+        document.getElementById('modalDeleteBtn').addEventListener('click', () => {
+            if (!currentModalStudent) return;
+            const email = currentModalStudent.email;
+            if (!confirm(`Permanently delete ${email}? This cannot be undone. Their chat history and credentials row is left in place but orphaned - re-adding the same email later starts them fresh.`)) return;
+
+            deleteStudent(email);
+        });
+
         function toggleStudent(email, enable) {
             const action = enable ? 'enable' : 'disable';
-            if (!enable && !confirm(`Disable login for ${email}? Their data/history is kept - you can re-enable any time.`)) return;
 
             fetch(`/api/admin/students/${encodeURIComponent(email)}/${action}`, { method: 'POST' })
                 .then(response => response.json().then(data => ({ ok: response.ok, data })))
                 .then(({ ok, data }) => {
                     if (ok && data.status === 'success') {
+                        closeStudentModal();
                         loadStudents();
                     } else {
-                        alert('Error: ' + (data.error || 'Unknown error'));
+                        showModalMessage('Error: ' + (data.error || 'Unknown error'), true);
                     }
                 })
-                .catch(error => alert('Error: ' + error.message));
+                .catch(error => showModalMessage('Error: ' + error.message, true));
         }
 
         function deleteStudent(email) {
-            if (!confirm(`Permanently delete ${email}? This cannot be undone. Their chat history and credentials row is left in place but orphaned - re-adding the same email later starts them fresh.`)) return;
-
             fetch(`/api/admin/students/${encodeURIComponent(email)}/delete`, { method: 'POST' })
                 .then(response => response.json().then(data => ({ ok: response.ok, data })))
                 .then(({ ok, data }) => {
                     if (ok && data.status === 'success') {
+                        closeStudentModal();
                         loadStudents();
                     } else {
-                        alert('Error: ' + (data.error || 'Unknown error'));
+                        showModalMessage('Error: ' + (data.error || 'Unknown error'), true);
                     }
                 })
-                .catch(error => alert('Error: ' + error.message));
+                .catch(error => showModalMessage('Error: ' + error.message, true));
         }
 
         function disableAllStudents() {

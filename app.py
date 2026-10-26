@@ -1925,6 +1925,30 @@ def enable_student(target_email):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/admin/students/<path:target_email>/reset-password', methods=['POST'])
+@login_required
+def reset_student_password(target_email):
+    """Kick off a password reset for one student. Cognito invalidates their
+    current password and emails them a verification code themselves (same
+    delivery path as the original invite) - they then set a new password
+    via the normal 'Forgot password' flow on the login page. We never see
+    or set the password ourselves."""
+    user_email = session.get('user_email', '')
+    if not _is_proctor(user_email):
+        return jsonify({'error': 'Access denied'}), 403
+    try:
+        cognito_client.admin_reset_user_password(
+            UserPoolId=os.getenv('COGNITO_USER_POOL_ID'),
+            Username=target_email
+        )
+        return jsonify({'status': 'success'})
+    except cognito_client.exceptions.UserNotFoundException:
+        return jsonify({'error': 'Student not found'}), 404
+    except Exception as e:
+        logger.error(f"Error resetting password for {target_email}: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/admin/students/<path:target_email>/delete', methods=['POST'])
 @login_required
 def delete_student(target_email):
