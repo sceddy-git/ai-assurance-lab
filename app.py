@@ -16,7 +16,7 @@ from typing import Dict, Optional
 from urllib.parse import urlencode, parse_qs
 from urllib.request import urlopen
 
-from flask import Flask, render_template, session, request, redirect, url_for, jsonify, send_file, Response, stream_with_context
+from flask import Flask, render_template, session, request, redirect, url_for, jsonify, send_file, Response, stream_with_context, make_response
 from flask_cors import CORS
 import requests
 import boto3
@@ -1231,13 +1231,17 @@ def admin_students():
     if not _is_proctor(user_email):
         return jsonify({'error': 'Access denied - proctor access required'}), 403
     
-    return render_template(
+    resp = make_response(render_template(
         'admin_students.html', email=user_email,
         galileo_url=galileo_telemetry.get_console_url(),
         galileo_dashboard_url=galileo_telemetry.get_dashboard_url(),
         splunk_ao_url=splunk_ao_telemetry.get_console_url(),
         splunk_ao_dashboard_url=splunk_ao_telemetry.get_dashboard_url()
-    )
+    ))
+    # This page changes frequently during active development; make sure
+    # browsers never serve a stale cached copy of the buttons/JS.
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    return resp
 
 
 @app.route('/admin/progress')

@@ -719,28 +719,33 @@
                             // crafted email/company value from the public self-signup
                             // form can never break out of an inline handler string.
                             const actionsCell = row.cells[row.cells.length - 1];
-                            actionsCell.style.display = 'flex';
-                            actionsCell.style.flexWrap = 'wrap';
-                            actionsCell.style.gap = '6px';
-                            actionsCell.style.minWidth = '80px';
+                            const actionsWrap = document.createElement('div');
+                            actionsWrap.style.display = 'flex';
+                            actionsWrap.style.flexWrap = 'wrap';
+                            actionsWrap.style.gap = '6px';
+                            actionsCell.appendChild(actionsWrap);
 
                             const toggleBtn = document.createElement('button');
                             toggleBtn.className = `button ${isEnabled ? 'danger' : 'secondary'}`;
+                            toggleBtn.style.margin = '0';
                             toggleBtn.style.padding = '6px 10px';
                             toggleBtn.style.fontSize = '12px';
                             toggleBtn.style.whiteSpace = 'nowrap';
                             toggleBtn.textContent = isEnabled ? 'Disable' : 'Enable';
                             toggleBtn.addEventListener('click', () => toggleStudent(student.email, !isEnabled));
-                            actionsCell.appendChild(toggleBtn);
+                            actionsWrap.appendChild(toggleBtn);
 
                             const deleteBtn = document.createElement('button');
                             deleteBtn.className = 'button danger';
+                            deleteBtn.style.margin = '0';
                             deleteBtn.style.padding = '6px 10px';
                             deleteBtn.style.fontSize = '12px';
                             deleteBtn.style.whiteSpace = 'nowrap';
-                            deleteBtn.textContent = 'Delete';
+                            deleteBtn.style.background = '#991b1b';
+                            deleteBtn.style.border = '1px solid #7f1d1d';
+                            deleteBtn.textContent = '🗑 Delete';
                             deleteBtn.addEventListener('click', () => deleteStudent(student.email));
-                            actionsCell.appendChild(deleteBtn);
+                            actionsWrap.appendChild(deleteBtn);
                         });
                     }
                 })
