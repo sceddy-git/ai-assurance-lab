@@ -313,6 +313,43 @@
             background: #f8f9fa;
         }
 
+        #studentsBody tr.selected {
+            background: #f0f2ff;
+        }
+
+        .filter-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .filter-bar select {
+            padding: 6px 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #444;
+        }
+
+        .bulk-actions-bar {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            background: #fff7ed;
+            border: 1px solid #fed7aa;
+            border-radius: 6px;
+            padding: 10px 14px;
+            margin-bottom: 15px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #9a3412;
+        }
+
+        .bulk-actions-bar.show {
+            display: flex;
+        }
+
         td {
             padding: 12px;
             border-bottom: 1px solid #e5e7eb;
@@ -553,10 +590,28 @@
 
                 <div id="studentsList" style="display: none;">
                     <div class="student-count" id="studentCount"></div>
-                    <p style="color: #666; font-size: 13px; margin-bottom: 10px;">Click a student row to manage their account.</p>
+
+                    <div class="filter-bar">
+                        <label for="statusFilter" style="font-size: 13px; color: #666; font-weight: 600;">Status:</label>
+                        <select id="statusFilter" onchange="renderStudents()">
+                            <option value="all">All</option>
+                            <option value="enabled">Enabled only</option>
+                            <option value="disabled">Disabled only</option>
+                        </select>
+                    </div>
+
+                    <div class="bulk-actions-bar" id="bulkActionsBar">
+                        <span id="bulkSelectedCount">0 selected</span>
+                        <button class="button danger" style="margin: 0; padding: 6px 14px; font-size: 13px;" onclick="bulkDisableSelected()">Disable Selected</button>
+                        <button class="button danger" style="margin: 0; padding: 6px 14px; font-size: 13px; background: #991b1b; border: 1px solid #7f1d1d;" onclick="bulkDeleteSelected()">Delete Selected</button>
+                        <button class="button secondary" style="margin: 0; padding: 6px 14px; font-size: 13px;" onclick="clearSelection()">Clear Selection</button>
+                    </div>
+
+                    <p style="color: #666; font-size: 13px; margin-bottom: 10px;">Click a student row to manage their account. Use the checkboxes to select multiple students for a bulk action.</p>
                     <table id="studentsTable">
                         <thead>
                             <tr>
+                                <th style="width: 30px;"><input type="checkbox" id="selectAllCheckbox" onclick="toggleSelectAll(this)"></th>
                                 <th>Email</th>
                                 <th>First Name</th>
                                 <th>Last Name</th>
@@ -784,6 +839,9 @@
             `).join('');
         }
 
+        let allStudents = [];
+        let selectedEmails = new Set();
+
         function loadStudents() {
             const studentsList = document.getElementById('studentsList');
             const loadingStudents = document.getElementById('loadingStudents');
@@ -792,6 +850,8 @@
             loadingStudents.style.display = 'block';
             studentsList.style.display = 'none';
             emptyState.style.display = 'none';
+            selectedEmails.clear();
+            updateBulkBar();
 
             fetch('/api/admin/students/list')
                 .then(response => response.json())
@@ -800,34 +860,14 @@
 
                     if (data.count === 0) {
                         emptyState.style.display = 'block';
+                        allStudents = [];
                     } else {
                         studentsList.style.display = 'block';
+                        allStudents = data.students;
                         document.getElementById('studentCount').innerHTML = `
                             Total: <strong>${data.count}</strong> students enrolled
                         `;
-
-                        const tbody = document.getElementById('studentsBody');
-                        tbody.innerHTML = '';
-
-                        data.students.forEach(student => {
-                            const row = tbody.insertRow();
-                            const isEnabled = student.enabled !== false;
-                            const statusColor = isEnabled ? '#10b981' : '#ef4444';
-                            const statusText = isEnabled ? student.status : 'DISABLED';
-                            row.style.cursor = 'pointer';
-                            row.title = 'Click to manage this student';
-                            row.innerHTML = `
-                                <td>${escapeHtml(student.email)}</td>
-                                <td>${escapeHtml(student.first_name)}</td>
-                                <td>${escapeHtml(student.last_name)}</td>
-                                <td>${escapeHtml(student.company)}</td>
-                                <td>${escapeHtml(student.class_name)}</td>
-                                <td>${new Date(student.created).toLocaleDateString()}</td>
-                                <td><span style="color: ${statusColor}; font-weight: 600;">${statusText}</span></td>
-                                <td>${tokenBadges(student)}</td>
-                            `;
-                            row.addEventListener('click', () => openStudentModal(student));
-                        });
+                        renderStudents();
                     }
                 })
                 .catch(error => {
@@ -835,6 +875,127 @@
                     emptyState.style.display = 'block';
                     emptyState.innerHTML = `<p>Error loading students: ${error.message}</p>`;
                 });
+        }
+
+        function renderStudents() {
+            const filter = document.getElementById('statusFilter').value;
+            const tbody = document.getElementById('studentsBody');
+            tbody.innerHTML = '';
+
+            const filtered = allStudents.filter(student => {
+                const isEnabled = student.enabled !== false;
+                if (filter === 'enabled') return isEnabled;
+                if (filter === 'disabled') return !isEnabled;
+                return true;
+            });
+
+            filtered.forEach(student => {
+                const row = tbody.insertRow();
+                const isEnabled = student.enabled !== false;
+                const statusColor = isEnabled ? '#10b981' : '#ef4444';
+                const statusText = isEnabled ? student.status : 'DISABLED';
+                row.style.cursor = 'pointer';
+                row.title = 'Click to manage this student';
+                if (selectedEmails.has(student.email)) row.classList.add('selected');
+                row.innerHTML = `
+                    <td><input type="checkbox" class="student-checkbox" ${selectedEmails.has(student.email) ? 'checked' : ''}></td>
+                    <td>${escapeHtml(student.email)}</td>
+                    <td>${escapeHtml(student.first_name)}</td>
+                    <td>${escapeHtml(student.last_name)}</td>
+                    <td>${escapeHtml(student.company)}</td>
+                    <td>${escapeHtml(student.class_name)}</td>
+                    <td>${new Date(student.created).toLocaleDateString()}</td>
+                    <td><span style="color: ${statusColor}; font-weight: 600;">${statusText}</span></td>
+                    <td>${tokenBadges(student)}</td>
+                `;
+
+                const checkbox = row.querySelector('.student-checkbox');
+                checkbox.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    toggleStudentSelection(student.email, checkbox.checked, row);
+                });
+
+                row.addEventListener('click', () => openStudentModal(student));
+            });
+
+            const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+            selectAllCheckbox.checked = filtered.length > 0 && filtered.every(s => selectedEmails.has(s.email));
+        }
+
+        function toggleStudentSelection(email, isSelected, row) {
+            if (isSelected) {
+                selectedEmails.add(email);
+                row.classList.add('selected');
+            } else {
+                selectedEmails.delete(email);
+                row.classList.remove('selected');
+            }
+            updateBulkBar();
+        }
+
+        function toggleSelectAll(checkbox) {
+            const filter = document.getElementById('statusFilter').value;
+            const filtered = allStudents.filter(student => {
+                const isEnabled = student.enabled !== false;
+                if (filter === 'enabled') return isEnabled;
+                if (filter === 'disabled') return !isEnabled;
+                return true;
+            });
+            if (checkbox.checked) {
+                filtered.forEach(s => selectedEmails.add(s.email));
+            } else {
+                filtered.forEach(s => selectedEmails.delete(s.email));
+            }
+            renderStudents();
+        }
+
+        function clearSelection() {
+            selectedEmails.clear();
+            renderStudents();
+            updateBulkBar();
+        }
+
+        function updateBulkBar() {
+            const bar = document.getElementById('bulkActionsBar');
+            const count = selectedEmails.size;
+            document.getElementById('bulkSelectedCount').textContent =
+                `${count} student${count === 1 ? '' : 's'} selected`;
+            bar.classList.toggle('show', count > 0);
+        }
+
+        function bulkDisableSelected() {
+            const emails = Array.from(selectedEmails);
+            if (emails.length === 0) return;
+            if (!confirm(`Disable login for ${emails.length} selected student(s)? Their data/history is kept - they can be re-enabled any time.`)) return;
+
+            Promise.allSettled(
+                emails.map(email => fetch(`/api/admin/students/${encodeURIComponent(email)}/disable`, { method: 'POST' })
+                    .then(r => r.json().then(data => ({ ok: r.ok && data.status === 'success', email }))))
+            ).then(results => {
+                const failed = results.filter(r => r.status !== 'fulfilled' || !r.value.ok);
+                if (failed.length > 0) {
+                    alert(`Disabled ${emails.length - failed.length} of ${emails.length}. ${failed.length} failed - check the console/logs.`);
+                }
+                loadStudents();
+            });
+        }
+
+        function bulkDeleteSelected() {
+            const emails = Array.from(selectedEmails);
+            if (emails.length === 0) return;
+            if (!confirm(`Permanently delete ${emails.length} selected student(s)? This cannot be undone.`)) return;
+            if (!confirm(`This is permanent. Delete ${emails.length} student(s)?`)) return;
+
+            Promise.allSettled(
+                emails.map(email => fetch(`/api/admin/students/${encodeURIComponent(email)}/delete`, { method: 'POST' })
+                    .then(r => r.json().then(data => ({ ok: r.ok && data.status === 'success', email }))))
+            ).then(results => {
+                const failed = results.filter(r => r.status !== 'fulfilled' || !r.value.ok);
+                if (failed.length > 0) {
+                    alert(`Deleted ${emails.length - failed.length} of ${emails.length}. ${failed.length} failed - check the console/logs.`);
+                }
+                loadStudents();
+            });
         }
 
         // ---- Student management modal ----
