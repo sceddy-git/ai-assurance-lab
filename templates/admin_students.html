@@ -495,15 +495,19 @@
                 </div>
             </div>
 
-            <!-- Upload Section -->
+            {% if is_super_admin %}
+            <!-- Upload Section (super admin only - registration is normally via per-class QR code) -->
             <div class="section">
                 <h2><span class="icon">📤</span> Bulk Import (CSV or Excel)</h2>
-                
+
                 <div class="help-text">
                     <strong>Columns:</strong> email, first_name, last_name (header row required)<br>
                     <strong>Example:</strong> alice@example.com, Alice, Smith<br>
                     Accepts <code>.csv</code>, <code>.xlsx</code>, or <code>.xls</code> files.
                     Students will be created in Cognito and can log in immediately.
+                    <br><br>
+                    <strong>Super admin only.</strong> Other proctors should use the per-class QR
+                    code (Classes page) so students self-register into the right class.
                 </div>
 
                 <div class="upload-area" id="dropZone">
@@ -525,6 +529,7 @@
                     Choose File
                 </button>
             </div>
+            {% endif %}
 
             <!-- Disable All Section -->
             <div class="section">
@@ -538,6 +543,15 @@
                 <button class="button danger" onclick="disableAllStudents()">
                     Disable All Students
                 </button>
+
+                <div class="results" id="disableAllResults">
+                    <div id="disableAllResultsContent"></div>
+                </div>
+
+                <div class="loading" id="disableAllLoading">
+                    <div class="spinner"></div>
+                    <p>Disabling students...</p>
+                </div>
             </div>
 
             <!-- Proctor Management Section -->
@@ -660,33 +674,38 @@
     </div>
 
     <script>
+        // Bulk CSV/Excel import UI is only rendered for the super admin -
+        // these are all null for other proctors, so every reference below
+        // is guarded on dropZone existing.
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
         const uploadResults = document.getElementById('uploadResults');
         const loading = document.getElementById('loading');
 
-        // Drag and drop
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('dragover');
-        });
+        if (dropZone) {
+            // Drag and drop
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('dragover');
+            });
 
-        dropZone.addEventListener('dragleave', () => {
-            dropZone.classList.remove('dragover');
-        });
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('dragover');
+            });
 
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('dragover');
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                fileInput.files = files;
-                uploadFile();
-            }
-        });
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    fileInput.files = files;
+                    uploadFile();
+                }
+            });
+        }
 
         // File input change
-        fileInput.addEventListener('change', uploadFile);
+        if (fileInput) fileInput.addEventListener('change', uploadFile);
 
         function addSingleStudent() {
             const emailInput = document.getElementById('singleEmail');
@@ -1109,17 +1128,19 @@
                 return;
             }
 
-            loading.style.display = 'block';
+            const disableAllLoading = document.getElementById('disableAllLoading');
+            const disableAllResults = document.getElementById('disableAllResults');
+            disableAllLoading.style.display = 'block';
 
             fetch('/api/admin/students/disable-all', {
                 method: 'POST'
             })
             .then(response => response.json())
             .then(data => {
-                loading.style.display = 'none';
+                disableAllLoading.style.display = 'none';
                 if (data.status === 'success') {
-                    uploadResults.classList.add('show', 'success');
-                    document.getElementById('resultsContent').innerHTML = `
+                    disableAllResults.classList.add('show', 'success');
+                    document.getElementById('disableAllResultsContent').innerHTML = `
                         <div class="result-stat">
                             <span class="stat-number">${data.disabled}</span>
                             <span>Students disabled</span>
@@ -1134,7 +1155,7 @@
                 }
             })
             .catch(error => {
-                loading.style.display = 'none';
+                disableAllLoading.style.display = 'none';
                 alert('Error: ' + error.message);
             });
         }

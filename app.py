@@ -1233,6 +1233,7 @@ def admin_students():
     
     resp = make_response(render_template(
         'admin_students.html', email=user_email,
+        is_super_admin=(user_email.strip().lower() == SUPER_ADMIN_EMAIL.lower()),
         galileo_url=galileo_telemetry.get_console_url(),
         galileo_dashboard_url=galileo_telemetry.get_dashboard_url(),
         splunk_ao_url=splunk_ao_telemetry.get_console_url(),
@@ -1527,10 +1528,14 @@ def _parse_students_excel(file) -> list:
 @app.route('/api/admin/students/upload', methods=['POST'])
 @login_required
 def upload_students_csv():
-    """Upload and create students from a CSV or Excel (.xlsx/.xls) file."""
+    """Upload and create students from a CSV or Excel (.xlsx/.xls) file.
+
+    Restricted to the super admin only: registration is now meant to go
+    through the per-class QR code join flow, so bulk CSV/Excel import is a
+    legacy/break-glass path rather than something every proctor needs."""
     user_email = session.get('user_email', '')
-    if not _is_proctor(user_email):
-        return jsonify({'error': 'Access denied'}), 403
+    if user_email.strip().lower() != SUPER_ADMIN_EMAIL.lower():
+        return jsonify({'error': 'Bulk import is restricted to the super admin - use the per-class QR code to register students instead.'}), 403
 
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
