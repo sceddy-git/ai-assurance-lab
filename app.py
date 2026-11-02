@@ -1933,20 +1933,50 @@ def enable_student(target_email):
 @app.route('/api/admin/students/<path:target_email>/reset-password', methods=['POST'])
 @login_required
 def reset_student_password(target_email):
-    """Kick off a password reset for one student. Cognito invalidates their
-    current password and emails them a verification code themselves (same
-    delivery path as the original invite) - they then set a new password
-    via the normal 'Forgot password' flow on the login page. We never see
-    or set the password ourselves."""
+    """Kick off a password reset for one student.
+
+    Cognito's AdminResetUserPassword (and the student's own 'Forgot
+    password' link) only work once an account has a real password set -
+    i.e. status CONFIRMED. A student who never completed their very first
+    sign-in is still in FORCE_CHANGE_PASSWORD, has no password to
+    reset/forget yet, and Cognito rejects both APIs with
+    'User password cannot be reset in the current state'. For that case we
+    instead resend their original invite email, which hands them a fresh
+    temporary password to sign in with for the first time.
+
+    Either way, we never see or set the password ourselves - Cognito
+    generates and emails it directly to the student."""
     user_email = session.get('user_email', '')
     if not _is_proctor(user_email):
         return jsonify({'error': 'Access denied'}), 403
     try:
+        user = cognito_client.admin_get_user(
+            UserPoolId=os.getenv('COGNITO_USER_POOL_ID'),
+            Username=target_email
+        )
+        user_status = user.get('UserStatus')
+
+        if user_status == 'FORCE_CHANGE_PASSWORD':
+            # Never completed first sign-in - resend the original invite
+            # (a brand new temp password) instead of a reset, since
+            # there's no real password yet to reset.
+            cognito_client.admin_create_user(
+                UserPoolId=os.getenv('COGNITO_USER_POOL_ID'),
+                Username=target_email,
+                MessageAction='RESEND',
+                DesiredDeliveryMediums=['EMAIL']
+            )
+            return jsonify({
+                'status': 'success',
+                'method': 'resent_invite',
+                'message': 'This student never completed their first sign-in, so we resent their original invite email with a fresh temporary password instead.'
+            })
+
         cognito_client.admin_reset_user_password(
             UserPoolId=os.getenv('COGNITO_USER_POOL_ID'),
             Username=target_email
         )
-        return jsonify({'status': 'success'})
+        return jsonify({'status': 'success', 'method': 'reset'})
     except cognito_client.exceptions.UserNotFoundException:
         return jsonify({'error': 'Student not found'}), 404
     except Exception as e:

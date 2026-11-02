@@ -1077,7 +1077,7 @@
                 .then(response => response.json().then(data => ({ ok: response.ok, data })))
                 .then(({ ok, data }) => {
                     if (ok && data.status === 'success') {
-                        showModalMessage('Password reset started - they\'ll get an email with a reset code.', false);
+                        showModalMessage(data.message || 'Password reset started - they\'ll get an email with a reset code.', false);
                     } else {
                         showModalMessage('Error: ' + (data.error || 'Unknown error'), true);
                     }
