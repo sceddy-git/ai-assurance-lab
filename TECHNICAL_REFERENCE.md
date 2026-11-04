@@ -339,6 +339,41 @@ already fixed on `main` / live:
    - DynamoDB tables are already `PAY_PER_REQUEST` (see table above) so
      they auto-scale with the write burst; no change needed there. SES is
      on a 50,000/day production quota, far above 40 invite emails.
+6. **Per-chat-request thread leak causing repeated whole-service restarts
+   during a busy live lab (2026-11-04)**. `galileo_telemetry.new_logger()`
+   and `splunk_ao_telemetry.new_logger()` both create a brand-new SDK
+   logger per chat request (`app.py`'s `/api/chat`), and the underlying
+   OTLP/gRPC exporter each one spins up leaks background `libuv-worker` OS
+   threads that are never torn down. A cron-based safety net already
+   exists for exactly this class of problem — `thread_watchdog.sh` (not
+   tracked in git; lives at `/usr/local/bin/thread-watchdog.sh` on the
+   instance, run every 10 min via `/etc/cron.d`) restarts
+   `flask-app.service` if any single gunicorn worker's thread count
+   crosses 50. During a high-volume lab session it started firing every
+   10-20 minutes, and because it restarts the *whole service*, every
+   student got hit with a ~30-45s outage each time, not just whoever was
+   on the leaking worker.
+   - **Immediate mitigation applied live**: lowered gunicorn's
+     `--max-requests` 300 → 100 (`--max-requests-jitter` 30 → 20) in
+     `/etc/systemd/system/flask-app.service` (also not tracked in git -
+     see note below). This makes gunicorn recycle individual *worker
+     processes* proactively and one at a time (zero downtime - the other
+     9 keep serving) well before any single worker's thread count nears
+     the watchdog's 50-thread threshold, so the disruptive whole-service
+     restarts should become rare again.
+   - **Not yet done / real fix**: make `galileo_telemetry.py` and
+     `splunk_ao_telemetry.py` reuse one shared logger per worker process
+     (set up once at startup, like `setup_metrics()` already does) instead
+     of constructing a fresh one on every single chat request. That
+     should eliminate the leak at the source rather than just recycling
+     around it.
+   - **Ops note**: neither `/etc/systemd/system/flask-app.service` nor
+     `/usr/local/bin/thread-watchdog.sh` / its `/etc/cron.d` entry are
+     tracked in this git repo - they only exist on the live EC2 instance.
+     Any future reimage/redeploy of the instance needs to recreate the
+     `--max-requests 100 --max-requests-jitter 20` gunicorn flags and the
+     watchdog cron job from scratch, or restore them from an instance
+     snapshot/backup.
 
 ## Adding a new MCP-backed service (e.g. a 4th tool)
 
