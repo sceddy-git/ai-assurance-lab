@@ -120,54 +120,79 @@ HTML_OUTPUT_SYSTEM_PROMPT = (
 # [PROSPECT] but the surrounding instructional text is otherwise unchanged).
 # This is best-effort signal for proctors, not a strict completion gate.
 # ============================================================================
+# NOTE on keeping this in sync: these phrases are matched verbatim (lowercased,
+# whitespace-collapsed) against the fixed prompts in templates/guide.html.
+# Whenever the guide's prompt wording changes, these must be updated too, or
+# the checkpoint silently stops firing - this whole dict drifted badly out of
+# sync with the guide in a prior rewrite (wrong lab counts, renamed labs,
+# "organisation" vs "organization" spelling, etc.) before being corrected here
+# on 2026-11-06. Prefer short, distinctive substrings from the middle of a
+# prompt (less likely to be hand-edited by a student) over the whole prompt.
 LAB_CHECKPOINTS = {
     'te_verify': {'module': 'te', 'label': 'Verify connection', 'phrases': [
         'what thousandeyes mcp tools are available',
     ]},
     'te_lab1': {'module': 'te', 'label': 'Lab 1: Prospect Demo', 'phrases': [
-        'please create a thousandeyes page load test for each of these urls',
-        'retrieve the latest metrics for every test you created',
+        'results for domain',
+        'should have their first results now',
         'write a professional customer-facing performance report',
     ]},
-    'te_lab2': {'module': 'te', 'label': 'Lab 2: Outage triage', 'phrases': [
-        'list all active thousandeyes alerts right now',
+    'te_lab2': {'module': 'te', 'label': 'Lab 2: The Outage Call', 'phrases': [
+        'tell me which have been firing for more than 15 minutes',
         'troubleshoot the most critical alert',
+        'which enterprise agents are reporting packet loss greater than 1%',
     ]},
-    'te_lab3': {'module': 'te', 'label': 'Lab 3: Historical deep-dive', 'phrases': [
-        'show me uptime and time-to-first-byte for the customer portal',
-        'which regions showed elevated page-load time between',
+    'te_lab3': {'module': 'te', 'label': 'Lab 3: Proving the SLA', 'phrases': [
+        'pull results for those test ids since they were created',
+        'call out anything that dropped below a 99.5% uptime sla',
     ]},
-    'te_lab4': {'module': 'te', 'label': 'Lab 4: Anomaly detection', 'phrases': [
-        'analyse all thousandeyes tests for metric anomalies',
-        'run an agent-to-server instant test from our sydney enterprise agent',
+    'te_lab4': {'module': 'te', 'label': "Lab 4: Catching It Before They Do", 'phrases': [
+        'analyze those tests for metric anomalies in the time since they were created',
+        'show me the path visualization: every network hop from our agent to their host',
+        'run a fresh agent-to-server instant test against it from a different cloud agent',
+    ]},
+    'te_lab5': {'module': 'te', 'label': 'Lab 5: The Story', 'phrases': [
+        "pull together everything from this session on my customer's",
+        'what\'s the one number or finding from this whole session',
     ]},
     'meraki_verify': {'module': 'meraki', 'label': 'Verify connection', 'phrases': [
         'what meraki mcp tools are available',
     ]},
-    'meraki_lab1': {'module': 'meraki', 'label': 'Lab 1: Overview & device health', 'phrases': [
-        'give me a health snapshot of my meraki organisation',
+    'meraki_lab1': {'module': 'meraki', 'label': 'Lab 1: Meet the Network', 'phrases': [
+        'health snapshot of my meraki organization',
         'draw me a physical diagram of my',
     ]},
-    'meraki_lab2': {'module': 'meraki', 'label': 'Lab 2: Security & visibility', 'phrases': [
-        'flag any that allow unrestricted inbound traffic from 0.0.0.0/0',
-        'conduct a full security audit of my meraki organisation',
+    'meraki_lab2': {'module': 'meraki', 'label': 'Lab 2: The Trouble Ticket', 'phrases': [
+        'pull wireless connection stats and failed-connection history',
+        'what does that distinction suggest about root cause',
+        'this is the trouble ticket writeup',
     ]},
-    'meraki_lab3': {'module': 'meraki', 'label': 'Lab 3: Performance & usage', 'phrases': [
+    'meraki_lab3': {'module': 'meraki', 'label': 'Lab 3: The Risk Review', 'phrases': [
+        'flag any that allow unrestricted inbound traffic from 0.0.0.0/0',
+        'conduct a full security audit of my meraki organization',
+    ]},
+    'meraki_lab4': {'module': 'meraki', 'label': "Lab 4: Proving It's Fixed", 'phrases': [
         'draw a performance dashboard for my network',
         'show the top 10 bandwidth consumers this week',
     ]},
-    'meraki_lab4': {'module': 'meraki', 'label': 'Lab 4: Config & optimisation', 'phrases': [
+    'meraki_lab5': {'module': 'meraki', 'label': 'Lab 5: The Handoff', 'phrases': [
         'is 802.11r fast roaming enabled on my aps',
-        'generate a full configuration audit of my',
+        'generate a configuration audit of my',
     ]},
-    'splunk_lab1': {'module': 'splunk', 'label': 'Lab 1: Threat hunt', 'phrases': [
-        'search splunk for failed login attempts',
+    'meraki_lab6': {'module': 'meraki', 'label': 'Lab 6: The Story', 'phrases': [
+        "pull together everything from this session on this customer's network",
+        "make the strongest case for expanding this engagement",
     ]},
-    'splunk_lab2': {'module': 'splunk', 'label': 'Lab 2: Operational health', 'phrases': [
-        'list all splunk indexes and tell me which',
+    # Splunk Part A (Labs 1-3) runs entirely inside Splunk's own native AI
+    # Assistant UI, not this app's chat - those prompts never reach our
+    # /api/chat handler at all, so they can never be detected here by design
+    # (not a bug to fix). Only Part B's two exercises go through our chat.
+    'splunk_pci': {'module': 'splunk', 'label': 'Part B: PCI compliance investigation', 'phrases': [
+        'list and document all of the log data available in splunk',
+        'write a 500-word paragraph in report format explaining the findings about pci compliance',
     ]},
-    'splunk_lab3': {'module': 'splunk', 'label': 'Lab 3: Correlation', 'phrases': [
-        'search the meraki syslog index for 802.11 disassociation events',
+    'splunk_cloudspend': {'module': 'splunk', 'label': 'Part B (bonus): Multi-cloud spend analysis', 'phrases': [
+        'break down the spend on a day-by-day basis for each of gcp, aws and azure',
     ]},
 }
 
