@@ -475,6 +475,86 @@ def _build_system_prompt(meraki_org_id=None):
     )
     return prompt
 
+
+def _call_mcp_tool_with_fixups(mcp_url, mcp_token, tool_name, tool_input, require_token, verify_tls):
+    """Wraps call_mcp_tool with one deterministic, narrowly-scoped auto-retry
+    for the two ThousandEyes API rejections confirmed (via Galileo trace
+    history, 2026-11-06) to recur across many real student/proctor sessions
+    regardless of the system-prompt guidance above - a model can still ignore
+    guidance, so this guarantees the fix instead of just making it less likely.
+
+    Each fixup only triggers on its exact tool name + error signature; any
+    other error from the same tools is returned completely unchanged. At most
+    one retry per original call, so a genuinely different problem still
+    surfaces normally rather than looping.
+    """
+    result = call_mcp_tool(mcp_url, mcp_token, tool_name, tool_input, require_token=require_token, verify_tls=verify_tls)
+    error_text = result.get('error') if isinstance(result, dict) else None
+    if not error_text:
+        return result
+    error_str = str(error_text)
+
+    # Fixup 1: aggregation_type="SUM" is never valid for this endpoint (only
+    # MAXIMUM/MINIMUM/MEAN/MEDIAN/STDDEV are) - seen 10x across real sessions.
+    # Swap to MEAN (closest "typical value" aggregation) and flag the
+    # substitution so Claude can caveat the answer instead of silently
+    # presenting a mean as if it were the originally requested sum.
+    if (tool_name == 'get_network_app_synthetics_metrics'
+            and tool_input.get('aggregation_type') == 'SUM'
+            and 'aggregationType' in error_str):
+        fixed_input = dict(tool_input, aggregation_type='MEAN')
+        retry = call_mcp_tool(mcp_url, mcp_token, tool_name, fixed_input, require_token=require_token, verify_tls=verify_tls)
+        if isinstance(retry, dict) and not retry.get('error'):
+            retry['_auto_fixup_note'] = (
+                "This API does not support aggregation_type=SUM; automatically "
+                "retried with MEAN instead - mention this substitution if you "
+                "report this number to the user."
+            )
+        return retry
+
+    # Fixup 2: page-load test creation fails when the target agent doesn't
+    # have BrowserBot installed - seen 6+ times, always on Enterprise Agents
+    # (never Cloud Agents, which always support it). Look up an enabled Cloud
+    # Agent and retry once with that substituted in.
+    if (tool_name in ('create_synthetic_test', 'create_and_run_instant_test')
+            and 'BrowserBot' in error_str):
+        is_page_load = (
+            tool_input.get('test_type') == 'page-load'
+            or (isinstance(tool_input.get('config'), dict)
+                and tool_input['config'].get('test_type') == 'page-load')
+        )
+        if is_page_load:
+            cloud_agent_id = None
+            try:
+                agents_result = call_mcp_tool(
+                    mcp_url, mcp_token, 'list_cloud_enterprise_agents',
+                    {'agent_type': 'cloud', 'enabled': True},
+                    require_token=require_token, verify_tls=verify_tls
+                )
+                agents_raw = agents_result.get('result') if isinstance(agents_result, dict) else None
+                agents = json.loads(agents_raw) if isinstance(agents_raw, str) else (agents_raw or [])
+                cloud_agent_id = next((a.get('agentId') for a in agents if a.get('enabled')), None)
+            except Exception as e:
+                logger.warning(f"BrowserBot auto-fixup: couldn't list cloud agents: {e}")
+            if cloud_agent_id:
+                fixed_input = json.loads(json.dumps(tool_input))  # deep copy
+                if 'agent_ids' in fixed_input:
+                    fixed_input['agent_ids'] = [cloud_agent_id]
+                elif isinstance(fixed_input.get('config'), dict) and 'agent_ids' in fixed_input['config']:
+                    fixed_input['config']['agent_ids'] = [cloud_agent_id]
+                else:
+                    return result  # unrecognized input shape - don't guess further
+                retry = call_mcp_tool(mcp_url, mcp_token, tool_name, fixed_input, require_token=require_token, verify_tls=verify_tls)
+                if isinstance(retry, dict) and not retry.get('error'):
+                    retry['_auto_fixup_note'] = (
+                        f"The originally requested agent didn't have BrowserBot "
+                        f"installed (required for page-load tests); automatically "
+                        f"retried using Cloud Agent {cloud_agent_id} instead."
+                    )
+                return retry
+
+    return result
+
 # AWS and Cognito configuration
 COGNITO_DOMAIN = os.getenv('COGNITO_DOMAIN')
 COGNITO_CLIENT_ID = os.getenv('COGNITO_CLIENT_ID')
@@ -1226,7 +1306,7 @@ def chat():
                                     tool_module = 'splunk'
                                 if tool_module:
                                     modules_used.add(tool_module)
-                                tool_result = call_mcp_tool(mcp_url, mcp_token, tool_name, tool_input, require_token=require_token, verify_tls=verify_tls)
+                                tool_result = _call_mcp_tool_with_fixups(mcp_url, mcp_token, tool_name, tool_input, require_token=require_token, verify_tls=verify_tls)
                         except MCPClientError as e:
                             logger.error(f"Tool execution error for {tool_name}: {e}")
                             tool_result = {"error": f"Tool execution failed: {str(e)}"}
