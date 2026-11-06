@@ -249,6 +249,68 @@ def _extract_prospect_info(user_message: str) -> Optional[dict]:
     return {"name": name[:120], "urls": urls}
 
 
+# LAB 1 Step 2's prompt text never names the prospect at all anymore - the
+# company/domain is only visible inside the ServiceFinder screenshot the
+# student attaches. Detected by this substring (stable across minor prompt
+# wording tweaks since it's the one fixed phrase describing the screenshot
+# itself, not the task instructions around it).
+_LAB1_SCREENSHOT_PHRASE = 'results for domain'
+
+
+def _extract_prospect_domain_from_screenshot(image_block: dict) -> Optional[dict]:
+    """Ask Claude to read the prospect's primary domain directly off a
+    ServiceFinder "Results for domain" screenshot (LAB 1 Step 2).
+
+    This is a separate, isolated, single-turn Bedrock call (no tools, no
+    conversation history, tiny max_tokens) - deliberately not reusing the
+    student's real chat-loop `messages`/`available_tools`, so a slow or
+    malformed response here can never block, corrupt, or get mixed into the
+    actual lab response the student sees. Any failure just means no
+    prospect gets recorded for this turn - it never surfaces as a chat
+    error.
+
+    Returns {"name": <domain>, "urls": []} on success, or None if no
+    domain-like text could be confidently read off the image.
+    """
+    try:
+        request_body = {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 50,
+            "messages": [{
+                "role": "user",
+                "content": [
+                    image_block,
+                    {"type": "text", "text": (
+                        'This is a screenshot from a network research tool showing a '
+                        '"Results for domain" list - every tile is a hostname belonging '
+                        "to one company/customer that was searched. Reply with ONLY that "
+                        "company's primary registrable domain (e.g. example.com), lowercase, "
+                        "nothing else - no explanation, no punctuation. If you cannot "
+                        "confidently tell, reply with exactly: unknown"
+                    )}
+                ]
+            }]
+        }
+        response = bedrock_client.invoke_model(
+            modelId=CLAUDE_MODEL_ID,
+            body=json.dumps(request_body)
+        )
+        result = json.loads(response['body'].read())
+        text = ''.join(
+            block.get('text', '') for block in result.get('content', [])
+            if block.get('type') == 'text'
+        ).strip().strip('.').lower()
+
+        # Sanity check it actually looks like a bare domain, not a refusal/
+        # explanation/sentence the model produced despite the instruction.
+        if text == 'unknown' or not re.match(r'^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$', text):
+            return None
+        return {"name": text, "urls": []}
+    except Exception as e:
+        logger.warning(f"Screenshot prospect-domain extraction failed: {e}")
+        return None
+
+
 # ----------------------------------------------------------------------
 # Bedrock context-window safety net.
 #
@@ -965,6 +1027,18 @@ def chat():
         # for sales follow-up, so capture it separately from the pass/fail
         # checkpoint above.
         prospect_info = _extract_prospect_info(user_message)
+
+        # LAB 1 Step 2 no longer names the prospect in text at all - the
+        # domain is only visible in the attached ServiceFinder screenshot.
+        # If the text-based capture above found nothing but this message
+        # is that screenshot prompt with an image attached, read the
+        # domain directly off the image instead.
+        if not prospect_info and _LAB1_SCREENSHOT_PHRASE in user_message.lower():
+            image_block = next(
+                (b for b in attachment_blocks if b.get('type') == 'image'), None
+            )
+            if image_block:
+                prospect_info = _extract_prospect_domain_from_screenshot(image_block)
 
         # Optional Galileo observability: one trace per chat request, spans
         # added around the Bedrock call and each MCP tool call below. Fully
