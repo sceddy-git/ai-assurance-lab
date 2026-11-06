@@ -459,6 +459,20 @@ def _build_system_prompt(meraki_org_id=None):
             "automatically for any Meraki tool call that requires an organization "
             "ID (e.g. via execute_api parameters) - never ask the user for it."
         )
+    prompt += (
+        "\n\nTwo ThousandEyes tool-usage pitfalls observed repeatedly in real "
+        "lab sessions (check these before calling the tool, not after it errors):\n"
+        "1. get_network_app_synthetics_metrics' aggregation_type only accepts "
+        "MAXIMUM, MINIMUM, MEAN, MEDIAN, or STDDEV - never SUM. If you need a "
+        "total, request MEAN or another valid aggregation and compute the sum "
+        "yourself from the raw values, or sum per-test MEAN values across tests.\n"
+        "2. create_synthetic_test / create_and_run_instant_test page-load tests "
+        "require an agent with BrowserBot installed. Not every Cloud/Enterprise "
+        "agent has it. Before creating a page-load test, prefer an agent you've "
+        "already confirmed works (e.g. one list_cloud_enterprise_agents shows as "
+        "a Cloud Agent, which generally support BrowserBot) rather than guessing "
+        "by name or geography alone, to avoid an avoidable 400 error and retry."
+    )
     return prompt
 
 # AWS and Cognito configuration

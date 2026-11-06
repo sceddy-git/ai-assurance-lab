@@ -1423,10 +1423,33 @@
         // going without the student noticing more than a longer wait.
         const MAX_AUTO_CONTINUES = 4;
 
+        // Guide prompts use bracket placeholders like [network], [MX model],
+        // [switch model], [PROSPECT] that students are meant to replace with a
+        // real name before sending. Confirmed in real session logs (2026-11-06)
+        // that students sometimes send these verbatim, getting a predictable
+        // "which network did you mean?" round trip instead of an answer. This
+        // is a soft confirm, not a hard block - some legitimate messages may
+        // contain brackets for other reasons (e.g. quoting a list), so a
+        // student can still choose to send as-is.
+        const PLACEHOLDER_RE = /\[[a-zA-Z][a-zA-Z0-9 _-]{1,30}\]/;
+
         async function sendMessage() {
             const message = messageInput.value.trim();
             const filesToSend = selectedFiles.slice();
             if (!message && filesToSend.length === 0) return;
+
+            const placeholderMatch = message.match(PLACEHOLDER_RE);
+            if (placeholderMatch) {
+                const ok = confirm(
+                    `It looks like "${placeholderMatch[0]}" is still a placeholder from the guide. ` +
+                    `Replace it with a real name (e.g. a network or customer name) before sending?\n\n` +
+                    `Click Cancel to go back and edit it, or OK to send it exactly as written.`
+                );
+                if (!ok) {
+                    messageInput.focus();
+                    return;
+                }
+            }
 
             // Disable input while processing
             messageInput.disabled = true;
