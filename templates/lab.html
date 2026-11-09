@@ -708,6 +708,53 @@
             border-radius: 6px;
         }
 
+        /* Self-serve progress checklist (Session Info sidebar) - added
+           2026-11-09. Deliberately reuses existing .info-* tokens/colors
+           rather than introducing a new palette, so it blends into the
+           sidebar instead of standing out as a separate feature. */
+        #progress-summary {
+            font-family: inherit;
+            word-break: normal;
+        }
+        .progress-module {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            margin: 10px 0 4px;
+        }
+        .progress-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            padding: 3px 0;
+            color: var(--text-secondary);
+        }
+        .progress-item.done {
+            color: var(--text-primary);
+        }
+        .progress-item .tick {
+            width: 14px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .progress-item .tier-tag {
+            margin-left: auto;
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 1px 5px;
+            border-radius: 4px;
+            background: var(--bg-page);
+            border: 1px solid var(--border-subtle);
+            flex-shrink: 0;
+        }
+        .progress-item.stretch-item .tier-tag {
+            opacity: 0.6;
+        }
+
         .quick-links {
             border-top: 1px solid var(--border-subtle);
             padding-top: 15px;
@@ -863,6 +910,12 @@
                         <div class="info-value" id="availability-status">Loading...</div>
                     </div>
 
+                    <div class="info-section" id="progress-section">
+                        <div class="info-title">📋 My Progress</div>
+                        <div class="info-value" id="progress-summary">Loading...</div>
+                        <div id="progress-checklist"></div>
+                    </div>
+
                     <div class="quick-links">
                         <a href="/credentials">⚙️ Manage Credentials</a>
                         <a href="/logout">🚪 Logout</a>
@@ -989,6 +1042,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadCredentialStatus();
             checkAdminAccess();
+            loadMyProgress();
             messageInput.focus();
             messageInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
@@ -997,6 +1051,73 @@
                 }
             });
         });
+
+        // ---- Self-serve progress checklist (Session Info sidebar) ----
+        const PROGRESS_MODULE_LABELS = { te: 'ThousandEyes', meraki: 'Meraki', splunk: 'Splunk (bonus)' };
+        const PROGRESS_MODULE_ORDER = ['te', 'meraki', 'splunk'];
+
+        // The last checkpoint in each module's "story" - reaching one of
+        // these triggers the one-time feedback nudge (see sendMessage's
+        // labs_matched handling below), since it means the student finished
+        // that module's whole arc.
+        const PROGRESS_FINAL_CHECKPOINTS = ['te_lab5', 'meraki_lab6', 'splunk_cloudspend'];
+
+        async function loadMyProgress() {
+            try {
+                const response = await fetch('/api/my-progress');
+                if (!response.ok) return;
+                const data = await response.json();
+                renderMyProgress(data);
+            } catch (error) {
+                // Non-essential UI - fail silently, chat still works fine.
+                console.warn('Could not load progress checklist:', error);
+            }
+        }
+
+        function renderMyProgress(data) {
+            const summaryEl = document.getElementById('progress-summary');
+            const listEl = document.getElementById('progress-checklist');
+            if (!summaryEl || !listEl || !data || !Array.isArray(data.checkpoints)) return;
+
+            summaryEl.textContent = `${data.core_done} / ${data.core_total} core labs done`;
+
+            const byModule = {};
+            for (const cp of data.checkpoints) {
+                (byModule[cp.module] = byModule[cp.module] || []).push(cp);
+            }
+
+            let html = '';
+            for (const mod of PROGRESS_MODULE_ORDER) {
+                const items = byModule[mod];
+                if (!items || !items.length) continue;
+                html += `<div class="progress-module">${PROGRESS_MODULE_LABELS[mod] || mod}</div>`;
+                for (const cp of items) {
+                    const tierClass = cp.tier === 'stretch' ? ' stretch-item' : '';
+                    const doneClass = cp.done ? ' done' : '';
+                    const tick = cp.done ? '✅' : '⬜';
+                    html += `<div class="progress-item${doneClass}${tierClass}">` +
+                        `<span class="tick">${tick}</span><span>${cp.label}</span>` +
+                        `<span class="tier-tag">${cp.tier}</span></div>`;
+                }
+            }
+            listEl.innerHTML = html;
+        }
+
+        // One-time, low-key feedback nudge shown inline in chat the first
+        // time a student hits the last checkpoint of a module's story. Keyed
+        // per-user in localStorage so it never repeats across reloads/visits.
+        function maybeShowFeedbackNudge(labsMatchedThisTurn) {
+            if (!Array.isArray(labsMatchedThisTurn)) return;
+            const hit = labsMatchedThisTurn.find(id => PROGRESS_FINAL_CHECKPOINTS.includes(id));
+            if (!hit) return;
+            const flagKey = 'feedbackNudgeShown_' + hit + '_' + {{ email | tojson }};
+            if (localStorage.getItem(flagKey)) return;
+            localStorage.setItem(flagKey, '1');
+            addMessage(
+                "🎉 Looks like you just finished this module's story. If you've got a sec, your proctor would love to hear what worked or didn't — no need to leave this chat, just tell them directly.",
+                false
+            );
+        }
 
         async function checkAdminAccess() {
             try {
@@ -1491,19 +1612,27 @@
                         // with a non-200 status, not a stream.
                         const error = await response.json();
                         removeLoadingIndicator();
-                        addMessage(`Error: ${error.error || 'Unknown error'}`, false);
+                        // error.error is usually an actionable, specific reason
+                        // (e.g. "no ThousandEyes credentials configured") worth
+                        // showing verbatim - the fallback only kicks in for a
+                        // genuinely unexpected/unhandled failure, where a raw
+                        // stack trace or bare exception string would otherwise
+                        // be shown directly to the student.
+                        console.warn('Chat request failed:', error);
+                        addMessage(`⚠️ ${error.error || "Something went wrong with that request. Try again, or let your proctor know if it keeps happening."}`, false);
                         return;
                     }
 
                     const { finalData, errorData } = await parseChatStream(response);
                     if (errorData) {
                         removeLoadingIndicator();
-                        addMessage(`Error: ${errorData.error || 'Unknown error'}`, false);
+                        console.warn('Chat stream returned an error:', errorData);
+                        addMessage(`⚠️ ${errorData.error || "Something went wrong partway through that request. Try again, or let your proctor know if it keeps happening."}`, false);
                         return;
                     }
                     if (!finalData) {
                         removeLoadingIndicator();
-                        addMessage('Error: Unexpected empty response from server', false);
+                        addMessage('⚠️ No response came back from the server. Try sending that again.', false);
                         return;
                     }
                     data = finalData;
@@ -1540,10 +1669,17 @@
                 // Reload credential status (may have changed)
                 loadCredentialStatus();
 
+                // Only hit /api/my-progress when this turn actually matched a
+                // checkpoint, instead of after every single message.
+                if (Array.isArray(data.labs_matched) && data.labs_matched.length) {
+                    loadMyProgress();
+                    maybeShowFeedbackNudge(data.labs_matched);
+                }
+
             } catch (error) {
                 console.error('Error sending message:', error);
                 removeLoadingIndicator();
-                addMessage('Error: Could not reach the server', false);
+                addMessage("Something went wrong reaching the server. Check your connection and try again — if it keeps happening, let your proctor know.", false);
             } finally {
                 messageInput.disabled = false;
                 document.getElementById('attach-button').disabled = false;

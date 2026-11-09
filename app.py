@@ -141,58 +141,65 @@ HTML_OUTPUT_SYSTEM_PROMPT = (
 # "organisation" vs "organization" spelling, etc.) before being corrected here
 # on 2026-11-06. Prefer short, distinctive substrings from the middle of a
 # prompt (less likely to be hand-edited by a student) over the whole prompt.
+# 'tier' is 'core' (everyone should reach this) or 'stretch' (great if there's
+# time, but nothing later depends on it) - added 2026-11-09 after real class
+# data showed median completion was 0 labs and nothing past roughly lab 2 of
+# either required module was ever reached by any student across 92 accounts /
+# 6 classes. Mirrors the "Core"/"Stretch" badges now shown in guide.html and
+# drives the /api/my-progress checklist so students see an honest, achievable
+# goal instead of an implied "finish all 13" expectation.
 LAB_CHECKPOINTS = {
-    'te_verify': {'module': 'te', 'label': 'Verify connection', 'phrases': [
+    'te_verify': {'module': 'te', 'label': 'Verify connection', 'tier': 'core', 'phrases': [
         'what thousandeyes mcp tools are available',
     ]},
-    'te_lab1': {'module': 'te', 'label': 'Lab 1: Prospect Demo', 'phrases': [
+    'te_lab1': {'module': 'te', 'label': 'Lab 1: Prospect Demo', 'tier': 'core', 'phrases': [
         'results for domain',
         'should have their first results now',
         'write a professional customer-facing performance report',
     ]},
-    'te_lab2': {'module': 'te', 'label': 'Lab 2: The Outage Call', 'phrases': [
+    'te_lab2': {'module': 'te', 'label': 'Lab 2: The Outage Call', 'tier': 'core', 'phrases': [
         'alerts in the last 7 days (both triggered and cleared)',
         "walk me through it like you'd walk a customer through it",
         'what would a probable fault domain and troubleshooting path look like',
     ]},
-    'te_lab3': {'module': 'te', 'label': 'Lab 3: Proving the SLA', 'phrases': [
+    'te_lab3': {'module': 'te', 'label': 'Lab 3: Proving the SLA', 'tier': 'stretch', 'phrases': [
         'pull results for those test ids since they were created',
         'call out anything that dropped below a 99.5% uptime sla',
     ]},
-    'te_lab4': {'module': 'te', 'label': "Lab 4: Catching It Before They Do", 'phrases': [
+    'te_lab4': {'module': 'te', 'label': "Lab 4: Catching It Before They Do", 'tier': 'stretch', 'phrases': [
         'analyze those tests for metric anomalies in the time since they were created',
         'show me the path visualization: every network hop from our agent to their host',
         'run a fresh agent-to-server instant test against it from a different cloud agent',
     ]},
-    'te_lab5': {'module': 'te', 'label': 'Lab 5: The Story', 'phrases': [
+    'te_lab5': {'module': 'te', 'label': 'Lab 5: The Story', 'tier': 'stretch', 'phrases': [
         "pull together everything from this session on my customer's",
         'what\'s the one number or finding from this whole session',
     ]},
-    'meraki_verify': {'module': 'meraki', 'label': 'Verify connection', 'phrases': [
+    'meraki_verify': {'module': 'meraki', 'label': 'Verify connection', 'tier': 'core', 'phrases': [
         'what meraki mcp tools are available',
     ]},
-    'meraki_lab1': {'module': 'meraki', 'label': 'Lab 1: Meet the Network', 'phrases': [
+    'meraki_lab1': {'module': 'meraki', 'label': 'Lab 1: Meet the Network', 'tier': 'core', 'phrases': [
         'health snapshot of my meraki organization',
         'draw me a physical diagram of my',
     ]},
-    'meraki_lab2': {'module': 'meraki', 'label': 'Lab 2: The Trouble Ticket', 'phrases': [
+    'meraki_lab2': {'module': 'meraki', 'label': 'Lab 2: The Trouble Ticket', 'tier': 'core', 'phrases': [
         'pull wireless connection stats and failed-connection history',
         'what does that distinction suggest about root cause',
         'this is the trouble ticket writeup',
     ]},
-    'meraki_lab3': {'module': 'meraki', 'label': 'Lab 3: The Risk Review', 'phrases': [
+    'meraki_lab3': {'module': 'meraki', 'label': 'Lab 3: The Risk Review', 'tier': 'stretch', 'phrases': [
         'flag any that allow unrestricted inbound traffic from 0.0.0.0/0',
         'conduct a full security audit of my meraki organization',
     ]},
-    'meraki_lab4': {'module': 'meraki', 'label': "Lab 4: Proving It's Fixed", 'phrases': [
+    'meraki_lab4': {'module': 'meraki', 'label': "Lab 4: Proving It's Fixed", 'tier': 'stretch', 'phrases': [
         'draw a performance dashboard for my network',
         'show the top 10 bandwidth consumers this week',
     ]},
-    'meraki_lab5': {'module': 'meraki', 'label': 'Lab 5: The Handoff', 'phrases': [
+    'meraki_lab5': {'module': 'meraki', 'label': 'Lab 5: The Handoff', 'tier': 'stretch', 'phrases': [
         'is 802.11r fast roaming enabled on my aps',
         'generate a configuration audit of my',
     ]},
-    'meraki_lab6': {'module': 'meraki', 'label': 'Lab 6: The Story', 'phrases': [
+    'meraki_lab6': {'module': 'meraki', 'label': 'Lab 6: The Story', 'tier': 'stretch', 'phrases': [
         "pull together everything from this session on this customer's network",
         "make the strongest case for expanding this engagement",
     ]},
@@ -200,11 +207,13 @@ LAB_CHECKPOINTS = {
     # Assistant UI, not this app's chat - those prompts never reach our
     # /api/chat handler at all, so they can never be detected here by design
     # (not a bug to fix). Only Part B's two exercises go through our chat.
-    'splunk_pci': {'module': 'splunk', 'label': 'Part B: PCI compliance investigation', 'phrases': [
+    # Splunk as a whole is already bonus/optional (see REQUIRED_CHECKPOINTS
+    # below), so both its checkpoints are 'stretch'.
+    'splunk_pci': {'module': 'splunk', 'label': 'Part B: PCI compliance investigation', 'tier': 'stretch', 'phrases': [
         'list and document all of the log data available in splunk',
         'write a 500-word paragraph in report format explaining the findings about pci compliance',
     ]},
-    'splunk_cloudspend': {'module': 'splunk', 'label': 'Part B (bonus): Multi-cloud spend analysis', 'phrases': [
+    'splunk_cloudspend': {'module': 'splunk', 'label': 'Part B (bonus): Multi-cloud spend analysis', 'tier': 'stretch', 'phrases': [
         'break down the spend on a day-by-day basis for each of gcp, aws and azure',
     ]},
 }
@@ -484,7 +493,24 @@ def _build_system_prompt(meraki_org_id=None):
         "agent has it. Before creating a page-load test, prefer an agent you've "
         "already confirmed works (e.g. one list_cloud_enterprise_agents shows as "
         "a Cloud Agent, which generally support BrowserBot) rather than guessing "
-        "by name or geography alone, to avoid an avoidable 400 error and retry."
+        "by name or geography alone, to avoid an avoidable 400 error and retry.\n\n"
+        "A Meraki tool-usage pitfall observed repeatedly in real lab sessions "
+        "(about a quarter of all execute_api calls fail on this): execute_api "
+        "needs the exact parameter names/shape for the specific Meraki API "
+        "capability you're calling, and guessing them from the capability_id "
+        "name alone frequently returns 'Invalid parameters for <capability_id>'. "
+        "Always call semantic_search for a capability first (even one you've "
+        "used earlier in this same conversation) to confirm its exact required "
+        "parameters before calling execute_api with it, rather than reusing a "
+        "remembered shape from a different capability.\n\n"
+        "A Splunk SPL pitfall observed in real lab sessions: writing "
+        "extract/stats/rex commands against field names or formats you haven't "
+        "confirmed exist in this data (e.g. a wildcard rename that doesn't match "
+        "the source field, or a transform that assumes a log format this index "
+        "doesn't use) reliably produces a SPL parse error. Before writing SPL "
+        "that references specific fields, confirm those fields actually exist "
+        "via splunk_get_metadata (or a quick exploratory search) rather than "
+        "assuming a common/textbook field name or log format."
     )
     return prompt
 
@@ -1004,6 +1030,41 @@ def guide():
     return render_template('guide.html')
 
 
+@app.route('/api/my-progress')
+@login_required
+def my_progress():
+    """Self-serve progress checklist for the logged-in student - distinct from
+    /api/admin/progress, which is proctor-only and covers every student.
+    Added 2026-11-09 so students can see an honest, achievable checklist
+    (Core vs Stretch, see LAB_CHECKPOINTS) instead of having zero visibility
+    into what they've completed or what's actually expected of them."""
+    email = session.get('user_email', '')
+    try:
+        summary = get_progress_summary().get(email.lower(), {})
+        completed = set(summary.get('labs_completed', []))
+    except Exception as e:
+        logger.warning(f"Failed to load self-progress for {email}: {e}")
+        completed = set()
+
+    checkpoints = [
+        {
+            'id': cid,
+            'label': c['label'],
+            'module': c['module'],
+            'tier': c.get('tier', 'stretch'),
+            'done': cid in completed,
+        }
+        for cid, c in LAB_CHECKPOINTS.items()
+    ]
+    core_ids = [cid for cid, c in LAB_CHECKPOINTS.items() if c.get('tier') == 'core']
+    core_done = len([cid for cid in core_ids if cid in completed])
+    return jsonify({
+        'checkpoints': checkpoints,
+        'core_total': len(core_ids),
+        'core_done': core_done,
+    })
+
+
 @app.route('/api/chat/feedback', methods=['POST'])
 @login_required
 def chat_feedback():
@@ -1427,6 +1488,11 @@ def chat():
 
                 yield "FINAL:" + json.dumps({
                     "response": assistant_message,
+                    # Checkpoint IDs this exact turn matched (see
+                    # _detect_lab_checkpoints) - lets the frontend refresh its
+                    # self-progress checklist only when something changed,
+                    # instead of polling /api/my-progress on every message.
+                    "labs_matched": sorted(labs_matched),
                     "tools_used": total_tools_used,
                     "te_available": bool(te_token),
                     "meraki_available": bool(meraki_token),
