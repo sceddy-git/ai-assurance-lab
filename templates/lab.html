@@ -935,6 +935,11 @@
         const availabilityStatus = document.getElementById('availability-status');
 
         let conversationHistory = [];
+        // Set to a LAB_CHECKPOINTS id while a feedback nudge is awaiting a
+        // reply (see maybeShowFeedbackNudge / sendMessage) - the student's
+        // very next message gets captured as feedback in addition to
+        // continuing through the normal chat flow.
+        let pendingFeedbackCheckpoint = null;
 
         // ---- Chat persistence (survive navigating away / reloading) ----
         // Keyed per-user so a shared machine doesn't mix conversations. Only
@@ -1113,10 +1118,28 @@
             const flagKey = 'feedbackNudgeShown_' + hit + '_' + {{ email | tojson }};
             if (localStorage.getItem(flagKey)) return;
             localStorage.setItem(flagKey, '1');
-            addMessage(
-                "🎉 Looks like you just finished this module's story. If you've got a sec, your proctor would love to hear what worked or didn't — no need to leave this chat, just tell them directly.",
-                false
-            );
+
+            const nudgeText = "🎉 Looks like you just finished this module's story. If you've got a sec, " +
+                "your proctor would love to hear what worked or didn't — just reply here and I'll pass it " +
+                "along. No need to wait around for a response first, either: you're all set to go ahead and " +
+                "start the next lab whenever you're ready.";
+            addMessage(nudgeText, false);
+
+            // Fixes a real bug found 2026-11-09: this nudge is purely a
+            // client-side UI bubble and was never added to
+            // conversationHistory, so when a student replied to it, the
+            // model had zero context for what they were replying to (it
+            // isn't part of the conversation sent to the backend) and gave
+            // a confused/apologetic response. Adding it here as an
+            // assistant turn means the model actually sees what it's
+            // responding to, same as any other message in the chat.
+            conversationHistory.push({ role: 'assistant', content: nudgeText });
+
+            // The next message the student sends gets captured as feedback
+            // (see sendMessage) - this is what actually makes "replying to
+            // your proctor" functional rather than just a nice sentiment
+            // that goes nowhere.
+            pendingFeedbackCheckpoint = hit;
         }
 
         async function checkAdminAccess() {
@@ -1570,6 +1593,21 @@
                     messageInput.focus();
                     return;
                 }
+            }
+
+            // If a feedback nudge is awaiting a reply, this message is it -
+            // capture it in the background (fire-and-forget; must never
+            // block or fail the student's actual chat turn) and clear the
+            // pending flag so only this one reply gets captured, not every
+            // message for the rest of the session.
+            if (pendingFeedbackCheckpoint && message) {
+                const feedbackCheckpoint = pendingFeedbackCheckpoint;
+                pendingFeedbackCheckpoint = null;
+                fetch('/api/feedback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: message, checkpoint_id: feedbackCheckpoint })
+                }).catch(err => console.warn('Feedback capture failed (non-blocking):', err));
             }
 
             // Disable input while processing

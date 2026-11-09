@@ -36,6 +36,8 @@ from dynamo_db import (
     get_progress_summary,
     record_prospect,
     get_all_prospects,
+    record_feedback,
+    get_all_feedback,
     set_disabled,
     clear_te_provisioning,
     list_credentials_by_class,
@@ -1653,6 +1655,49 @@ def api_admin_progress():
 
     except Exception as e:
         logger.error(f"Error building progress dashboard: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/feedback', methods=['POST'])
+@login_required
+def api_submit_feedback():
+    """Capture a student's reply to the end-of-module feedback nudge (see
+    maybeShowFeedbackNudge in lab.html). Student-facing, fire-and-forget
+    from the client - failures here should never surface as a chat error,
+    since the student's real conversation already succeeded by the time
+    this fires."""
+    user_email = session.get('user_email', '')
+    try:
+        data = request.get_json(force=True) or {}
+        text = (data.get('text') or '').strip()
+        checkpoint_id = data.get('checkpoint_id') or ''
+        module = LAB_CHECKPOINTS.get(checkpoint_id, {}).get('module', '')
+        if not text:
+            return jsonify({'error': 'No feedback text provided'}), 400
+
+        record_feedback(user_email, checkpoint_id, module, text)
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        logger.warning(f"Failed to record feedback for {user_email}: {e}")
+        # Best-effort feature - don't make this look like a hard failure to the student.
+        return jsonify({'status': 'success'})
+
+
+@app.route('/api/admin/feedback', methods=['GET'])
+@login_required
+def api_admin_feedback():
+    """Proctor-facing view of every end-of-module feedback reply students
+    have left, newest first - the actual delivery mechanism for the
+    feedback nudge shown in chat."""
+    user_email = session.get('user_email', '')
+    if not _is_proctor(user_email):
+        return jsonify({'error': 'Access denied'}), 403
+
+    try:
+        feedback = get_all_feedback()
+        return jsonify({'status': 'success', 'count': len(feedback), 'feedback': feedback})
+    except Exception as e:
+        logger.error(f"Error listing feedback: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 

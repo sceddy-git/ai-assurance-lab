@@ -570,6 +570,80 @@ def get_all_prospects() -> list:
     return results
 
 
+def record_feedback(email: str, checkpoint_id: str, module: str, text: str) -> None:
+    """
+    Record a student's reply to the end-of-module feedback nudge (shown once
+    per student per module-finishing checkpoint - see maybeShowFeedbackNudge
+    in lab.html). Stored the same way as record_prospect: appended to a list
+    attribute on the student's own credentials item, so it shows up
+    alongside everything else proctors already view per-student, with no
+    new table needed.
+
+    Best-effort - callers should wrap this in a try/except so a DynamoDB
+    hiccup never breaks the chat response the student is waiting on.
+
+    Args:
+        email: User's email address
+        checkpoint_id: The LAB_CHECKPOINTS id that triggered the nudge
+            (e.g. 'te_lab5'), so a proctor can see which module/story this
+            feedback is about.
+        module: The module the checkpoint belongs to ('te'/'meraki'/'splunk').
+        text: The student's actual reply text.
+    """
+    if not email or not text:
+        return
+
+    table = get_table()
+    entry = {
+        "checkpoint_id": checkpoint_id or "",
+        "module": module or "",
+        "text": text,
+        "recorded_at": int(time.time())
+    }
+
+    table.update_item(
+        Key={"email": email},
+        UpdateExpression="SET feedback = list_append(if_not_exists(feedback, :empty), :entry)",
+        ExpressionAttributeValues={
+            ":empty": [],
+            ":entry": [entry]
+        }
+    )
+
+
+def get_all_feedback() -> list:
+    """
+    Scan the credentials table for every recorded end-of-module feedback
+    reply across all students, for the proctor-facing feedback view.
+    Returns a flat list sorted newest-first.
+
+    Returns:
+        List of {email, checkpoint_id, module, text, recorded_at} dicts.
+    """
+    table = get_table()
+    results = []
+    scan_kwargs = {"ProjectionExpression": "email, feedback"}
+    while True:
+        response = table.scan(**scan_kwargs)
+        for item in response.get('Items', []):
+            email = item.get('email')
+            for f in (item.get('feedback') or []):
+                results.append({
+                    "email": email,
+                    "checkpoint_id": f.get("checkpoint_id"),
+                    "module": f.get("module"),
+                    "text": f.get("text"),
+                    "recorded_at": f.get("recorded_at")
+                })
+        last_key = response.get('LastEvaluatedKey')
+        if not last_key:
+            break
+        scan_kwargs['ExclusiveStartKey'] = last_key
+
+    results.sort(key=lambda r: r.get('recorded_at') or 0, reverse=True)
+    return results
+
+
 def update_connection_status(email: str, service: str, connected: bool) -> bool:
     """
     Update the connection status for a service.
