@@ -105,7 +105,20 @@ HTML_OUTPUT_SYSTEM_PROMPT = (
     "```html fenced code block. The user's chat interface will automatically offer "
     "a download button for any ```html code block you return, so prefer this format "
     "whenever the user wants something they can save or share, rather than only "
-    "describing it in prose."
+    "describing it in prose.\n\n"
+    "If that output is a multi-slide deck or carousel with JS-driven navigation "
+    "(Next/Previous buttons, arrow keys), never combine `overflow-x: auto` + "
+    "`scroll-snap-type` on the same element that your JS also applies "
+    "`transform: translateX(...)` to for slide-switching - confirmed via a real "
+    "session (2026-11-09) to render slide 1 correctly but go visibly blank on "
+    "every subsequent slide, because translating an `overflow:auto` element "
+    "moves its entire clipped viewport off-screen while its internal scroll "
+    "position never changes from 0. Pick exactly one navigation mechanism: "
+    "either (a) set `overflow-x: hidden` on the slide-track element and drive "
+    "slides purely via the JS transform, or (b) drop the transform entirely and "
+    "call `container.scrollTo({left: offset, behavior: 'smooth'})` to drive "
+    "native scroll-snap. Test mentally that clicking 'Next' from slide 1 would "
+    "actually reveal slide 2's content, not an empty background."
 )
 
 
