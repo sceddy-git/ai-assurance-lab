@@ -601,6 +601,36 @@ bedrock_client = boto3.client(
 # var if a future lab needs Sonnet's extra capability for a specific module.
 CLAUDE_MODEL_ID = os.getenv('CLAUDE_MODEL_ID', 'us.anthropic.claude-haiku-4-5-20251001-v1:0')
 
+# Sonnet 4.5 is used ONLY for turns that look like they're asking for a
+# polished HTML artifact (report/dashboard/deck/narrative - see
+# _wants_html_output below). Haiku handles the tool-calling loop fine for
+# API parameter selection, but a real session (2026-11-09) showed it can
+# write subtly broken HTML/CSS/JS for interactive output (e.g. combining
+# overflow:auto + scroll-snap with a JS transform-based carousel, which
+# rendered slide 1 but left every other slide blank). Those turns are
+# single-shot generation (not tool-looping), so Sonnet's extra latency cost
+# is low-risk against the 140s wall-clock budget, unlike applying it to
+# every turn.
+CLAUDE_MODEL_ID_HTML = os.getenv('CLAUDE_MODEL_ID_HTML', 'us.anthropic.claude-sonnet-4-5-20250929-v1:0')
+
+# Keywords mirroring HTML_OUTPUT_SYSTEM_PROMPT's own trigger ("report,
+# document, dashboard, or any kind of downloadable output") plus the other
+# deliverable nouns used throughout guide.html's prompts (narrative, deck,
+# slide talking points, one-pager, email). Deliberately broad/best-effort:
+# a false positive just costs a bit of extra latency on an ordinary question;
+# a false negative just falls back to the previous (Haiku-only) behavior.
+_HTML_OUTPUT_TRIGGER_RE = re.compile(
+    r'\b(report|dashboard|document|deck|slide|narrative|presentation|'
+    r'one-?pager|email)\b', re.IGNORECASE
+)
+
+
+def _wants_html_output(user_message: str) -> bool:
+    """Best-effort guess that this turn is asking for a polished HTML
+    artifact, so it should use CLAUDE_MODEL_ID_HTML instead of the default
+    CLAUDE_MODEL_ID for this turn's Bedrock calls."""
+    return bool(user_message and _HTML_OUTPUT_TRIGGER_RE.search(user_message))
+
 # Optional Galileo observability - safe no-op if GALILEO_API_KEY isn't set.
 galileo_telemetry.setup_metrics()
 splunk_ao_telemetry.setup_metrics()
@@ -1215,6 +1245,7 @@ def chat():
         total_tools_used = 0
         content = []
         system_prompt = _build_system_prompt(meraki_org_id)
+        active_model_id = CLAUDE_MODEL_ID_HTML if _wants_html_output(user_message) else CLAUDE_MODEL_ID
 
         def generate():
             """Streams newline-delimited progress lines (`STATUS:<text>`)
@@ -1253,18 +1284,18 @@ def chat():
 
                     try:
                         response = bedrock_client.invoke_model(
-                            modelId=CLAUDE_MODEL_ID,
+                            modelId=active_model_id,
                             body=json.dumps(request_body)
                         )
                         result = json.loads(response['body'].read())
                         content = result.get('content', [])
                         galileo_telemetry.add_llm_span(
                             gl_logger, request_body, result,
-                            model_id=CLAUDE_MODEL_ID
+                            model_id=active_model_id
                         )
                         splunk_ao_telemetry.add_llm_span(
                             ao_logger, request_body, result,
-                            model_id=CLAUDE_MODEL_ID
+                            model_id=active_model_id
                         )
                     except Exception as e:
                         logger.error(f"Bedrock invocation failed: {e}")
