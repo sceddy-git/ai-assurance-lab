@@ -202,7 +202,7 @@ LAB_CHECKPOINTS = {
         'generate a configuration audit of my',
     ]},
     'meraki_lab6': {'module': 'meraki', 'label': 'Lab 6: The Story', 'tier': 'stretch', 'phrases': [
-        "pull together everything from this session on this customer's network",
+        "pull together everything from this session on this customer's multi-site deployment",
         "make the strongest case for expanding this engagement",
     ]},
     # Splunk Part A (Labs 1-3) runs entirely inside Splunk's own native AI
