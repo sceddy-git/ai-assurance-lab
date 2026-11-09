@@ -275,10 +275,10 @@ server. No questions; be conservative if anything is ambiguous.
     <div class="lab">
       <div class="lab-h"><span class="n">LAB 2</span> The Outage Call</div>
       <div class="lab-b">
-        <div class="sub">Three weeks into the trial, your customer's NOC calls — something's alerting. Interrogate it in plain English.</div>
-        <div class="prompt">List all active ThousandEyes alerts right now and tell me which have been firing for more than 15 minutes.</div>
-        <div class="prompt">Troubleshoot the most critical alert. Suggest a probable fault domain and give me the supporting evidence from the test data.</div>
-        <div class="prompt">Which enterprise agents are reporting packet loss greater than 1% to the affected target right now? Show me the path-visualization summary.</div>
+        <div class="sub">Day 1 of the trial — your customer's NOC wants proof ThousandEyes would catch something the moment it happens. Prove the alerting and triage story in plain English, using both your own org and the live internet.</div>
+        <div class="prompt">Check my own ThousandEyes org for alerts in the last 7 days (both triggered and cleared). If there's anything there, summarize it. If there's nothing yet, that's the expected, correct answer this early in a trial with only a few minutes of test history — say so explicitly rather than treating it as a dead end.</div>
+        <div class="prompt">Now prove the platform is watching the whole internet, not just our handful of tests: search for real outages in the last 24 hours. Pick the most significant one and walk me through it like you'd walk a customer through it — what happened, which provider or network, how widespread, and what evidence proves it.</div>
+        <div class="prompt">For that outage, what would a probable fault domain and troubleshooting path look like if this were hitting my customer's traffic instead? Use the supporting evidence from the data to make the case.</div>
         <div class="prompt">Now check on my customer's own tests specifically: look at every test tagged "customer-demo" and tell me if any of them are currently showing errors, failures, or response times noticeably above their baseline. This is what I'd tell the customer if they asked "is our stuff okay right now?"</div>
       </div>
     </div>

@@ -138,9 +138,9 @@ LAB_CHECKPOINTS = {
         'write a professional customer-facing performance report',
     ]},
     'te_lab2': {'module': 'te', 'label': 'Lab 2: The Outage Call', 'phrases': [
-        'tell me which have been firing for more than 15 minutes',
-        'troubleshoot the most critical alert',
-        'which enterprise agents are reporting packet loss greater than 1%',
+        'alerts in the last 7 days (both triggered and cleared)',
+        "walk me through it like you'd walk a customer through it",
+        'what would a probable fault domain and troubleshooting path look like',
     ]},
     'te_lab3': {'module': 'te', 'label': 'Lab 3: Proving the SLA', 'phrases': [
         'pull results for those test ids since they were created',
