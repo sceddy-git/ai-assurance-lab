@@ -1380,6 +1380,7 @@ def chat():
             nonlocal content, total_tools_used, messages, ao_last_span_id, ao_trace_future
             try:
                 for iteration in range(MAX_TOOL_ITERATIONS):
+                    logger.info(f"[telemetry-debug] loop iteration {iteration} starting for {email}")
                     if time.monotonic() - chat_loop_started_at > CHAT_WALL_CLOCK_BUDGET_SECONDS:
                         logger.warning(
                             f"Chat wall-clock budget ({CHAT_WALL_CLOCK_BUDGET_SECONDS}s) exceeded "
@@ -1404,6 +1405,7 @@ def chat():
                         )
                         result = json.loads(response['body'].read())
                         content = result.get('content', [])
+                        logger.info(f"[telemetry-debug] Bedrock call succeeded, content_types={[c.get('type') for c in content]}")
                         # Make sure start_trace() actually finished before we
                         # depend on it - only waits if it's still genuinely
                         # running; normally it's long done by now since the
