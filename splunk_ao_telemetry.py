@@ -315,9 +315,7 @@ def add_llm_span(ao_logger, request_body: dict, result: dict, model_id: str) -> 
             num_input_tokens=usage.get('input_tokens'),
             num_output_tokens=usage.get('output_tokens'),
         )
-        span_id = str(getattr(span, 'id', '')) or None
-        logger.info(f"Splunk AO add_llm_span succeeded, span_id={span_id}, tokens={usage.get('input_tokens')}/{usage.get('output_tokens')}")
-        return span_id
+        return str(getattr(span, 'id', '')) or None
     except Exception as e:
         logger.warning(f"Splunk AO add_llm_span failed: {e}")
         return None
@@ -346,7 +344,6 @@ def conclude_and_flush(ao_logger, assistant_message: str) -> None:
     try:
         ao_logger.conclude(output=_truncate_for_logging(assistant_message or ""), conclude_all=True)
         ao_logger.flush()
-        logger.info("Splunk AO conclude/flush succeeded")
     except Exception as e:
         logger.warning(f"Splunk AO conclude/flush failed: {e}")
 

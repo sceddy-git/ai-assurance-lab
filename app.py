@@ -444,15 +444,22 @@ def _cap_messages_for_bedrock(messages: list, max_total_chars: int = MAX_TOTAL_M
 # into "telemetry for this one message is missing" - which is invisible to
 # the student - rather than "the whole chat response never arrives."
 TELEMETRY_CALL_TIMEOUT_SECONDS = 8
-_telemetry_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="telemetry")
 
 
-def _run_with_timeout(fn, timeout_seconds, default, *args, **kwargs):
+def _run_with_timeout(fn, timeout_seconds, default, *args, executor=None, **kwargs):
     """Run fn(*args, **kwargs) in a worker thread, returning `default` if it
     doesn't finish within timeout_seconds or raises. Never raises itself -
-    telemetry must never be the reason a chat response fails or hangs."""
+    telemetry must never be the reason a chat response fails or hangs.
+
+    executor: which ThreadPoolExecutor to submit to. Must default to None/a
+    module-level pool only for *standalone* one-off calls (e.g. setup_metrics()
+    at startup) that don't need to share SDK state with anything else. Any
+    sequence of calls that belong to the same Splunk AO trace MUST share one
+    single-worker executor (see new_ao_telemetry_pool() below) - see its
+    docstring for why."""
+    pool = executor or _default_telemetry_executor
     try:
-        future = _telemetry_executor.submit(fn, *args, **kwargs)
+        future = pool.submit(fn, *args, **kwargs)
         return future.result(timeout=timeout_seconds)
     except FutureTimeoutError:
         logger.warning(f"{getattr(fn, '__name__', fn)} exceeded {timeout_seconds}s timeout, continuing without it")
@@ -462,45 +469,42 @@ def _run_with_timeout(fn, timeout_seconds, default, *args, **kwargs):
         return default
 
 
-def _submit_telemetry(fn, *args, **kwargs):
-    """Fire fn(*args, **kwargs) off to the telemetry pool immediately, without
-    waiting for it. Returns the Future.
-
-    Found 2026-10-13/2026-11-10: start_trace() was being run through
-    _run_with_timeout() above, which only stops the caller from *waiting*
-    past TELEMETRY_CALL_TIMEOUT_SECONDS - it does NOT cancel the submitted
-    work, which keeps running unattended in the worker thread. add_llm_span()
-    fires immediately after on the main thread, synchronously, assuming the
-    trace/session setup already landed. ~46% of the time it hadn't (per
-    journalctl: 411/769 "start_trace...exceeded...timeout" warnings), so the
-    span silently attached to nothing - no exception, no log line, just a
-    permanently missing cost/token number. That's the real cause of the
-    "trend graph had cost, then it stopped" regression traced back to the
-    8s-timeout commit (b1847d0).
-
-    Fix: don't block on start_trace() up front. Submit it and keep the
-    Future; the caller must await it (see _await_telemetry below) right
-    before the first call that actually depends on the trace existing
-    (add_llm_span), so by the time it matters the trace has either already
-    finished (the common case - the LLM call itself takes longer) or we
-    wait out the remaining budget instead of racing ahead onto a broken
-    logger."""
-    return _telemetry_executor.submit(fn, *args, **kwargs)
+_default_telemetry_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="telemetry")
 
 
-def _await_telemetry(future, timeout_seconds, default):
-    """Wait up to timeout_seconds for a Future from _submit_telemetry() above.
-    Never raises - same contract as _run_with_timeout()."""
-    if future is None:
-        return default
-    try:
-        return future.result(timeout=timeout_seconds)
-    except FutureTimeoutError:
-        logger.warning(f"telemetry call exceeded {timeout_seconds}s timeout, continuing without it")
-        return default
-    except Exception as e:
-        logger.warning(f"telemetry call failed: {e}")
-        return default
+def new_ao_telemetry_pool():
+    """One single-worker ThreadPoolExecutor per chat request, used for every
+    Splunk AO call in that request's trace (start_trace, add_llm_span,
+    add_tool_span, conclude_and_flush).
+
+    Found 2026-11-10 (after the 2026-10-13 fix above still didn't restore
+    token/cost data): Splunk AO's SDK (splunk_ao/decorator.py) tracks the
+    "current trace"/span stack using contextvars.ContextVar, e.g.
+    _trace_context, _span_stack_context. ContextVars are per-OS-thread (not
+    shared across threads the way they are across async tasks on one
+    thread) - a value set in one thread is invisible in another. The
+    original 8s-timeout fix ran start_trace()/conclude_and_flush() through a
+    *shared, 4-worker* _telemetry_executor, while add_llm_span()/
+    add_tool_span() were called directly on the main gunicorn request
+    thread. So start_trace()'s ContextVar updates landed on whichever of 4
+    worker threads happened to run it - a thread add_llm_span() never
+    touches - and add_llm_span() silently created a parentless, orphaned
+    span with no trace to attach to (no exception; the call "succeeds" and
+    even returns token counts, just with has_children/is_complete never set
+    on the actual trace). Confirmed live via get_spans(): every post-Oct-13
+    trace had 0 child spans despite add_llm_span() logging success.
+
+    Fix: every telemetry call for one request must run on the exact same
+    OS thread, so the ContextVars start_trace() sets are the same ones
+    add_llm_span()/conclude_and_flush() see. A single-worker executor
+    guarantees that (one worker thread processes everything submitted to it,
+    strictly in submission order), while still giving each individual call
+    its own bounded timeout via _run_with_timeout(..., executor=this_pool).
+
+    Caller must shut this down (shutdown(wait=False) is fine - we don't care
+    about a slow Splunk call finishing late in an abandoned thread, only
+    that it doesn't block *this* request) once the chat response is sent."""
+    return ThreadPoolExecutor(max_workers=1, thread_name_prefix="ao-telemetry")
 
 
 def _build_system_prompt(meraki_org_id=None):
@@ -1323,13 +1327,16 @@ def chat():
         # configured. (Galileo was removed 2026-11-10 - same underlying data,
         # no need to send it to two observability backends.)
         ao_logger = splunk_ao_telemetry.new_logger()
-        # Fire-and-await-later rather than block here - see _submit_telemetry's
-        # docstring for why blocking on this with a timeout silently orphaned
-        # ~46% of spans. ao_trace_ready is awaited (bounded) right before the
-        # first add_llm_span call below, which depends on the trace existing.
-        ao_trace_future = _submit_telemetry(
-            splunk_ao_telemetry.start_trace,
-            ao_logger, email, user_message, labs_matched, is_proctor=_is_proctor(email)
+        # One single-worker pool for every Splunk AO call in this request's
+        # trace - see new_ao_telemetry_pool()'s docstring for why this (not
+        # just awaiting start_trace, which was tried and didn't fix it) is
+        # required for add_llm_span()/conclude_and_flush() to actually see
+        # the trace start_trace() creates.
+        ao_pool = new_ao_telemetry_pool()
+        _run_with_timeout(
+            splunk_ao_telemetry.start_trace, TELEMETRY_CALL_TIMEOUT_SECONDS, None,
+            ao_logger, email, user_message, labs_matched, is_proctor=_is_proctor(email),
+            executor=ao_pool
         )
         # Record id of the most recent LLM span logged this turn, so the
         # frontend's thumbs up/down buttons can attach feedback to exactly
@@ -1377,10 +1384,9 @@ def chat():
             Any exception here can't be caught by chat()'s outer try/except
             (that only covers code before streaming starts, which is why
             this has its own try/except yielding an ERROR: line)."""
-            nonlocal content, total_tools_used, messages, ao_last_span_id, ao_trace_future
+            nonlocal content, total_tools_used, messages, ao_last_span_id
             try:
                 for iteration in range(MAX_TOOL_ITERATIONS):
-                    logger.info(f"[telemetry-debug] loop iteration {iteration} starting for {email}")
                     if time.monotonic() - chat_loop_started_at > CHAT_WALL_CLOCK_BUDGET_SECONDS:
                         logger.warning(
                             f"Chat wall-clock budget ({CHAT_WALL_CLOCK_BUDGET_SECONDS}s) exceeded "
@@ -1405,25 +1411,18 @@ def chat():
                         )
                         result = json.loads(response['body'].read())
                         content = result.get('content', [])
-                        logger.info(f"[telemetry-debug] Bedrock call succeeded, content_types={[c.get('type') for c in content]}")
-                        # Make sure start_trace() actually finished before we
-                        # depend on it - only waits if it's still genuinely
-                        # running; normally it's long done by now since the
-                        # Bedrock call above takes longer. See
-                        # _submit_telemetry's docstring for the bug this fixes.
-                        if ao_trace_future is not None:
-                            _await_telemetry(ao_trace_future, TELEMETRY_CALL_TIMEOUT_SECONDS, None)
-                            ao_trace_future = None
-                        ao_last_span_id = splunk_ao_telemetry.add_llm_span(
-                            ao_logger, request_body, result,
-                            model_id=active_model_id
+                        ao_last_span_id = _run_with_timeout(
+                            splunk_ao_telemetry.add_llm_span, TELEMETRY_CALL_TIMEOUT_SECONDS, None,
+                            ao_logger, request_body, result, model_id=active_model_id,
+                            executor=ao_pool
                         ) or ao_last_span_id
                     except Exception as e:
                         logger.error(f"Bedrock invocation failed: {e}")
-                        if ao_trace_future is not None:
-                            _await_telemetry(ao_trace_future, TELEMETRY_CALL_TIMEOUT_SECONDS, None)
-                            ao_trace_future = None
-                        splunk_ao_telemetry.conclude_and_flush(ao_logger, f"[error] Bedrock invocation failed: {e}")
+                        _run_with_timeout(
+                            splunk_ao_telemetry.conclude_and_flush, TELEMETRY_CALL_TIMEOUT_SECONDS, None,
+                            ao_logger, f"[error] Bedrock invocation failed: {e}",
+                            executor=ao_pool
+                        )
                         error_str = str(e)
                         if 'ValidationException' in error_str and 'too long' in error_str.lower():
                             # Belt-and-suspenders: the proactive caps above should
@@ -1481,9 +1480,11 @@ def chat():
                             logger.error(f"Tool execution error for {tool_name}: {e}")
                             tool_result = {"error": f"Tool execution failed: {str(e)}"}
 
-                        splunk_ao_telemetry.add_tool_span(
+                        _run_with_timeout(
+                            splunk_ao_telemetry.add_tool_span, TELEMETRY_CALL_TIMEOUT_SECONDS, None,
                             ao_logger, tool_name, tool_input, tool_result, tool_use_id,
-                            module=tool_module, had_error=bool(isinstance(tool_result, dict) and tool_result.get('error'))
+                            module=tool_module, had_error=bool(isinstance(tool_result, dict) and tool_result.get('error')),
+                            executor=ao_pool
                         )
 
                         tool_result_text = json.dumps(tool_result) if not isinstance(tool_result, str) else tool_result
@@ -1529,16 +1530,10 @@ def chat():
                 except Exception as e:
                     logger.warning(f"Failed to record lab activity for {email}: {e}")
 
-                # Defensive: covers the rare case the loop exits (e.g. hit
-                # MAX_TOOL_ITERATIONS/wall-clock budget) without ever reaching
-                # the add_llm_span call above, so this is otherwise the first
-                # thing depending on start_trace having finished.
-                if ao_trace_future is not None:
-                    _await_telemetry(ao_trace_future, TELEMETRY_CALL_TIMEOUT_SECONDS, None)
-                    ao_trace_future = None
                 _run_with_timeout(
                     splunk_ao_telemetry.conclude_and_flush, TELEMETRY_CALL_TIMEOUT_SECONDS, None,
-                    ao_logger, assistant_message
+                    ao_logger, assistant_message,
+                    executor=ao_pool
                 )
 
                 if prospect_info:
@@ -1570,6 +1565,12 @@ def chat():
             except Exception as e:
                 logger.error(f"Error streaming chat response for {email}: {e}")
                 yield "ERROR:" + json.dumps({'error': 'Internal server error'}) + "\n"
+            finally:
+                # Safety net for any exit path above that didn't already shut
+                # this down - shutdown(wait=False) is cheap and idempotent,
+                # and leaving a per-request single-worker pool running forever
+                # would leak one OS thread per chat request.
+                ao_pool.shutdown(wait=False)
 
         return Response(
             stream_with_context(generate()),
