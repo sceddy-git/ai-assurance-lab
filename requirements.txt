@@ -10,6 +10,5 @@ psutil==5.9.0
 mcp==1.30.0
 pypdf==4.3.1
 openpyxl==3.1.5
-galileo==2.6.0
 splunk-ao==0.4.0
 qrcode[pil]==7.4.2

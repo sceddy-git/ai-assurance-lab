@@ -143,7 +143,7 @@
       <li>Students never install anything — everything runs in this web app (Flask on EC2), reached over HTTPS.</li>
       <li>Chat is powered by Claude on <b>AWS Bedrock</b>; login is <b>AWS Cognito</b> (Hosted UI, OAuth).</li>
       <li>Per-student credentials (ThousandEyes token, Meraki key, Splunk URL) are encrypted and stored in <b>DynamoDB</b> — never in source code.</li>
-      <li>Every chat turn is logged to <b>Galileo</b> for observability (tool selection quality, error rate, instruction adherence, etc.) — optional, but on by default in this deployment.</li>
+      <li>Every chat turn is logged to <b>Splunk Agent Observability</b> for observability (tool selection quality, error rate, instruction adherence, etc.) — optional, but on by default in this deployment.</li>
       <li>Proctors get a separate admin area (this page, plus Students / Classes / Progress / Settings) gated by an explicit proctor allow-list, not just "any logged-in user."</li>
     </ul>
   </section>
@@ -154,7 +154,7 @@
     <p>From scheduling a class to a student running their first lab prompt:</p>
     <div class="mermaid">
 flowchart TD
-    A["Proctor: Settings page<br/>one-time config<br/>(Cognito, encryption key,<br/>Galileo, shared Meraki key,<br/>own ThousandEyes token)"] --> B["Proctor: Classes page<br/>Schedule a class<br/>→ generates QR + join link"]
+    A["Proctor: Settings page<br/>one-time config<br/>(Cognito, encryption key,<br/>Splunk AO, shared Meraki key,<br/>own ThousandEyes token)"] --> B["Proctor: Classes page<br/>Schedule a class<br/>→ generates QR + join link"]
     B --> C["Proctor projects QR code<br/>at the start of the session"]
     C --> D["Student scans QR<br/>/join/&lt;token&gt; page"]
     D --> E["Student submits<br/>name, company, email"]
@@ -170,7 +170,7 @@ flowchart TD
     M --> N["Student sends a prompt<br/>→ Claude (Bedrock) decides<br/>which MCP tool(s) to call"]
     N --> O["MCP tool call →<br/>ThousandEyes / Meraki / Splunk API"]
     O --> P["Result returned to Claude<br/>→ natural-language answer<br/>shown to student"]
-    P --> Q["Chat turn logged to Galileo<br/>(quality/error metrics)"]
+    P --> Q["Chat turn logged to Splunk AO<br/>(quality/error metrics)"]
     P --> R["Progress checkpoint recorded<br/>in DynamoDB"]
     Q --> S["Proctor: Progress dashboard<br/>sees live completion %,<br/>who's stuck, who's ahead"]
     R --> S
@@ -208,7 +208,7 @@ flowchart TD
         <ul>
           <li><b>Claude</b> (Haiku 4.5 by default) via <b>AWS Bedrock</b> — does the actual reasoning and tool selection</li>
           <li><b>MCP servers</b>: ThousandEyes (Cisco-hosted), Meraki (Cisco-hosted), Splunk (optional) — Claude calls these directly with each student's own bearer token</li>
-          <li><b>Galileo</b> observability — every chat turn logged as a trace with LLM/tool/agent spans and scored on 6 metrics</li>
+          <li><b>Splunk Agent Observability</b> — every chat turn logged as a trace with LLM/tool/agent spans and scored on 6 metrics</li>
         </ul>
       </div>
       <div class="card mk">
@@ -232,7 +232,7 @@ flowchart TD
       <li><div><div class="st-t">Proctor emails listed</div><div class="st-d"><code>PROCTOR_EMAILS</code> (comma-separated) — anyone on this list plus the permanent super admin gets access to Students/Classes/Progress/Settings/this guide. Manage via <b>Students → Proctors</b> in the UI, no manual <code>.env</code> editing needed day-to-day.</div></div></li>
       <li><div><div class="st-t">Super admin's own ThousandEyes token saved</div><div class="st-d">On the super admin's own <b>Credentials</b> page, save a ThousandEyes token that belongs to the required training org (see §8). This is what drives auto-provisioning for every student — there is deliberately no separate service-account token.</div></div></li>
       <li><div><div class="st-t">Shared Meraki key set (optional but recommended)</div><div class="st-d"><code>MERAKI_SHARED_API_KEY</code> / <code>MERAKI_SHARED_ORG_ID</code> in <code>.env</code> — gives every student working Meraki access with zero setup. Students can still override with their own key (see §9).</div></div></li>
-      <li><div><div class="st-t">Galileo configured (optional)</div><div class="st-d"><code>GALILEO_API_KEY</code>/<code>GALILEO_PROJECT</code>/<code>GALILEO_LOG_STREAM</code> — if unset, chat still works, just without observability. Dashboard link surfaces automatically in the admin nav once set.</div></div></li>
+      <li><div><div class="st-t">Splunk AO configured (optional)</div><div class="st-d"><code>SPLUNK_AO_REALM</code>/<code>SPLUNK_AO_O11Y_TOKEN</code>/<code>SPLUNK_AO_PROJECT</code>/<code>SPLUNK_AO_AGENT_STREAM</code> — if unset, chat still works, just without observability. Dashboard link surfaces automatically in the admin nav once set.</div></div></li>
       <li><div><div class="st-t">Sanity-check the lab guide</div><div class="st-d">Open <code>/guide</code> yourself and skim the ThousandEyes and Meraki lab prompts against the current demo org's actual data — placeholders like <code>[network]</code> need real names from the org that's connected today.</div></div></li>
     </ol>
   </section>
@@ -292,7 +292,7 @@ flowchart TD
       <tr><td>Last active</td><td>Timestamp of their most recent chat message</td></tr>
     </table>
     <p>Students who haven't logged in yet still appear (pulled straight from Cognito) with zero progress, so no-shows are obvious at a glance. The list is sorted <b>least progress first</b> so the students who most need help are always at the top.</p>
-    <div class="note"><span class="i">ℹ️</span><div>If Galileo is configured, the <b>Metrics Dashboard</b> link in the admin nav opens a separate, deeper view — tool selection quality, error rates, instruction adherence, etc. — useful after the session for retros, not usually needed live.</div></div>
+    <div class="note"><span class="i">ℹ️</span><div>If Splunk AO is configured, the <b>Splunk AO Traces</b> link in the admin nav opens a deeper view — tool selection quality, error rates, instruction adherence, etc. — useful after the session for retros, not usually needed live.</div></div>
   </section>
 
   <!-- 8. TE PROVISIONING -->
@@ -338,8 +338,8 @@ flowchart TD
     <ol class="steps">
       <li><div><div class="st-t">Disable the class</div><div class="st-d">Classes → find the class → <b>Disable</b>. Soft-disables every enrolled student's Cognito login. Fully reversible — nothing else is touched, so this is always safe to do immediately once the session ends.</div></div></li>
       <li><div><div class="st-t">Decide on ThousandEyes cleanup</div><div class="st-d">Only if you're sure no one needs their data anymore: Classes → <b>Delete ThousandEyes Account Groups</b>. This is destructive and irreversible — it deletes the dedicated Account Group + user for every student in that class. There's a confirmation dialog; read it.</div></div></li>
-      <li><div><div class="st-t">Leave students' credentials/progress alone</div><div class="st-d">There's no need to delete student records after a session — they're harmless at rest (encrypted), and keeping them lets you pull retro numbers from Progress/Galileo later.</div></div></li>
-      <li><div><div class="st-t">Optional retro</div><div class="st-d">If Galileo is configured, the Metrics Dashboard link (Settings/Students/Progress nav) is the best place to review tool-selection quality and error rates across the whole cohort after the fact.</div></div></li>
+      <li><div><div class="st-t">Leave students' credentials/progress alone</div><div class="st-d">There's no need to delete student records after a session — they're harmless at rest (encrypted), and keeping them lets you pull retro numbers from Progress/Splunk AO later.</div></div></li>
+      <li><div><div class="st-t">Optional retro</div><div class="st-d">If Splunk AO is configured, the Splunk AO Traces link (Settings/Students/Progress nav) is the best place to review tool-selection quality and error rates across the whole cohort after the fact.</div></div></li>
     </ol>
   </section>
 

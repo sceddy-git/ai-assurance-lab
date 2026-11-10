@@ -644,6 +644,81 @@ def get_all_feedback() -> list:
     return results
 
 
+def record_message_rating(email: str, feedback_id: str, liked: bool) -> None:
+    """
+    Record a student's thumbs up/down on one assistant chat response (see
+    buildFeedbackButtons in lab.html). Stored the same append-to-list
+    pattern as record_feedback/record_prospect above - no new table needed.
+
+    Originally this was meant to go to Splunk AO as an annotation-queue
+    rating, but Splunk's annotation-queue "add records by ID" endpoint
+    rejects live production agent-stream records as not found (confirmed
+    via direct SSM testing against the real API, 2026-11-10 - a pre-GA
+    platform limitation, not something fixable client-side). Storing it
+    ourselves is simpler and gives proctors the same visibility anyway.
+
+    Best-effort - callers should wrap this in a try/except so a DynamoDB
+    hiccup never breaks the chat response the student is waiting on.
+
+    Args:
+        email: User's email address
+        feedback_id: The Splunk AO LLM span id the student is reacting to
+            (still captured/sent for a possible future Splunk-side retry,
+            even though it isn't used to call Splunk today).
+        liked: True for thumbs up, False for thumbs down.
+    """
+    if not email or not feedback_id:
+        return
+
+    table = get_table()
+    entry = {
+        "feedback_id": feedback_id,
+        "liked": bool(liked),
+        "recorded_at": int(time.time())
+    }
+
+    table.update_item(
+        Key={"email": email},
+        UpdateExpression="SET message_ratings = list_append(if_not_exists(message_ratings, :empty), :entry)",
+        ExpressionAttributeValues={
+            ":empty": [],
+            ":entry": [entry]
+        }
+    )
+
+
+def get_all_message_ratings() -> list:
+    """
+    Scan the credentials table for every recorded thumbs up/down rating
+    across all students, for the proctor-facing feedback view. Returns a
+    flat list sorted newest-first.
+
+    Returns:
+        List of {email, feedback_id, liked, recorded_at} dicts.
+    """
+    table = get_table()
+    results = []
+    scan_kwargs = {"ProjectionExpression": "email, message_ratings"}
+    while True:
+        response = table.scan(**scan_kwargs)
+        for item in response.get('Items', []):
+            email = item.get('email')
+            for r in (item.get('message_ratings') or []):
+                results.append({
+                    "email": email,
+                    "feedback_id": r.get("feedback_id"),
+                    "liked": r.get("liked"),
+                    "recorded_at": r.get("recorded_at")
+                })
+        last_key = response.get('LastEvaluatedKey')
+        if not last_key:
+            break
+        scan_kwargs['ExclusiveStartKey'] = last_key
+
+    results.sort(key=lambda r: r.get('recorded_at') or 0, reverse=True)
+    return results
+
+
 def update_connection_status(email: str, service: str, connected: bool) -> bool:
     """
     Update the connection status for a service.

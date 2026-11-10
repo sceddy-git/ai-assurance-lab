@@ -4,22 +4,18 @@ Optional Splunk Agent Observability (splunk-ao) integration.
 Splunk Agent Observability is built directly on Galileo (the SDK's own
 SplunkAOLogger class is implemented using galileo_core schemas internally,
 and its error messages still reference app.galileo.ai) - it's effectively
-Galileo under new Splunk/Cisco branding. Because of that, this module is a
-near 1:1 port of galileo_telemetry.py: same shape, same call sites in
-app.py, same env-var pattern, just SplunkAOLogger instead of GalileoLogger
-and Splunk's O11y Cloud deployment env vars instead of Galileo's.
+Galileo under new Splunk/Cisco branding.
 
-This runs ALONGSIDE galileo_telemetry.py, not instead of it, for as long as
-both are configured - there's no reason to lose the existing Galileo history
-while Splunk AO is still "not yet generally available" (per its own docs,
-as of this integration).
+This module used to run alongside a separate galileo_telemetry.py (both
+sending the same data to two backends). Galileo was removed 2026-11-10 -
+Splunk AO alone now covers the same trace/span/cost data, so there was no
+reason to keep paying for and maintaining a duplicate integration.
 
-Design goals (identical to galileo_telemetry.py):
+Design goals:
 - Zero impact when SPLUNK_AO_REALM/SPLUNK_AO_O11Y_TOKEN aren't set.
 - Never let a Splunk AO SDK error/outage break a student's chat response -
   every public function here swallows and logs its own exceptions.
-- Don't send raw student email as free-text metadata; hash it the same way
-  galileo_telemetry.py does.
+- Don't send raw student email as free-text metadata; hash it first.
 """
 
 import datetime
@@ -52,6 +48,12 @@ _AgentStreams = None
 _Scorers = None
 _ScorerSettings = None
 _ScorerConfig = None
+_AnnotationQueues = None
+_LikeDislikeConstraints = None
+_AnnotationRatingCreate = None
+_LikeDislikeRating = None
+_create_rating_sync = None
+_SplunkAOConfig = None
 
 if ENABLED:
     try:
@@ -64,9 +66,48 @@ if ENABLED:
         from splunk_ao.scorers import Scorers as _Scorers  # noqa: N812
         from splunk_ao.scorers import ScorerSettings as _ScorerSettings  # noqa: N812
         from splunk_ao.scorers import ScorerConfig as _ScorerConfig  # noqa: N812
+        from splunk_ao.annotation_queues import AnnotationQueues as _AnnotationQueues  # noqa: N812
+        from splunk_ao.resources.models.like_dislike_constraints import LikeDislikeConstraints as _LikeDislikeConstraints  # noqa: N812
+        from splunk_ao.resources.models.annotation_rating_create import AnnotationRatingCreate as _AnnotationRatingCreate  # noqa: N812
+        from splunk_ao.resources.models.like_dislike_rating import LikeDislikeRating as _LikeDislikeRating  # noqa: N812
+        from splunk_ao.resources.api.annotation_queue_records.create_annotation_queue_record_rating_annotation_queues_queue_id_records_record_id_rating_put import sync as _create_rating_sync  # noqa: N812
+        from splunk_ao.configuration import SplunkAOConfig as _SplunkAOConfig  # noqa: N812
     except Exception as e:  # pragma: no cover - defensive, package may not be installed yet
         logger.warning(f"Splunk AO SDK not available, disabling telemetry: {e}")
         ENABLED = False
+
+    # KNOWN SPLUNK AO BUG (confirmed 2026-11-10, splunk-ao 0.4.0): any API
+    # response embedding a UserDB object (annotation-queue owner/creator,
+    # collaborators, etc.) for an API-token identity fails to parse with
+    # "'capability_based' is not a valid UserRole" -
+    # splunk_ao.resources.models.user_db.UserDB.from_dict() does strict
+    # `UserRole(_role)` enum construction, but this SDK version's UserRole
+    # enum (admin/manager/read_only/user) predates Splunk's newer
+    # "capability_based" RBAC role, which the backend now returns for API
+    # tokens. Confirmed via direct SSM testing against the real annotation
+    # queue API - every other code path in this module (projects, agent
+    # streams, scorers, traces/spans) is unaffected, since none of those
+    # responses embed a UserDB. Only the feedback/annotation-queue
+    # functions below hit this. Worked around narrowly by making just
+    # user_db.py's local UserRole binding tolerant of unknown values
+    # (falls back to the raw string instead of raising) rather than
+    # patching the shared UserRole class itself, so nothing else in the
+    # SDK is affected. Safe to delete once Splunk ships a fixed SDK
+    # version with a matching UserRole member.
+    try:
+        from splunk_ao.resources.models import user_db as _user_db_module
+        from splunk_ao.resources.models.user_role import UserRole as _RealUserRole
+
+        def _lenient_user_role(value):
+            try:
+                return _RealUserRole(value)
+            except ValueError:
+                logger.info(f"Splunk AO SDK bug workaround: unknown UserRole '{value}', using raw value")
+                return value
+
+        _user_db_module.UserRole = _lenient_user_role
+    except Exception as e:
+        logger.warning(f"Failed to apply Splunk AO UserRole workaround: {e}")
 
 
 # Judge model used to score the 5 evaluators below. Splunk AO's preset
@@ -106,8 +147,9 @@ _ACTION_COMPLETION_SCORER_ID = '662bf46c-2aee-412e-a010-7ad13eca8cb7'
 
 
 def hash_user(email: Optional[str]) -> str:
-    """Same hashing scheme as galileo_telemetry.hash_user() - independent
-    copy so this module has zero import-time dependency on Galileo."""
+    """SHA-256 hash of a lowercased/stripped email, truncated to 16 chars -
+    keeps students identifiable/groupable in Splunk AO without sending raw
+    PII as free-text metadata."""
     if not email:
         return "unknown"
     return hashlib.sha256(email.strip().lower().encode("utf-8")).hexdigest()[:16]
@@ -119,9 +161,9 @@ def setup_metrics() -> None:
     if not ENABLED:
         return
     try:
-        # Same rationale as galileo_telemetry.setup_metrics(): the
-        # project/agent stream need to exist before metrics can be enabled
-        # on them, and they're normally auto-created lazily on first use.
+        # The project/agent stream need to exist before metrics can be
+        # enabled on them, and they're normally auto-created lazily on
+        # first use - so bootstrap one here with a throwaway trace.
         bootstrap = _SplunkAOLogger(project=SPLUNK_AO_PROJECT, agent_stream=SPLUNK_AO_AGENT_STREAM)
         bootstrap.start_trace(input="__startup_bootstrap__")
         bootstrap.conclude(output="ok")
@@ -182,9 +224,9 @@ def start_trace(ao_logger, email: str, user_message: str, labs_matched: Any,
     if ao_logger is None:
         return None
     try:
-        # Same per-student-per-day session grouping as galileo_telemetry.py,
-        # for the same reason: Action Completion/Action Advancement are
-        # session-only metrics and never fire on a bare trace.
+        # Group traces into one session per student per day - Action
+        # Completion/Action Advancement are session-only metrics and never
+        # fire on a bare trace.
         session_external_id = f"{hash_user(email)}:{datetime.date.today().isoformat()}"
         try:
             ao_logger.start_session(
@@ -216,7 +258,8 @@ def start_trace(ao_logger, email: str, user_message: str, labs_matched: Any,
         return None
 
 
-# Same cap/rationale as galileo_telemetry.MAX_LOGGED_CHARS.
+# Cap on how much of any single input/output value gets sent to Splunk AO -
+# large tool results shouldn't bloat telemetry payloads or hit SDK limits.
 MAX_LOGGED_CHARS = 24_000
 
 
@@ -235,10 +278,9 @@ def _truncate_for_logging(value: Any) -> str:
 
 
 def _anthropic_tools_to_openai_schema(anthropic_tools: Optional[list]) -> Optional[list]:
-    """Same conversion as galileo_telemetry._anthropic_tools_to_openai_schema
-    - Bedrock/Anthropic tool defs into the OpenAI-style shape add_llm_span's
-    tools= parameter expects, so tool_selection_quality/tool_error_rate have
-    something to judge selection against."""
+    """Converts Bedrock/Anthropic tool defs into the OpenAI-style shape
+    add_llm_span's tools= parameter expects, so tool_selection_quality/
+    tool_error_rate have something to judge selection against."""
     if not anthropic_tools:
         return None
     converted = []
@@ -257,12 +299,15 @@ def _anthropic_tools_to_openai_schema(anthropic_tools: Optional[list]) -> Option
     return converted or None
 
 
-def add_llm_span(ao_logger, request_body: dict, result: dict, model_id: str) -> None:
+def add_llm_span(ao_logger, request_body: dict, result: dict, model_id: str) -> Optional[str]:
+    """Log one LLM span. Returns the span's record id (str) so a caller can
+    later attach student thumbs up/down feedback to this exact span via
+    submit_feedback() below, or None if telemetry is disabled/failed."""
     if ao_logger is None:
-        return
+        return None
     try:
         usage = (result or {}).get('usage', {})
-        ao_logger.add_llm_span(
+        span = ao_logger.add_llm_span(
             input=_truncate_for_logging(request_body.get('messages', '')),
             output=_truncate_for_logging(result.get('content', '')),
             model=model_id,
@@ -270,8 +315,10 @@ def add_llm_span(ao_logger, request_body: dict, result: dict, model_id: str) -> 
             num_input_tokens=usage.get('input_tokens'),
             num_output_tokens=usage.get('output_tokens'),
         )
+        return str(getattr(span, 'id', '')) or None
     except Exception as e:
         logger.warning(f"Splunk AO add_llm_span failed: {e}")
+        return None
 
 
 def add_tool_span(ao_logger, tool_name: str, tool_input: dict, tool_result: Any,
@@ -301,14 +348,111 @@ def conclude_and_flush(ao_logger, assistant_message: str) -> None:
         logger.warning(f"Splunk AO conclude/flush failed: {e}")
 
 
+# Student thumbs up/down feedback is modeled as a Splunk AO "annotation
+# queue" rating. Splunk AO's annotation queues are built for curated human-review
+# workflows (create a queue, explicitly add specific record ids to it, then
+# rate a record already in the queue) rather than live per-message
+# feedback - so this does all three steps on demand, lazily creating the
+# queue/field once and caching their ids for the life of the process.
+_FEEDBACK_QUEUE_NAME = "chat-message-feedback"
+_FEEDBACK_FIELD_NAME = "helpful"
+_feedback_queue_id: Optional[str] = None
+_feedback_template_id: Optional[str] = None
+_feedback_project_id: Optional[str] = None
+_feedback_agent_stream_id: Optional[str] = None
+
+
+def _ensure_feedback_queue() -> Optional[tuple]:
+    """Lazily create (or find) the annotation queue + like/dislike field used
+    for student chat feedback. Returns
+    (queue_id, template_id, project_id, agent_stream_id), or None if setup
+    fails. Cached in module globals after the first call."""
+    global _feedback_queue_id, _feedback_template_id, _feedback_project_id, _feedback_agent_stream_id
+    if _feedback_queue_id and _feedback_template_id and _feedback_project_id and _feedback_agent_stream_id:
+        return (_feedback_queue_id, _feedback_template_id, _feedback_project_id, _feedback_agent_stream_id)
+    try:
+        project = _Projects().get_with_env_fallbacks(name=SPLUNK_AO_PROJECT)
+        _feedback_project_id = project.id
+        agent_stream = _AgentStreams().get(name=SPLUNK_AO_AGENT_STREAM, project_name=project.name)
+        _feedback_agent_stream_id = agent_stream.id
+
+        queues_client = _AnnotationQueues()
+        queue = queues_client.get(name=_FEEDBACK_QUEUE_NAME)
+        if queue is None:
+            queue = queues_client.create(
+                name=_FEEDBACK_QUEUE_NAME,
+                description="Student thumbs up/down feedback on individual chat responses (AI Assurance Lab).",
+            )
+        _feedback_queue_id = queue.id
+
+        template_id = None
+        for field in queues_client.list_fields(queue.id):
+            if getattr(field, 'name', None) == _FEEDBACK_FIELD_NAME:
+                template_id = field.id
+                break
+        if template_id is None:
+            field = queues_client.create_field(
+                queue.id,
+                name=_FEEDBACK_FIELD_NAME,
+                constraints=_LikeDislikeConstraints(annotation_type="like_dislike"),
+            )
+            template_id = field.id
+        _feedback_template_id = template_id
+
+        return (_feedback_queue_id, _feedback_template_id, _feedback_project_id, _feedback_agent_stream_id)
+    except Exception as e:
+        logger.warning(f"Splunk AO feedback queue setup failed: {e}")
+        return None
+
+
+def submit_feedback(record_id: str, liked: bool) -> bool:
+    """Record a student's thumbs up/down on one LLM span (identified by the
+    record_id returned from add_llm_span) as a Splunk AO annotation-queue
+    rating. Returns True if recorded, False if telemetry is disabled or the
+    call fails - never raises."""
+    if not ENABLED or not record_id:
+        return False
+    try:
+        setup = _ensure_feedback_queue()
+        if setup is None:
+            return False
+        queue_id, template_id, project_id, agent_stream_id = setup
+
+        try:
+            added = _AnnotationQueues().add_records(
+                queue_id=queue_id, project_id=project_id, agent_stream_id=agent_stream_id, record_ids=[record_id]
+            )
+            if not added:
+                # 0 added usually just means it's already in the queue from
+                # a repeat vote on the same message - not fatal, still try
+                # to write the rating below.
+                logger.info(f"Splunk AO add_records_to_annotation_queue added 0 records for {record_id} (likely already queued)")
+        except Exception as e:
+            logger.info(f"Splunk AO add_records_to_annotation_queue non-fatal issue: {e}")
+
+        config = _SplunkAOConfig.get()
+        body = _AnnotationRatingCreate(rating=_LikeDislikeRating(value=liked))
+        _create_rating_sync(
+            queue_id=queue_id,
+            record_id=record_id,
+            client=config.api_client,
+            body=body,
+            annotation_template_id=template_id,
+        )
+        return True
+    except Exception as e:
+        logger.warning(f"Splunk AO submit_feedback failed: {e}")
+        return False
+
+
 _console_url_cache: Optional[str] = None
 
 
 def get_console_url() -> Optional[str]:
-    """Best-effort deep link to the Splunk AO console for proctors. Unlike
-    Galileo's version, this doesn't need an API round-trip to resolve
-    project/log-stream UUIDs - the O11y Cloud console URL is a pure
-    function of the realm (app.<realm>.observability.splunkcloud.com), per
+    """Best-effort deep link to the Splunk AO console for proctors. No API
+    round-trip needed to resolve project/log-stream UUIDs - the O11y Cloud
+    console URL is a pure function of the realm
+    (app.<realm>.observability.splunkcloud.com), per
     splunk_ao.deployment.O11yConfig.require_console_url."""
     global _console_url_cache
     if not ENABLED:
@@ -322,6 +466,5 @@ def get_console_url() -> Optional[str]:
 def get_dashboard_url() -> Optional[str]:
     """No agent-stream-specific dashboard deep link is exposed by the SDK
     yet (Agent Observability on O11y Cloud is pre-GA) - fall back to the
-    console URL, same as galileo_telemetry.get_dashboard_url() falls back
-    when its own trends-deep-link lookup fails."""
+    console URL."""
     return get_console_url()

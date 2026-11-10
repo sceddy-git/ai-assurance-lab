@@ -203,12 +203,6 @@
                 <a href="/admin/classes">🏫 Classes</a>
                 <a href="/admin/settings">⚙️ Settings</a>
                 <a href="/admin/guide">📘 Proctor Guide</a>
-                {% if galileo_dashboard_url %}
-                <a href="{{ galileo_dashboard_url }}" target="_blank" rel="noopener">📊 Metrics Dashboard (Trends → Default View)</a>
-                {% endif %}
-                {% if galileo_url %}
-                <a href="{{ galileo_url }}" target="_blank" rel="noopener">🔭 Galileo Traces</a>
-                {% endif %}
                 {% if splunk_ao_url %}
                 <a href="{{ splunk_ao_url }}" target="_blank" rel="noopener">🔭 Splunk AO Traces</a>
                 {% endif %}
@@ -307,6 +301,27 @@
             </div>
             <div id="feedbackEmpty" style="display:none; text-align:center; padding:20px; color:#999;">
                 No feedback recorded yet — this fills in as students finish a module.
+            </div>
+
+            <h2 style="margin:36px 0 12px; font-size:18px; color:#333;">👍 Message Ratings</h2>
+            <p class="muted" style="margin-bottom:14px;">
+                Thumbs up/down students give on individual chat responses. Captured automatically when a student
+                clicks either button under an assistant message.
+            </p>
+            <div id="ratingsWrap" style="overflow-x:auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Rating</th>
+                            <th>Student</th>
+                            <th>When</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ratingsBody"></tbody>
+                </table>
+            </div>
+            <div id="ratingsEmpty" style="display:none; text-align:center; padding:20px; color:#999;">
+                No ratings recorded yet — this fills in as students react to chat responses.
             </div>
         </div>
     </div>
@@ -472,11 +487,29 @@
                 .catch(err => console.error('Failed to load feedback', err));
         }
 
+        function loadMessageRatings() {
+            fetch('/api/admin/message-ratings')
+                .then(r => r.json())
+                .then(data => {
+                    const ratings = data.ratings || [];
+                    document.getElementById('ratingsWrap').style.display = ratings.length ? 'block' : 'none';
+                    document.getElementById('ratingsEmpty').style.display = ratings.length ? 'none' : 'block';
+                    document.getElementById('ratingsBody').innerHTML = ratings.map(r => `
+                        <tr>
+                            <td>${r.liked ? '👍 Helpful' : '👎 Not helpful'}</td>
+                            <td>${escapeHtml(r.email)}</td>
+                            <td>${fmtTime(r.recorded_at)}</td>
+                        </tr>`).join('');
+                })
+                .catch(err => console.error('Failed to load message ratings', err));
+        }
+
         loadProgress();
         loadProspects();
         loadFeedback();
+        loadMessageRatings();
         // Auto-refresh every 30s so proctors can watch it live during the lab.
-        setInterval(() => { loadProgress(); loadProspects(); loadFeedback(); }, 30000);
+        setInterval(() => { loadProgress(); loadProspects(); loadFeedback(); loadMessageRatings(); }, 30000);
     </script>
 </body>
 </html>

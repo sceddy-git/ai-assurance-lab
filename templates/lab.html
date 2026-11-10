@@ -972,7 +972,7 @@
             conversationHistory = saved;
             for (const turn of saved) {
                 if (typeof turn.content === 'string') {
-                    addMessage(turn.content, turn.role === 'user', null, turn.trace_id);
+                    addMessage(turn.content, turn.role === 'user', null, turn.feedback_id);
                 }
             }
         }
@@ -1209,7 +1209,7 @@
             return DOMPurify.sanitize(rawHtml, { ADD_ATTR: ['target', 'rel'] });
         }
 
-        function addMessage(text, isUser, fileNames, traceId) {
+        function addMessage(text, isUser, fileNames, feedbackId) {
             const messagesContainer = document.getElementById('messages');
             const messagesInner = document.getElementById('messages-inner');
 
@@ -1256,8 +1256,8 @@
                     link.setAttribute('rel', 'noopener noreferrer');
                 });
                 addHtmlDownloadButtons(content);
-                if (traceId) {
-                    content.appendChild(buildFeedbackButtons(traceId));
+                if (feedbackId) {
+                    content.appendChild(buildFeedbackButtons(feedbackId));
                 }
             }
 
@@ -1269,11 +1269,11 @@
         }
 
         // Builds the thumbs up/down row shown under an assistant message
-        // that has a Galileo trace_id (i.e. telemetry is enabled for this
-        // response). Clicking either button posts feedback to Galileo and
-        // locks in the choice; it never blocks or errors visibly to the
-        // student if the request fails, since feedback is a nice-to-have.
-        function buildFeedbackButtons(traceId) {
+        // that has a Splunk AO feedback_id (i.e. telemetry is enabled for
+        // this response). Clicking either button posts feedback to Splunk
+        // AO and locks in the choice; it never blocks or errors visibly to
+        // the student if the request fails, since feedback is a nice-to-have.
+        function buildFeedbackButtons(feedbackId) {
             const wrap = document.createElement('div');
             wrap.className = 'feedback-buttons';
 
@@ -1295,7 +1295,7 @@
                 fetch('/api/chat/feedback', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ trace_id: traceId, liked })
+                    body: JSON.stringify({ feedback_id: feedbackId, liked })
                 }).catch(err => console.warn('Feedback submission failed:', err));
             };
 
@@ -1700,8 +1700,8 @@
                 }
 
                 // Add assistant response
-                addMessage(displayResponse, false, null, data.trace_id);
-                conversationHistory.push({ role: 'assistant', content: displayResponse, trace_id: data.trace_id });
+                addMessage(displayResponse, false, null, data.feedback_id);
+                conversationHistory.push({ role: 'assistant', content: displayResponse, feedback_id: data.feedback_id });
                 saveChatHistory();
 
                 // Reload credential status (may have changed)

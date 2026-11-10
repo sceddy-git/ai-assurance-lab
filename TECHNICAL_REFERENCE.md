@@ -340,9 +340,10 @@ already fixed on `main` / live:
      they auto-scale with the write burst; no change needed there. SES is
      on a 50,000/day production quota, far above 40 invite emails.
 6. **Per-chat-request thread leak causing repeated whole-service restarts
-   during a busy live lab (2026-11-04)**. `galileo_telemetry.new_logger()`
-   and `splunk_ao_telemetry.new_logger()` both create a brand-new SDK
-   logger per chat request (`app.py`'s `/api/chat`), and the underlying
+   during a busy live lab (2026-11-04)**. At the time, both
+   `galileo_telemetry.new_logger()` and `splunk_ao_telemetry.new_logger()`
+   created a brand-new SDK logger per chat request (`app.py`'s
+   `/api/chat`), and the underlying
    OTLP/gRPC exporter each one spins up leaks background `libuv-worker` OS
    threads that are never torn down. A cron-based safety net already
    exists for exactly this class of problem — `thread_watchdog.sh` (not
@@ -361,8 +362,8 @@ already fixed on `main` / live:
      9 keep serving) well before any single worker's thread count nears
      the watchdog's 50-thread threshold, so the disruptive whole-service
      restarts should become rare again.
-   - **Not yet done / real fix**: make `galileo_telemetry.py` and
-     `splunk_ao_telemetry.py` reuse one shared logger per worker process
+   - **Not yet done / real fix**: make `splunk_ao_telemetry.py` (Galileo
+     was removed 2026-11-10) reuse one shared logger per worker process
      (set up once at startup, like `setup_metrics()` already does) instead
      of constructing a fresh one on every single chat request. That
      should eliminate the leak at the source rather than just recycling

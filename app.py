@@ -38,6 +38,8 @@ from dynamo_db import (
     get_all_prospects,
     record_feedback,
     get_all_feedback,
+    record_message_rating,
+    get_all_message_ratings,
     set_disabled,
     clear_te_provisioning,
     list_credentials_by_class,
@@ -58,7 +60,6 @@ from mcp_client import (
     MERAKI_MCP_URL
 )
 from attachments import process_uploaded_files, AttachmentError, MAX_FILES, MAX_FILE_BYTES
-import galileo_telemetry
 import splunk_ao_telemetry
 import thousandeyes_admin
 
@@ -432,12 +433,12 @@ def _cap_messages_for_bedrock(messages: list, max_total_chars: int = MAX_TOTAL_M
     return messages[start:]
 
 
-# Bounded pool for calls to third-party observability SDKs (Galileo, Splunk
-# AO) that make their own HTTP requests outside our control and don't expose
-# a reliable timeout knob. Found 2026-10-13: the chat wall-clock budget only
-# guards the tool-calling loop, not these start/conclude/flush calls made
-# just before and after it - a slow Galileo/Splunk backend could still hang
-# a request past nginx's proxy timeout with zero visibility (no exception,
+# Bounded pool for calls to the Splunk AO observability SDK, which makes its
+# own HTTP requests outside our control and doesn't expose a reliable
+# timeout knob. Found 2026-10-13: the chat wall-clock budget only guards the
+# tool-calling loop, not these start/conclude/flush calls made just before
+# and after it - a slow Splunk AO backend could still hang a request past
+# nginx's proxy timeout with zero visibility (no exception,
 # no log line, just a silent 504). Running each call in a worker thread and
 # giving up after TELEMETRY_CALL_TIMEOUT_SECONDS converts that failure mode
 # into "telemetry for this one message is missing" - which is invisible to
@@ -659,8 +660,8 @@ def _wants_html_output(user_message: str) -> bool:
     CLAUDE_MODEL_ID for this turn's Bedrock calls."""
     return bool(user_message and _HTML_OUTPUT_TRIGGER_RE.search(user_message))
 
-# Optional Galileo observability - safe no-op if GALILEO_API_KEY isn't set.
-galileo_telemetry.setup_metrics()
+# Optional Splunk AO observability - safe no-op if SPLUNK_AO_REALM/
+# SPLUNK_AO_O11Y_TOKEN aren't set.
 splunk_ao_telemetry.setup_metrics()
 
 
@@ -1070,17 +1071,27 @@ def my_progress():
 @app.route('/api/chat/feedback', methods=['POST'])
 @login_required
 def chat_feedback():
-    """Record a student's thumbs up/down on one assistant response as a
-    Galileo annotation rating on that response's trace. No-op (still
-    returns 200) if Galileo telemetry is disabled, so the frontend doesn't
-    need to special-case a misconfigured lab."""
+    """Record a student's thumbs up/down on one assistant response.
+
+    Originally wired to Splunk AO's annotation-queue rating API (see
+    splunk_ao_telemetry.submit_feedback, still implemented but unused here)
+    - confirmed via direct testing (2026-11-10) that Splunk's "add records
+    to queue" endpoint rejects live production agent-stream records as not
+    found, a pre-GA platform limitation outside our control. Stored in our
+    own DynamoDB instead (dynamo_db.record_message_rating) so the feature
+    actually works today; revisit splunk_ao_telemetry.submit_feedback if
+    Splunk ever fixes that endpoint."""
     data = request.get_json() or {}
-    trace_id = (data.get('trace_id') or '').strip()
+    feedback_id = (data.get('feedback_id') or '').strip()
     liked = data.get('liked')
-    if not trace_id or not isinstance(liked, bool):
-        return jsonify({'error': 'trace_id and liked (boolean) are required'}), 400
-    ok = galileo_telemetry.submit_feedback(trace_id, liked)
-    return jsonify({'recorded': ok})
+    if not feedback_id or not isinstance(liked, bool):
+        return jsonify({'error': 'feedback_id and liked (boolean) are required'}), 400
+    try:
+        record_message_rating(session.get('user_email'), feedback_id, liked)
+        return jsonify({'recorded': True})
+    except Exception as e:
+        logger.warning(f"Failed to record message rating: {e}")
+        return jsonify({'recorded': False})
 
 
 # Keyword -> short progress phrase shown in the chat UI while a tool call is
@@ -1265,25 +1276,21 @@ def chat():
             if image_block:
                 prospect_info = _extract_prospect_domain_from_screenshot(image_block)
 
-        # Optional Galileo observability: one trace per chat request, spans
-        # added around the Bedrock call and each MCP tool call below. Fully
-        # no-op (gl_logger is None) if GALILEO_API_KEY isn't configured.
-        gl_logger = galileo_telemetry.new_logger()
-        gl_trace_id = _run_with_timeout(
-            galileo_telemetry.start_trace, TELEMETRY_CALL_TIMEOUT_SECONDS, None,
-            gl_logger, email, user_message, labs_matched, is_proctor=_is_proctor(email)
-        )
-
-        # Splunk Agent Observability: separate, independent logger/trace
-        # sent in parallel, using the exact same call shape as Galileo
-        # above (splunk-ao's SplunkAOLogger is built on Galileo internally).
-        # No-op (ao_logger is None) if SPLUNK_AO_REALM/SPLUNK_AO_O11Y_TOKEN
-        # aren't configured.
+        # Splunk Agent Observability: one trace per chat request, spans added
+        # around the Bedrock call and each MCP tool call below. Fully no-op
+        # (ao_logger is None) if SPLUNK_AO_REALM/SPLUNK_AO_O11Y_TOKEN aren't
+        # configured. (Galileo was removed 2026-11-10 - same underlying data,
+        # no need to send it to two observability backends.)
         ao_logger = splunk_ao_telemetry.new_logger()
         _run_with_timeout(
             splunk_ao_telemetry.start_trace, TELEMETRY_CALL_TIMEOUT_SECONDS, None,
             ao_logger, email, user_message, labs_matched, is_proctor=_is_proctor(email)
         )
+        # Record id of the most recent LLM span logged this turn, so the
+        # frontend's thumbs up/down buttons can attach feedback to exactly
+        # the response the student is reacting to (see submit_feedback() in
+        # splunk_ao_telemetry.py). None if telemetry is disabled/unavailable.
+        ao_last_span_id = None
 
         # Agentic loop: Claude may need multiple rounds of tool calls before it
         # has enough information to answer (e.g. Meraki's MCP server exposes a
@@ -1325,7 +1332,7 @@ def chat():
             Any exception here can't be caught by chat()'s outer try/except
             (that only covers code before streaming starts, which is why
             this has its own try/except yielding an ERROR: line)."""
-            nonlocal content, total_tools_used, messages
+            nonlocal content, total_tools_used, messages, ao_last_span_id
             try:
                 for iteration in range(MAX_TOOL_ITERATIONS):
                     if time.monotonic() - chat_loop_started_at > CHAT_WALL_CLOCK_BUDGET_SECONDS:
@@ -1352,17 +1359,12 @@ def chat():
                         )
                         result = json.loads(response['body'].read())
                         content = result.get('content', [])
-                        galileo_telemetry.add_llm_span(
-                            gl_logger, request_body, result,
-                            model_id=active_model_id
-                        )
-                        splunk_ao_telemetry.add_llm_span(
+                        ao_last_span_id = splunk_ao_telemetry.add_llm_span(
                             ao_logger, request_body, result,
                             model_id=active_model_id
-                        )
+                        ) or ao_last_span_id
                     except Exception as e:
                         logger.error(f"Bedrock invocation failed: {e}")
-                        galileo_telemetry.conclude_and_flush(gl_logger, f"[error] Bedrock invocation failed: {e}")
                         splunk_ao_telemetry.conclude_and_flush(ao_logger, f"[error] Bedrock invocation failed: {e}")
                         error_str = str(e)
                         if 'ValidationException' in error_str and 'too long' in error_str.lower():
@@ -1421,10 +1423,6 @@ def chat():
                             logger.error(f"Tool execution error for {tool_name}: {e}")
                             tool_result = {"error": f"Tool execution failed: {str(e)}"}
 
-                        galileo_telemetry.add_tool_span(
-                            gl_logger, tool_name, tool_input, tool_result, tool_use_id,
-                            module=tool_module, had_error=bool(isinstance(tool_result, dict) and tool_result.get('error'))
-                        )
                         splunk_ao_telemetry.add_tool_span(
                             ao_logger, tool_name, tool_input, tool_result, tool_use_id,
                             module=tool_module, had_error=bool(isinstance(tool_result, dict) and tool_result.get('error'))
@@ -1474,10 +1472,6 @@ def chat():
                     logger.warning(f"Failed to record lab activity for {email}: {e}")
 
                 _run_with_timeout(
-                    galileo_telemetry.conclude_and_flush, TELEMETRY_CALL_TIMEOUT_SECONDS, None,
-                    gl_logger, assistant_message
-                )
-                _run_with_timeout(
                     splunk_ao_telemetry.conclude_and_flush, TELEMETRY_CALL_TIMEOUT_SECONDS, None,
                     ao_logger, assistant_message
                 )
@@ -1499,9 +1493,9 @@ def chat():
                     "te_available": bool(te_token),
                     "meraki_available": bool(meraki_token),
                     "splunk_available": bool(splunk_url),
-                    # None if Galileo telemetry is disabled/unavailable - frontend
-                    # must hide the feedback buttons in that case.
-                    "trace_id": gl_trace_id,
+                    # None if Splunk AO telemetry is disabled/unavailable -
+                    # frontend must hide the feedback buttons in that case.
+                    "feedback_id": ao_last_span_id,
                     # True if this turn hit the wall-clock budget or iteration cap
                     # with a tool call still pending. Frontend auto-continues (see
                     # lab.html) rather than showing this as a dead end to the
@@ -1539,8 +1533,6 @@ def admin_students():
     resp = make_response(render_template(
         'admin_students.html', email=user_email,
         is_super_admin=(user_email.strip().lower() == SUPER_ADMIN_EMAIL.lower()),
-        galileo_url=galileo_telemetry.get_console_url(),
-        galileo_dashboard_url=galileo_telemetry.get_dashboard_url(),
         splunk_ao_url=splunk_ao_telemetry.get_console_url(),
         splunk_ao_dashboard_url=splunk_ao_telemetry.get_dashboard_url()
     ))
@@ -1560,8 +1552,6 @@ def admin_progress():
 
     return render_template(
         'admin_progress.html', email=user_email,
-        galileo_url=galileo_telemetry.get_console_url(),
-        galileo_dashboard_url=galileo_telemetry.get_dashboard_url(),
         splunk_ao_url=splunk_ao_telemetry.get_console_url(),
         splunk_ao_dashboard_url=splunk_ao_telemetry.get_dashboard_url()
     )
@@ -1698,6 +1688,23 @@ def api_admin_feedback():
         return jsonify({'status': 'success', 'count': len(feedback), 'feedback': feedback})
     except Exception as e:
         logger.error(f"Error listing feedback: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/message-ratings', methods=['GET'])
+@login_required
+def api_admin_message_ratings():
+    """Proctor-facing view of every thumbs up/down a student has given on
+    an individual chat response, newest first."""
+    user_email = session.get('user_email', '')
+    if not _is_proctor(user_email):
+        return jsonify({'error': 'Access denied'}), 403
+
+    try:
+        ratings = get_all_message_ratings()
+        return jsonify({'status': 'success', 'count': len(ratings), 'ratings': ratings})
+    except Exception as e:
+        logger.error(f"Error listing message ratings: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -2747,8 +2754,6 @@ def admin_settings():
     
     return render_template(
         'admin_settings.html', email=user_email,
-        galileo_url=galileo_telemetry.get_console_url(),
-        galileo_dashboard_url=galileo_telemetry.get_dashboard_url(),
         splunk_ao_url=splunk_ao_telemetry.get_console_url(),
         splunk_ao_dashboard_url=splunk_ao_telemetry.get_dashboard_url()
     )
