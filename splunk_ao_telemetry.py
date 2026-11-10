@@ -39,15 +39,10 @@ SPLUNK_AO_AGENT_STREAM = os.getenv('SPLUNK_AO_AGENT_STREAM', 'production')
 ENABLED = bool(SPLUNK_AO_REALM and SPLUNK_AO_O11Y_TOKEN)
 
 _SplunkAOLogger = None
-_SplunkAOEvaluators = None
-_enable_evaluators_fn = None
 _AgentType = None
 
 _Projects = None
 _AgentStreams = None
-_Scorers = None
-_ScorerSettings = None
-_ScorerConfig = None
 _AnnotationQueues = None
 _LikeDislikeConstraints = None
 _AnnotationRatingCreate = None
@@ -58,14 +53,9 @@ _SplunkAOConfig = None
 if ENABLED:
     try:
         from splunk_ao import SplunkAOLogger as _SplunkAOLogger  # noqa: N812
-        from splunk_ao.schema.metrics import SplunkAOEvaluators as _SplunkAOEvaluators  # noqa: N812
-        from splunk_ao.agent_streams import enable_evaluators as _enable_evaluators_fn
         from galileo_core.schemas.logging.agent import AgentType as _AgentType  # noqa: N812
         from splunk_ao.projects import Projects as _Projects  # noqa: N812
         from splunk_ao.agent_streams import AgentStreams as _AgentStreams  # noqa: N812
-        from splunk_ao.scorers import Scorers as _Scorers  # noqa: N812
-        from splunk_ao.scorers import ScorerSettings as _ScorerSettings  # noqa: N812
-        from splunk_ao.scorers import ScorerConfig as _ScorerConfig  # noqa: N812
         from splunk_ao.annotation_queues import AnnotationQueues as _AnnotationQueues  # noqa: N812
         from splunk_ao.resources.models.like_dislike_constraints import LikeDislikeConstraints as _LikeDislikeConstraints  # noqa: N812
         from splunk_ao.resources.models.annotation_rating_create import AnnotationRatingCreate as _AnnotationRatingCreate  # noqa: N812
@@ -110,42 +100,6 @@ if ENABLED:
         logger.warning(f"Failed to apply Splunk AO UserRole workaround: {e}")
 
 
-# Judge model used to score the 5 evaluators below. Splunk AO's preset
-# evaluators fail with a 403 "Executing this evaluator requires a configured
-# LLM integration... with a supported model to be set" (error code 1001)
-# until a model_name is explicitly set on each scorer's config - registering
-# the Bedrock Integration (Integration.create_bedrock()) alone isn't enough.
-# Must be one of the exact display-name strings returned by
-# get_available_scorer_models(LLMIntegration.AWS_BEDROCK), not a raw Bedrock
-# model ID.
-SPLUNK_AO_JUDGE_MODEL = os.getenv(
-    'SPLUNK_AO_JUDGE_MODEL', 'Anthropic - Claude 3.5 Sonnet v2 (Bedrock)'
-)
-# KNOWN SPLUNK AO BUG (confirmed 2026-10-01, splunk-ao 0.4.0, AO on O11y Cloud
-# pre-GA): every judge-model invocation through the AWS Bedrock integration
-# fails with "InvalidSignatureException... Canonical String ... should have
-# been 'POST /model/<id>%253A0/invoke'" - the colon in the Bedrock model ID
-# is double-URL-encoded by Splunk's backend signer. Reproduced identically
-# with two different model families (Anthropic Claude Haiku 4.5 AND Amazon
-# Nova Lite), and verified our own IAM credentials correctly sign/invoke
-# both models directly via boto3 - this is not an AWS credentials/policy
-# issue, it's a bug in Splunk's own SigV4 request construction for any
-# Bedrock model id (all of which contain a colon+revision suffix). No known
-# workaround exists on our side; evaluators will keep failing until Splunk
-# fixes this server-side. Traces/sessions/spans are unaffected - only
-# LLM-judge *scoring* is blocked.
-
-# splunk-ao 0.4.0's SplunkAOEvaluators enum values don't all match the
-# actual registered scorer label/name - action_completion's enum value
-# ("action_completion") matches neither the real scorer's label ("Action
-# Completion") nor its name ("agentic_session_success"), so
-# enable_evaluators() silently drops it as "unknown". Resolve it by scorer
-# ID directly instead. (Confirmed via Scorers().list() on 2026-10-01 - if
-# Splunk fixes the enum in a future SDK version, this id should still
-# resolve fine via list_by_ids().)
-_ACTION_COMPLETION_SCORER_ID = '662bf46c-2aee-412e-a010-7ad13eca8cb7'
-
-
 def hash_user(email: Optional[str]) -> str:
     """SHA-256 hash of a lowercased/stripped email, truncated to 16 chars -
     keeps students identifiable/groupable in Splunk AO without sending raw
@@ -156,53 +110,37 @@ def hash_user(email: Optional[str]) -> str:
 
 
 def setup_metrics() -> None:
-    """Enable evaluation metrics on the configured agent stream. Call once
-    at app startup. No-op if Splunk AO isn't configured."""
+    """Bootstrap the configured Splunk AO project/agent stream so they exist
+    before the first real chat request needs them. Call once at app startup.
+    No-op if Splunk AO isn't configured.
+
+    This used to also auto-enable the 5 preset LLM-judge evaluators
+    (tool_selection_quality, tool_error_rate, instruction_adherence,
+    correctness, action_completion) here. Removed 2026-11-10: judge-model
+    scoring via the AWS Bedrock integration is blocked by a confirmed
+    Splunk-side bug (see TECHNICAL_REFERENCE.md - Splunk double-URL-encodes
+    the colon in Bedrock model IDs, breaking SigV4 signing for every Bedrock
+    judge model), and the facilitator has since manually disabled evaluators
+    in the Splunk UI. Auto-enabling them here on every app startup would
+    silently fight that choice the moment Splunk ever fixes the underlying
+    bug or the API token's permissions change. If evaluators are wanted
+    again, enable them directly in the Splunk AO UI rather than re-adding
+    this - the API token this app uses doesn't have permission to toggle
+    project metrics anyway (confirmed via live testing: HTTP 403, error code
+    8508, "You do not have permission to toggle metrics in this project.")."""
     if not ENABLED:
         return
     try:
-        # The project/agent stream need to exist before metrics can be
-        # enabled on them, and they're normally auto-created lazily on
-        # first use - so bootstrap one here with a throwaway trace.
+        # The project/agent stream need to exist before any trace can be
+        # logged against them, and they're normally auto-created lazily on
+        # first use - so bootstrap one here with a throwaway trace instead
+        # of leaving that to whichever student's chat request happens first.
         bootstrap = _SplunkAOLogger(project=SPLUNK_AO_PROJECT, agent_stream=SPLUNK_AO_AGENT_STREAM)
         bootstrap.start_trace(input="__startup_bootstrap__")
         bootstrap.conclude(output="ok")
         bootstrap.flush()
     except Exception as e:
-        logger.warning(f"Splunk AO project/agent-stream bootstrap failed (metrics may not enable): {e}")
-
-    try:
-        # enable_evaluators() registers the 4 metrics whose enum value does
-        # match their real label/name, but leaves model_name unset on all
-        # of them (causing the error-1001 auth failure once a judge model
-        # is actually invoked). _enable_evaluators_fn's return value doesn't
-        # expose the created ScorerConfigs to patch afterwards, so we
-        # resolve+register all 5 (including the mislabeled
-        # action_completion) ourselves below instead of relying on it.
-        project = _Projects().get_with_env_fallbacks(name=SPLUNK_AO_PROJECT)
-        agent_stream = _AgentStreams().get(name=SPLUNK_AO_AGENT_STREAM, project_name=project.name)
-
-        scorers_client = _Scorers()
-        resolved = scorers_client.list_by_labels(
-            ["tool_selection_quality", "tool_error_rate", "instruction_adherence", "correctness"],
-            strict=False,
-        )
-        resolved += scorers_client.list_by_ids([_ACTION_COMPLETION_SCORER_ID])
-
-        configs = []
-        for s in resolved:
-            cfg = _ScorerConfig.from_dict(s.to_dict())
-            cfg.model_name = SPLUNK_AO_JUDGE_MODEL
-            configs.append(cfg)
-
-        _ScorerSettings().create(project_id=project.id, run_id=agent_stream.id, scorers=configs)
-        logger.info(
-            f"Splunk AO metrics enabled for {SPLUNK_AO_PROJECT}/{SPLUNK_AO_AGENT_STREAM} "
-            f"using judge model {SPLUNK_AO_JUDGE_MODEL} "
-            f"({len(configs)}/5 evaluators resolved: {[c.name for c in configs]})"
-        )
-    except Exception as e:
-        logger.warning(f"Failed to enable Splunk AO metrics: {e}")
+        logger.warning(f"Splunk AO project/agent-stream bootstrap failed: {e}")
 
 
 def new_logger():
