@@ -462,6 +462,47 @@ def _run_with_timeout(fn, timeout_seconds, default, *args, **kwargs):
         return default
 
 
+def _submit_telemetry(fn, *args, **kwargs):
+    """Fire fn(*args, **kwargs) off to the telemetry pool immediately, without
+    waiting for it. Returns the Future.
+
+    Found 2026-10-13/2026-11-10: start_trace() was being run through
+    _run_with_timeout() above, which only stops the caller from *waiting*
+    past TELEMETRY_CALL_TIMEOUT_SECONDS - it does NOT cancel the submitted
+    work, which keeps running unattended in the worker thread. add_llm_span()
+    fires immediately after on the main thread, synchronously, assuming the
+    trace/session setup already landed. ~46% of the time it hadn't (per
+    journalctl: 411/769 "start_trace...exceeded...timeout" warnings), so the
+    span silently attached to nothing - no exception, no log line, just a
+    permanently missing cost/token number. That's the real cause of the
+    "trend graph had cost, then it stopped" regression traced back to the
+    8s-timeout commit (b1847d0).
+
+    Fix: don't block on start_trace() up front. Submit it and keep the
+    Future; the caller must await it (see _await_telemetry below) right
+    before the first call that actually depends on the trace existing
+    (add_llm_span), so by the time it matters the trace has either already
+    finished (the common case - the LLM call itself takes longer) or we
+    wait out the remaining budget instead of racing ahead onto a broken
+    logger."""
+    return _telemetry_executor.submit(fn, *args, **kwargs)
+
+
+def _await_telemetry(future, timeout_seconds, default):
+    """Wait up to timeout_seconds for a Future from _submit_telemetry() above.
+    Never raises - same contract as _run_with_timeout()."""
+    if future is None:
+        return default
+    try:
+        return future.result(timeout=timeout_seconds)
+    except FutureTimeoutError:
+        logger.warning(f"telemetry call exceeded {timeout_seconds}s timeout, continuing without it")
+        return default
+    except Exception as e:
+        logger.warning(f"telemetry call failed: {e}")
+        return default
+
+
 def _build_system_prompt(meraki_org_id=None):
     """Build the system prompt, including the real current date/time.
 
@@ -1282,8 +1323,12 @@ def chat():
         # configured. (Galileo was removed 2026-11-10 - same underlying data,
         # no need to send it to two observability backends.)
         ao_logger = splunk_ao_telemetry.new_logger()
-        _run_with_timeout(
-            splunk_ao_telemetry.start_trace, TELEMETRY_CALL_TIMEOUT_SECONDS, None,
+        # Fire-and-await-later rather than block here - see _submit_telemetry's
+        # docstring for why blocking on this with a timeout silently orphaned
+        # ~46% of spans. ao_trace_ready is awaited (bounded) right before the
+        # first add_llm_span call below, which depends on the trace existing.
+        ao_trace_future = _submit_telemetry(
+            splunk_ao_telemetry.start_trace,
             ao_logger, email, user_message, labs_matched, is_proctor=_is_proctor(email)
         )
         # Record id of the most recent LLM span logged this turn, so the
@@ -1332,7 +1377,7 @@ def chat():
             Any exception here can't be caught by chat()'s outer try/except
             (that only covers code before streaming starts, which is why
             this has its own try/except yielding an ERROR: line)."""
-            nonlocal content, total_tools_used, messages, ao_last_span_id
+            nonlocal content, total_tools_used, messages, ao_last_span_id, ao_trace_future
             try:
                 for iteration in range(MAX_TOOL_ITERATIONS):
                     if time.monotonic() - chat_loop_started_at > CHAT_WALL_CLOCK_BUDGET_SECONDS:
@@ -1359,12 +1404,23 @@ def chat():
                         )
                         result = json.loads(response['body'].read())
                         content = result.get('content', [])
+                        # Make sure start_trace() actually finished before we
+                        # depend on it - only waits if it's still genuinely
+                        # running; normally it's long done by now since the
+                        # Bedrock call above takes longer. See
+                        # _submit_telemetry's docstring for the bug this fixes.
+                        if ao_trace_future is not None:
+                            _await_telemetry(ao_trace_future, TELEMETRY_CALL_TIMEOUT_SECONDS, None)
+                            ao_trace_future = None
                         ao_last_span_id = splunk_ao_telemetry.add_llm_span(
                             ao_logger, request_body, result,
                             model_id=active_model_id
                         ) or ao_last_span_id
                     except Exception as e:
                         logger.error(f"Bedrock invocation failed: {e}")
+                        if ao_trace_future is not None:
+                            _await_telemetry(ao_trace_future, TELEMETRY_CALL_TIMEOUT_SECONDS, None)
+                            ao_trace_future = None
                         splunk_ao_telemetry.conclude_and_flush(ao_logger, f"[error] Bedrock invocation failed: {e}")
                         error_str = str(e)
                         if 'ValidationException' in error_str and 'too long' in error_str.lower():
@@ -1471,6 +1527,13 @@ def chat():
                 except Exception as e:
                     logger.warning(f"Failed to record lab activity for {email}: {e}")
 
+                # Defensive: covers the rare case the loop exits (e.g. hit
+                # MAX_TOOL_ITERATIONS/wall-clock budget) without ever reaching
+                # the add_llm_span call above, so this is otherwise the first
+                # thing depending on start_trace having finished.
+                if ao_trace_future is not None:
+                    _await_telemetry(ao_trace_future, TELEMETRY_CALL_TIMEOUT_SECONDS, None)
+                    ao_trace_future = None
                 _run_with_timeout(
                     splunk_ao_telemetry.conclude_and_flush, TELEMETRY_CALL_TIMEOUT_SECONDS, None,
                     ao_logger, assistant_message
