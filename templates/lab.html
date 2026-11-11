@@ -1216,7 +1216,14 @@
             const listEl = document.getElementById('progress-checklist');
             if (!summaryEl || !listEl || !data || !Array.isArray(data.checkpoints)) return;
 
-            summaryEl.textContent = `${data.core_done} / ${data.core_total} core labs done`;
+            // Changed 2026-11-11 from "X / Y core labs done" (core tier
+            // only, via data.core_done/core_total) to the actual total
+            // across every checkpoint - core and stretch - so the count
+            // reflects everything in the checklist below it, not just a
+            // subset. Computed client-side since data.checkpoints already
+            // includes every tier.
+            const totalDone = data.checkpoints.filter(cp => cp.done).length;
+            summaryEl.textContent = `${totalDone} / ${data.checkpoints.length} labs done`;
 
             for (const cp of data.checkpoints) {
                 checkpointLabels[cp.id] = cp.label;
