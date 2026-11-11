@@ -434,6 +434,21 @@ CSS/layout gotchas worth knowing if this breaks again:
   this, the cursor crossing into the iframe's own document stops the parent
   page's `mousemove` listener from firing, breaking the drag.
 
+## Pre/post-event survey pages (not part of this app)
+
+`https://ai.thousandeyeschannel.com/survey/pre` and `/survey/post` are
+**static files served directly by nginx** (`/var/www/html/survey/pre.html`
+and `post.html` on the EC2 instance), not Flask routes - `app.py` has no
+`/survey` route at all. Like `thread_watchdog.sh`, these are placed on the
+instance by hand and are **not** touched by `deploy.sh`/git-pull. Unlike
+`thread_watchdog.sh`, they're now backed up in this repo under
+`survey-forms/` (added 2026-11-11, previously had no backup anywhere) - see
+`survey-forms/README.md` for the full picture: how the forms work, the
+Power Automate webhook they submit to, and the critical "question order is
+a contract with SharePoint's positional `field_N` columns" rule that must
+be respected before editing anything beyond wording or the event dropdown's
+option list.
+
 ## Adding a new MCP-backed service (e.g. a 4th tool)
 
 Follow the Splunk pattern, since it's the "bring your own URL/token" template

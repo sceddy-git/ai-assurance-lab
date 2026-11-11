@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AI & MCP Day — Pre-Event Survey</title>
+<style>
+:root{
+  --navy:#104B88; --midnight:#0C122E; --blue:#00ADEF; --teal:#0D5D70;
+  --turquoise:#04AEB1; --jungle:#0E404C; --slate:#32515B; --logo-orange:#FB7C32;
+  --gold:#F9A425; --orange:#F15E22; --alert:#CB2626; --ink:#4F565C;
+  --grey:#A7ACB0; --outline:#E3E5E4; --light-bg:#F1F3F3; --digital:#F9FBFB;
+  --green:#1AB92D; --purple:#A54C96;
+  --radius:14px;
+  --shadow:0 1px 2px rgba(12,18,46,.05), 0 10px 30px rgba(12,18,46,.07);
+  --font:"Inter","Helvetica Neue",Helvetica,Arial,system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:var(--font); color:var(--ink); background:var(--digital);
+  -webkit-font-smoothing:antialiased; min-height:100vh;
+  display:flex; flex-direction:column;
+}
+body::before{
+  content:""; position:fixed; inset:0 0 auto 0; height:320px; z-index:0;
+  background:linear-gradient(160deg,var(--midnight) 0%,var(--jungle) 55%,var(--teal) 100%);
+}
+header{position:relative; z-index:1; padding:26px 16px 0; }
+.head-inner{max-width:760px; margin:0 auto; display:flex; align-items:center; gap:14px}
+.logo{width:36px; height:40px; flex:none; display:block}
+/* keep the mark's own teal/orange; only the navy dot would vanish on the dark header */
+.logo circle{fill:#FFFFFF !important}
+.brand{color:#fff; line-height:1.25}
+.brand .ev{font-size:17px; font-weight:650; letter-spacing:-.01em}
+.brand .kind{font-size:12.5px; opacity:.72; letter-spacing:.06em; text-transform:uppercase; font-weight:600}
+header.big{padding-top:38px}
+header.big .head-inner{gap:20px}
+header.big .logo{width:54px; height:60px}
+header.big .brand .ev{font-size:26px}
+header.big .brand .kind{font-size:14px; letter-spacing:.07em}
+main{position:relative; z-index:1; flex:1; padding:22px 16px 40px; display:flex; flex-direction:column}
+.card{
+  max-width:760px; width:100%; margin:0 auto; background:#fff; border-radius:var(--radius);
+  box-shadow:var(--shadow); border:1px solid var(--outline); overflow:hidden;
+  display:flex; flex-direction:column; flex:1;
+}
+.bar{height:4px; background:var(--light-bg); position:relative; flex:none}
+.bar i{position:absolute; inset:0 auto 0 0; width:0%; background:linear-gradient(90deg,var(--turquoise),var(--blue)); transition:width .35s cubic-bezier(.4,0,.2,1)}
+.body{padding:34px 34px 10px; flex:1}
+.step{font-size:12px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--turquoise); margin:0 0 12px}
+h1{font-size:25px; line-height:1.3; font-weight:650; letter-spacing:-.02em; color:var(--midnight); margin:0 0 6px}
+.sub{font-size:14.5px; color:var(--grey); margin:0 0 22px}
+.opts{display:flex; flex-direction:column; gap:9px; margin:22px 0 0}
+.opts.cols{display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:9px}
+.opt{
+  display:flex; align-items:flex-start; gap:13px; width:100%; text-align:left;
+  padding:14px 16px; border:1.5px solid var(--outline); background:#fff;
+  border-radius:11px; cursor:pointer; font:inherit; font-size:15.5px; color:var(--ink);
+  transition:border-color .15s, background .15s, box-shadow .15s; line-height:1.45;
+}
+.opt:hover{border-color:var(--turquoise); background:#F6FCFC}
+.opt:focus-visible{outline:3px solid rgba(0,173,239,.35); outline-offset:2px}
+.opt[aria-pressed="true"]{border-color:var(--teal); background:#F2F9FA; box-shadow:inset 0 0 0 1px var(--teal)}
+.badge{
+  flex:none; width:26px; height:26px; border-radius:7px; background:var(--light-bg);
+  color:var(--slate); font-size:13px; font-weight:700; display:grid; place-items:center; margin-top:-1px;
+}
+.opt[aria-pressed="true"] .badge{background:var(--teal); color:#fff}
+.tick{flex:none; width:22px; height:22px; border-radius:6px; border:1.5px solid var(--outline); display:grid; place-items:center; margin-top:0}
+.opt[aria-pressed="true"] .tick{background:var(--teal); border-color:var(--teal)}
+.tick svg{width:12px; height:12px; opacity:0}
+.opt[aria-pressed="true"] .tick svg{opacity:1}
+.scalewrap{margin:26px 0 0}
+.scale{display:flex; gap:10px}
+.scale button{
+  flex:1; aspect-ratio:1/1; max-height:82px; border:1.5px solid var(--outline); background:#fff;
+  border-radius:12px; font:inherit; font-size:21px; font-weight:650; color:var(--slate); cursor:pointer;
+  transition:border-color .15s, background .15s, color .15s, transform .12s;
+}
+.scale button:hover{border-color:var(--turquoise); background:#F6FCFC}
+.scale button:focus-visible{outline:3px solid rgba(0,173,239,.35); outline-offset:2px}
+.scale button[aria-pressed="true"]{background:var(--teal); border-color:var(--teal); color:#fff; transform:translateY(-2px)}
+.ends{display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:16px}
+.ends span{
+  display:inline-flex; align-items:center; gap:9px; background:var(--light-bg);
+  border:1px solid var(--outline); border-radius:999px; padding:8px 16px 8px 9px;
+  font-size:15px; font-weight:650; color:var(--slate); letter-spacing:-.005em;
+}
+.ends span.hi{padding:8px 9px 8px 16px}
+.ends b{
+  flex:none; width:24px; height:24px; border-radius:50%; background:var(--teal); color:#fff;
+  display:grid; place-items:center; font-size:13px; font-weight:700;
+}
+.sub.scalenote{color:var(--slate); font-weight:650; font-size:15px}
+select{
+  width:100%; margin-top:24px; padding:16px 44px 16px 16px; font:inherit; font-size:16.5px;
+  color:var(--ink); background:#fff; border:1.5px solid var(--outline); border-radius:11px;
+  cursor:pointer; -webkit-appearance:none; appearance:none;
+  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5L6 6.5l5-5' fill='none' stroke='%2332515B' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 16px center; background-size:13px;
+}
+select:hover{border-color:var(--turquoise)}
+select:focus{outline:none; border-color:var(--turquoise); box-shadow:0 0 0 3px rgba(4,174,177,.13)}
+select:invalid,select.empty{color:var(--grey)}
+textarea{
+  width:100%; min-height:150px; resize:vertical; padding:15px 16px; font:inherit; font-size:15.5px;
+  line-height:1.55; color:var(--ink); border:1.5px solid var(--outline); border-radius:11px;
+  background:var(--digital); margin-top:22px;
+}
+textarea:focus{outline:none; border-color:var(--turquoise); background:#fff; box-shadow:0 0 0 3px rgba(4,174,177,.13)}
+textarea::placeholder{color:var(--grey)}
+.follow{margin-top:20px; padding-top:20px; border-top:1px solid var(--outline)}
+.follow label{display:block; font-size:14.5px; font-weight:600; color:var(--midnight)}
+.follow textarea{min-height:110px; margin-top:10px}
+.hint{font-size:13px; color:var(--grey); margin:14px 0 0}
+.hint.warn{color:var(--orange)}
+footer{
+  display:flex; align-items:center; gap:12px; padding:18px 34px 24px; flex:none;
+  border-top:1px solid var(--outline); background:var(--digital);
+}
+.spacer{flex:1}
+button.nav{
+  font:inherit; font-size:15px; font-weight:600; border-radius:10px; cursor:pointer;
+  padding:12px 26px; border:1.5px solid transparent; transition:background .15s,color .15s,border-color .15s;
+}
+.back{background:transparent; color:var(--grey); border-color:var(--outline)}
+.back:hover{color:var(--ink); border-color:var(--grey)}
+.next{background:var(--navy); color:#fff}
+.next:hover{background:var(--midnight)}
+.next:disabled{background:var(--outline); color:var(--grey); cursor:not-allowed}
+.next.submit{background:var(--teal)}
+.next.submit:hover{background:var(--jungle)}
+.kbd{font-size:12.5px; color:var(--grey)}
+.kbd b{font-weight:600; color:var(--slate); background:var(--light-bg); border-radius:4px; padding:2px 6px; font-size:11.5px}
+.done{padding:70px 34px; text-align:center}
+.done .mark{width:62px; height:62px; border-radius:50%; background:#EAF7EC; display:grid; place-items:center; margin:0 auto 22px}
+.done h1{margin-bottom:10px}
+.done p{font-size:16px; color:var(--grey); margin:0 auto; max-width:440px; line-height:1.6}
+.err{margin:18px auto 0; max-width:470px; background:#FDF1F1; border:1px solid #F3D3D3; color:#8F2020; border-radius:10px; padding:14px 16px; font-size:14px; line-height:1.55; text-align:left}
+.err button{margin-top:10px; font:inherit; font-size:14px; font-weight:600; background:var(--alert); color:#fff; border:0; border-radius:8px; padding:9px 18px; cursor:pointer}
+.demo{margin:18px auto 0; max-width:470px; background:#FFF8EA; border:1px solid #F5E2BC; color:#7A5410; border-radius:10px; padding:13px 16px; font-size:13.5px; line-height:1.55; text-align:left}
+.legal{max-width:760px; margin:16px auto 0; font-size:12.5px; color:var(--grey); text-align:center; line-height:1.6; position:relative; z-index:1}
+@media (max-width:640px){
+  .body{padding:26px 20px 8px}
+  footer{padding:15px 20px 20px}
+  h1{font-size:21px}
+  .kbd{display:none}
+  .scale{gap:7px}
+  .scale button{font-size:17px}
+  .ends{gap:8px}
+  .ends span{font-size:13px; padding:6px 12px 6px 7px; gap:7px}
+  .ends span.hi{padding:6px 7px 6px 12px}
+  .ends b{width:21px; height:21px; font-size:12px}
+  .opts.cols{grid-template-columns:1fr 1fr}
+  .done{padding:52px 20px}
+  header.big{padding-top:28px}
+  header.big .head-inner{gap:15px}
+  header.big .logo{width:42px; height:47px}
+  header.big .brand .ev{font-size:21px}
+  header.big .brand .kind{font-size:12.5px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none !important}}
+</style>
+</head>
+<body>
+<header class="big">
+  <div class="head-inner">
+    <svg class="logo" aria-hidden="true" focusable="false" viewBox="0 0 89 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+    <g transform="matrix(1,0,0,1,-10.7182,-15.82)">
+        <g transform="matrix(1,0,0,1,0.913804,0.39)">
+            <path d="M77.981,115.199L75.287,91.755L73.329,91.987L76.023,115.43L77.981,115.199Z" style="fill:rgb(22,161,162);"/>
+        </g>
+        <g transform="matrix(1,0,0,1,5,10)">
+            <path d="M45.831,105.677C43.093,105.677 48.351,105.712 48.351,105.712L40.496,81.469C40.496,80.149 39.925,78.899 38.925,78.047C37.937,77.196 36.625,76.817 35.336,77.008L22.024,77.224C20.845,77.404 19.646,77.052 18.735,76.263C17.825,75.474 17.306,74.341 17.306,73.142L15.735,63.511C15.735,62.171 15.203,60.91 14.254,59.972C13.305,59.042 12.043,58.531 10.715,58.55C9.856,58.55 9.106,58.128 8.645,57.41C8.184,56.679 8.133,55.808 8.504,55.031L12.375,46.91C12.664,46.281 12.836,45.582 12.856,44.859L12.856,44.828L12.926,38.859C12.926,22.097 26.406,8.418 42.965,8.371L43.055,8.371C48.465,8.371 53.754,9.812 58.344,12.519C58.945,12.879 59.723,12.679 60.082,12.07C60.442,11.468 60.242,10.691 59.633,10.332C54.652,7.382 48.914,5.82 43.055,5.82L42.953,5.82C24.992,5.871 10.383,20.691 10.383,38.832L10.313,44.773C10.301,45.144 10.212,45.504 10.075,45.812L6.204,53.922C5.465,55.48 5.575,57.293 6.493,58.742C7.415,60.203 8.993,61.062 10.731,61.062C11.38,61.051 12.001,61.293 12.462,61.754C12.93,62.215 13.192,62.832 13.192,63.492L14.763,73.123C14.763,75.065 15.603,76.893 17.072,78.162C18.54,79.424 20.482,79.99 22.392,79.701L35.715,79.485C36.273,79.407 36.844,79.563 37.285,79.935C37.726,80.313 37.976,80.856 37.976,81.435L45.831,105.677Z" style="fill:rgb(22,161,162);fill-rule:nonzero;"/>
+        </g>
+        <g transform="matrix(1,0,0,1,5,10)">
+            <path d="M51.27,52.68C51.27,51.98 51.84,51.41 52.539,51.41L66.488,51.41L66.488,42.41C66.488,41.711 67.058,41.141 67.758,41.141C68.457,41.141 69.027,41.711 69.027,42.41L69.027,51.539C69.027,52.867 67.949,53.949 66.617,53.949L52.539,53.949C51.84,53.949 51.269,53.379 51.269,52.68L51.27,52.68ZM69.032,37.078C69.032,37.777 68.461,38.347 67.762,38.347C67.063,38.347 66.493,37.777 66.493,37.078L66.493,33.667L52.544,33.667C51.844,33.667 51.274,33.097 51.274,32.398C51.274,31.699 51.844,31.128 52.544,31.128L66.622,31.128C67.95,31.128 69.032,32.207 69.032,33.539L69.032,37.078ZM31.071,44.41C31.071,46.488 32.762,48.191 34.852,48.191C36.492,48.191 37.883,47.14 38.403,45.679L52.551,45.679C53.25,45.679 53.82,45.109 53.82,44.41C53.82,43.71 53.25,43.14 52.551,43.14L38.403,43.14C37.883,41.679 36.481,40.628 34.852,40.628C32.774,40.628 31.071,42.32 31.071,44.41ZM34.84,43.171C35.532,43.171 36.078,43.73 36.078,44.41C36.078,45.089 35.52,45.648 34.84,45.648C34.16,45.648 33.602,45.089 33.602,44.41C33.602,43.73 34.16,43.171 34.84,43.171ZM38.149,28.589C36.071,28.589 34.368,30.281 34.368,32.371C34.368,34.46 36.059,36.152 38.149,36.152C38.707,36.152 39.238,36.023 39.719,35.8L44.078,40.242C44.317,40.48 44.637,40.621 44.977,40.621L52.535,40.621C53.235,40.621 53.805,40.05 53.805,39.351C53.805,38.652 53.235,38.082 52.535,38.082L45.504,38.082L41.524,34.023C41.774,33.523 41.914,32.964 41.914,32.363C41.914,30.285 40.223,28.582 38.133,28.582L38.149,28.589ZM36.899,32.359C36.899,31.667 37.457,31.121 38.137,31.121C38.817,31.121 39.375,31.679 39.375,32.359C39.375,33.039 38.817,33.597 38.137,33.597C37.457,33.597 36.899,33.039 36.899,32.359Z" style="fill:rgb(22,161,162);fill-rule:nonzero;"/>
+        </g>
+        <g transform="matrix(1,0,0,1,5,10)">
+            <path d="M86.961,38.578C87.481,40.039 88.883,41.09 90.512,41.09C92.59,41.09 94.293,39.398 94.293,37.309C94.293,35.219 92.602,33.527 90.512,33.527C88.871,33.527 87.481,34.578 86.961,36.039L74.082,36.039L74.082,33.52L77.851,33.52C78.551,33.52 79.121,32.949 79.121,32.25C79.121,31.551 78.551,30.981 77.851,30.981L74.082,30.981L74.082,28.469C74.082,27.141 73.004,26.059 71.672,26.059L69.031,26.059L69.031,23.57L71.82,23.57C72.359,25 73.742,26.031 75.359,26.031C77.438,26.031 79.141,24.34 79.141,22.25C79.141,20.16 77.449,18.469 75.359,18.469C73.699,18.469 72.301,19.539 71.789,21.027L67.77,21.027C67.07,21.027 66.5,21.598 66.5,22.297L66.5,26.047L63.969,26.047L63.969,18.637L67.789,18.637C68.488,18.637 69.059,18.066 69.059,17.367L69.059,13.309C70.488,12.77 71.52,11.387 71.52,9.77C71.52,7.691 69.828,5.988 67.738,5.988C65.649,5.988 63.957,7.68 63.957,9.77C63.957,11.43 65.028,12.828 66.516,13.34L66.516,16.102L62.695,16.102C61.996,16.102 61.426,16.672 61.426,17.371L61.426,26.043L58.895,26.043L58.895,22.453C58.895,21.754 58.324,21.184 57.625,21.184C56.926,21.184 56.356,21.754 56.356,22.453L56.356,26.043L52.535,26.043C51.836,26.043 51.266,26.613 51.266,27.312C51.266,28.012 51.836,28.582 52.535,28.582L71.547,28.582L71.547,56.461L52.535,56.461C51.836,56.461 51.266,57.031 51.266,57.73C51.266,58.43 51.836,59 52.535,59L56.336,59L56.336,67.691C56.336,68.391 56.907,68.961 57.606,68.961L61.395,68.961L61.395,74.262C59.934,74.781 58.883,76.184 58.883,77.812C58.883,79.891 60.575,81.594 62.664,81.594C64.754,81.594 66.446,79.902 66.446,77.812C66.446,76.172 65.395,74.781 63.934,74.262L63.934,67.691C63.934,66.992 63.364,66.422 62.664,66.422L58.875,66.422L58.875,59L61.406,59L61.406,62.75C61.406,63.449 61.977,64.019 62.676,64.019C63.375,64.019 63.945,63.449 63.945,62.75L63.945,59L66.477,59L66.477,62.59C66.477,63.289 67.047,63.859 67.746,63.859L71.516,63.859L71.516,69.187C70.055,69.707 69.004,71.109 69.004,72.738C69.004,74.816 70.695,76.519 72.785,76.519C74.875,76.519 76.566,74.828 76.566,72.738C76.566,71.098 75.516,69.707 74.055,69.187L74.055,62.586C74.055,61.886 73.484,61.316 72.785,61.316L69.016,61.316L69.016,58.996L71.676,58.996C73.004,58.996 74.086,57.918 74.086,56.586L74.086,53.765L79.117,53.765L79.117,56.687C77.656,57.207 76.606,58.609 76.606,60.238C76.606,62.316 78.297,64.019 80.387,64.019C82.477,64.019 84.168,62.328 84.168,60.238C84.168,58.598 83.117,57.207 81.656,56.687L81.656,52.496C81.656,51.797 81.086,51.226 80.387,51.226L74.086,51.226L74.086,48.695L77.855,48.695C78.555,48.695 79.125,48.125 79.125,47.426C79.125,46.727 78.555,46.156 77.855,46.156L74.086,46.156L74.086,43.625L79.848,43.625L83.879,47.727C83.699,48.168 83.598,48.648 83.598,49.149C83.598,51.227 85.289,52.93 87.379,52.93C89.469,52.93 91.16,51.238 91.16,49.149C91.16,47.059 89.469,45.367 87.379,45.367C86.73,45.367 86.109,45.539 85.57,45.828L81.289,41.469C81.051,41.231 80.73,41.09 80.391,41.09L74.102,41.09L74.102,38.559L86.981,38.559L86.961,38.578ZM90.52,36.07C91.211,36.07 91.758,36.629 91.758,37.309C91.758,37.988 91.199,38.547 90.52,38.547C89.84,38.547 89.281,37.988 89.281,37.309C89.281,36.629 89.84,36.07 90.52,36.07ZM75.36,21.019C76.051,21.019 76.598,21.578 76.598,22.257C76.598,22.937 76.039,23.496 75.36,23.496C74.68,23.496 74.121,22.937 74.121,22.257C74.121,21.578 74.68,21.019 75.36,21.019ZM67.731,8.558C68.422,8.558 68.969,9.117 68.969,9.796C68.969,10.476 68.41,11.035 67.731,11.035C67.051,11.035 66.492,10.476 66.492,9.796C66.492,9.117 67.051,8.558 67.731,8.558ZM62.66,79.07C61.969,79.07 61.422,78.512 61.422,77.832C61.422,77.152 61.981,76.594 62.66,76.594C63.34,76.594 63.899,77.152 63.899,77.832C63.899,78.512 63.34,79.07 62.66,79.07ZM72.781,74C72.09,74 71.543,73.441 71.543,72.762C71.543,72.082 72.102,71.523 72.781,71.523C73.461,71.523 74.02,72.082 74.02,72.762C74.02,73.441 73.461,74 72.781,74ZM80.379,61.5C79.688,61.5 79.141,60.941 79.141,60.262C79.141,59.582 79.699,59.023 80.379,59.023C81.059,59.023 81.617,59.582 81.617,60.262C81.617,60.941 81.059,61.5 80.379,61.5ZM88.61,49.172C88.61,49.863 88.051,50.41 87.371,50.41C86.692,50.41 86.133,49.852 86.133,49.172C86.133,48.492 86.692,47.934 87.371,47.934C88.051,47.934 88.61,48.492 88.61,49.172ZM31.071,44.41C31.071,46.488 32.762,48.191 34.852,48.191C36.492,48.191 37.883,47.14 38.403,45.679L52.551,45.679C53.25,45.679 53.82,45.109 53.82,44.41C53.82,43.71 53.25,43.14 52.551,43.14L38.403,43.14C37.883,41.679 36.481,40.628 34.852,40.628C32.774,40.628 31.071,42.32 31.071,44.41ZM34.84,43.171C35.532,43.171 36.078,43.73 36.078,44.41C36.078,45.089 35.52,45.648 34.84,45.648C34.16,45.648 33.602,45.089 33.602,44.41C33.602,43.73 34.16,43.171 34.84,43.171ZM38.149,28.589C36.071,28.589 34.368,30.281 34.368,32.371C34.368,34.46 36.059,36.152 38.149,36.152C38.707,36.152 39.238,36.023 39.719,35.8L44.078,40.242C44.317,40.48 44.637,40.621 44.977,40.621L52.535,40.621C53.235,40.621 53.805,40.05 53.805,39.351C53.805,38.652 53.235,38.082 52.535,38.082L45.504,38.082L41.524,34.023C41.774,33.523 41.914,32.964 41.914,32.363C41.914,30.285 40.223,28.582 38.133,28.582L38.149,28.589ZM36.899,32.359C36.899,31.667 37.457,31.121 38.137,31.121C38.817,31.121 39.375,31.679 39.375,32.359C39.375,33.039 38.817,33.597 38.137,33.597C37.457,33.597 36.899,33.039 36.899,32.359Z" style="fill:rgb(251,124,50);fill-rule:nonzero;"/>
+        </g>
+        <g transform="matrix(0.106588,0,0,0.106588,3.04535,74.5065)">
+            <path d="M166.8,285.7C179.7,303 216.1,344.5 262,344.5C293.7,344.5 325.5,324.7 356,285.7C325.2,247.7 293.8,228.2 262,228.2C216.1,228.5 180,269.1 166.8,285.7M262.3,371.5C189.7,371.5 141,296.1 139.1,292.9L134.4,285.7L139.1,278.5C141,275.4 189.7,201.5 262.3,201.5C305,201.5 346.2,227 384.2,277.5L390.2,285.4L384.2,293.6C345.9,345.4 305.1,371.5 262.3,371.5" style="fill:rgb(255,103,29);fill-rule:nonzero;"/>
+            <path d="M206.7,371.5C136,369.3 90.1,295.5 88.2,292.3L84.4,285.1L88.8,277.9C90.7,274.8 135.6,204.1 206,201.5C151.3,226.6 113.3,286.3 113.3,286.3C113.3,286.3 145.4,339.8 206.7,371.5" style="fill:rgb(255,103,29);fill-rule:nonzero;"/>
+            <path d="M251.6,330C269.2,320.3 289.9,307.4 307.2,285.7C290.2,264.6 266.7,252.4 249.4,243C291.2,233.9 327.6,275.1 327.6,275.1L337.3,285.8L327.6,296.8C289.7,338.2 251.6,330 251.6,330" style="fill:rgb(255,103,29);fill-rule:nonzero;"/>
+            <circle cx="235.4" cy="286.6" r="19.5" style="fill:rgb(18,40,76);"/>
+        </g>
+    </g>
+</svg>
+    <div class="brand">
+      <div class="ev">AI &amp; MCP Day</div>
+      <div class="kind">Pre-event survey</div>
+    </div>
+  </div>
+</header>
+<main>
+  <form class="card" id="card" novalidate>
+    <div class="bar"><i id="bar"></i></div>
+    <div class="body" id="body"></div>
+    <footer>
+      <button type="button" class="nav back" id="back">Back</button>
+      <div class="spacer"></div>
+      <span class="kbd" id="kbd"></span>
+      <button type="button" class="nav next" id="next">Next</button>
+    </footer>
+  </form>
+  <p class="legal">Responses are anonymous — we do not collect your name, email or any identifying information.</p>
+</main>
+<script>
+/* ---------------------------------------------------------------
+   CONFIGURE ME: point this at your endpoint (Zapier / Make / Power
+   Automate / your own handler). The form POSTs JSON.
+   While it is left as the placeholder below, the form runs in demo
+   mode: nothing is sent, and the payload is logged to the console.
+---------------------------------------------------------------- */
+var WEBHOOK_URL = "https://cb3b981f4b1d4fbbac05f7ab28fea0.69.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/28/workflows/2b9bf02afdc2434cb18955883e93f783/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=IRLjHiqZBuykZVfQGfEwtdLmg3bkbIeKJhYnev6tIyI";
+var SURVEY_ID   = "pre-event";
+
+var QUESTIONS = [
+  {
+    "id": "event",
+    "type": "dropdown",
+    "required": true,
+    "title": "Which event are you attending?",
+    "options": [
+      "Argentina",
+      "Bangalore",
+      "Brazil",
+      "Brisbane",
+      "Chile",
+      "Delhi",
+      "Florida",
+      "Kansas City",
+      "London",
+      "Melbourne",
+      "Mexico",
+      "Mumbai",
+      "Paris",
+      "Sydney",
+      "Washington, DC"
+    ],
+    "placeholder": "Select your location…"
+  },
+  {
+    "id": "familiarity",
+    "type": "scale_desc",
+    "required": true,
+    "title": "Rate your level of familiarity and engagement with AI",
+    "descriptors": [
+      "I have little or no exposure to AI tools.",
+      "I have basic awareness of AI concepts and tools but rarely use them in my work.",
+      "I use provided AI tools as part of daily workflow.",
+      "I experiment with AI beyond provided tools, including my own side projects.",
+      "I'm comfortable leading AI engagements with customers or managing AI projects internally."
+    ]
+  },
+  {
+    "id": "personal_project",
+    "type": "choice",
+    "required": true,
+    "title": "Have you worked on your own personal AI project?",
+    "options": [
+      "Yes",
+      "No"
+    ],
+    "followUp": {
+      "id": "personal_project_detail",
+      "showWhen": "Yes",
+      "label": "Tell us about it",
+      "placeholder": "Optional — what did you build, and what did you learn?"
+    }
+  },
+  {
+    "id": "confidence_pre",
+    "type": "scale_desc",
+    "required": true,
+    "title": "How confident are you in articulating an AI story to your business or customers?",
+    "descriptors": [
+      "No confidence — I would avoid or hand off the conversation.",
+      "Low confidence — I can talk about AI in general terms, but not tie it to business outcomes.",
+      "Moderate confidence — I can hold the conversation, but I struggle when it gets specific or technical.",
+      "Confident — I can connect AI to a customer's business problems and handle most questions.",
+      "High confidence — I can lead the conversation end to end and take it toward a scoped engagement."
+    ]
+  },
+  {
+    "id": "topics_wanted",
+    "type": "text",
+    "required": false,
+    "title": "What specific topics or skills are you most interested in learning about during the AI training day?",
+    "placeholder": "The more specific you are, the more we can shape the day around it."
+  },
+  {
+    "id": "adoption_challenges",
+    "type": "text",
+    "required": false,
+    "title": "What challenges do you face when adopting or implementing AI solutions?",
+    "placeholder": "Technical, organisational, commercial — whatever gets in the way."
+  }
+];
+
+var answers = {}, idx = 0, sending = false;
+var body = document.getElementById('body'), bar = document.getElementById('bar');
+var backBtn = document.getElementById('back'), nextBtn = document.getElementById('next');
+var kbd = document.getElementById('kbd');
+
+function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function answered(q){
+  var v = answers[q.id];
+  if (q.type === 'multi') return Array.isArray(v) && v.length > 0;
+  if (q.type === 'text')  return true;
+  return v !== undefined && v !== null && v !== '';
+}
+
+function render(){
+  var q = QUESTIONS[idx];
+  var h = '<p class="step">Question ' + (idx+1) + ' of ' + QUESTIONS.length + (q.required ? '' : ' &middot; optional') + '</p>';
+  h += '<h1>' + esc(q.title) + '</h1>';
+  if (q.subtitle) h += '<p class="sub' + (q.type === 'scale_desc' || q.type === 'rating' ? ' scalenote' : '') + '">' + esc(q.subtitle) + '</p>';
+
+  if (q.type === 'choice'){
+    h += '<div class="opts' + (q.columns ? ' cols' : '') + '" role="group">';
+    q.options.forEach(function(o,i){
+      h += '<button type="button" class="opt" data-v="' + esc(o) + '" aria-pressed="' + (answers[q.id]===o) + '">' +
+           '<span class="badge">' + (i+1) + '</span><span>' + esc(o) + '</span></button>';
+    });
+    h += '</div>';
+    if (q.followUp){
+      var show = answers[q.id] === q.followUp.showWhen;
+      h += '<div class="follow" id="follow" style="display:' + (show?'block':'none') + '">' +
+           '<label for="fu">' + esc(q.followUp.label) + '</label>' +
+           '<textarea id="fu" placeholder="' + esc(q.followUp.placeholder||'') + '">' + esc(answers[q.followUp.id]||'') + '</textarea></div>';
+    }
+  }
+  else if (q.type === 'dropdown'){
+    var sv = answers[q.id] || '';
+    h += '<select id="sel" class="' + (sv ? '' : 'empty') + '">';
+    h += '<option value=""' + (sv ? '' : ' selected') + '>' + esc(q.placeholder || 'Choose one…') + '</option>';
+    q.options.forEach(function(o){
+      h += '<option value="' + esc(o) + '"' + (sv === o ? ' selected' : '') + '>' + esc(o) + '</option>';
+    });
+    h += '</select>';
+  }
+  else if (q.type === 'scale_desc'){
+    h += '<div class="opts">';
+    q.descriptors.forEach(function(d,i){
+      h += '<button type="button" class="opt" data-v="' + (i+1) + '" aria-pressed="' + (answers[q.id]===i+1) + '">' +
+           '<span class="badge">' + (i+1) + '</span><span>' + esc(d) + '</span></button>';
+    });
+    h += '</div>';
+  }
+  else if (q.type === 'rating'){
+    h += '<div class="scalewrap"><div class="scale">';
+    for (var n=1; n<=5; n++){
+      h += '<button type="button" data-v="' + n + '" aria-label="' + n + ' out of 5" aria-pressed="' + (answers[q.id]===n) + '">' + n + '</button>';
+    }
+    h += '</div><div class="ends"><span><b>1</b>' + esc(q.low) + '</span><span class="hi">' + esc(q.high) + '<b>5</b></span></div></div>';
+  }
+  else if (q.type === 'multi'){
+    var cur = answers[q.id] || [];
+    h += '<div class="opts" role="group">';
+    q.options.forEach(function(o){
+      h += '<button type="button" class="opt" data-v="' + esc(o) + '" aria-pressed="' + (cur.indexOf(o)>-1) + '">' +
+           '<span class="tick"><svg viewBox="0 0 12 12"><path d="M1 6l3.2 3.4L11 2.4" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>' +
+           '<span>' + esc(o) + '</span></button>';
+    });
+    h += '</div><p class="hint" id="cnt"></p>';
+  }
+  else if (q.type === 'text'){
+    h += '<textarea id="ta" placeholder="' + esc(q.placeholder||'') + '">' + esc(answers[q.id]||'') + '</textarea>';
+  }
+
+  body.innerHTML = h;
+  bar.style.width = ((idx) / QUESTIONS.length * 100) + '%';
+  backBtn.style.visibility = idx === 0 ? 'hidden' : 'visible';
+  wire(q);
+  syncNav();
+  var f = body.querySelector('button.opt, .scale button, select');
+  if (f) f.focus({preventScroll:true});
+  window.scrollTo(0,0);
+}
+
+function wire(q){
+  if (q.type === 'choice' || q.type === 'scale_desc'){
+    body.querySelectorAll('.opt').forEach(function(b){
+      b.onclick = function(){
+        var v = q.type === 'scale_desc' ? parseInt(b.dataset.v,10) : b.dataset.v;
+        answers[q.id] = v;
+        body.querySelectorAll('.opt').forEach(function(x){ x.setAttribute('aria-pressed', x===b); });
+        var fu = document.getElementById('follow');
+        if (fu){
+          var show = v === q.followUp.showWhen;
+          fu.style.display = show ? 'block' : 'none';
+          if (!show) delete answers[q.followUp.id];
+          syncNav();
+          if (show) { document.getElementById('fu').focus({preventScroll:true}); return; }
+        }
+        syncNav();
+        if (!q.followUp) setTimeout(advance, 260);
+      };
+    });
+    var fuEl = document.getElementById('fu');
+    if (fuEl) fuEl.oninput = function(){ answers[q.followUp.id] = fuEl.value; };
+  }
+  else if (q.type === 'dropdown'){
+    var sel = document.getElementById('sel');
+    sel.onchange = function(){
+      answers[q.id] = sel.value;
+      if (!sel.value) delete answers[q.id];
+      sel.classList.toggle('empty', !sel.value);
+      syncNav();
+    };
+  }
+  else if (q.type === 'rating'){
+    body.querySelectorAll('.scale button').forEach(function(b){
+      b.onclick = function(){
+        answers[q.id] = parseInt(b.dataset.v,10);
+        body.querySelectorAll('.scale button').forEach(function(x){ x.setAttribute('aria-pressed', x===b); });
+        syncNav(); setTimeout(advance, 260);
+      };
+    });
+  }
+  else if (q.type === 'multi'){
+    var upd = function(){
+      var cur = answers[q.id] || [];
+      var c = document.getElementById('cnt');
+      c.textContent = cur.length + ' of ' + q.max + ' selected';
+      c.className = 'hint' + (cur.length >= q.max ? ' warn' : '');
+      body.querySelectorAll('.opt').forEach(function(x){
+        var on = cur.indexOf(x.dataset.v) > -1;
+        x.setAttribute('aria-pressed', on);
+        x.style.opacity = (!on && cur.length >= q.max) ? '.45' : '1';
+      });
+    };
+    body.querySelectorAll('.opt').forEach(function(b){
+      b.onclick = function(){
+        var cur = answers[q.id] || [];
+        var i = cur.indexOf(b.dataset.v);
+        if (i > -1) cur.splice(i,1);
+        else { if (cur.length >= q.max) return; cur.push(b.dataset.v); }
+        answers[q.id] = cur; upd(); syncNav();
+      };
+    });
+    upd();
+  }
+  else if (q.type === 'text'){
+    var ta = document.getElementById('ta');
+    ta.oninput = function(){ answers[q.id] = ta.value; };
+  }
+}
+
+function syncNav(){
+  var q = QUESTIONS[idx], last = idx === QUESTIONS.length - 1;
+  nextBtn.textContent = last ? 'Submit' : 'Next';
+  nextBtn.classList.toggle('submit', last);
+  nextBtn.disabled = q.required && !answered(q);
+  if (q.type === 'choice' || q.type === 'scale_desc'){
+    var n = (q.options || q.descriptors).length;
+    kbd.innerHTML = 'Press <b>1</b>–<b>' + n + '</b> to choose';
+  } else if (q.type === 'rating'){
+    kbd.innerHTML = 'Press <b>1</b>–<b>5</b> to rate';
+  } else {
+    kbd.innerHTML = q.required ? '' : 'Leave blank to skip';
+  }
+}
+
+function advance(){
+  var q = QUESTIONS[idx];
+  if (q.required && !answered(q)) return;
+  if (idx === QUESTIONS.length - 1) submit();
+  else { idx++; render(); }
+}
+
+nextBtn.onclick = advance;
+backBtn.onclick = function(){ if (idx > 0){ idx--; render(); } };
+
+document.addEventListener('keydown', function(e){
+  if (sending) return;
+  var q = QUESTIONS[idx], tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'select'){
+    if (e.key === 'Enter'){ e.preventDefault(); advance(); }
+    return;
+  }
+  if (tag === 'textarea'){
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)){ e.preventDefault(); advance(); }
+    return;
+  }
+  if (/^[1-9]$/.test(e.key)){
+    var list = body.querySelectorAll('.opt, .scale button');
+    var t = list[parseInt(e.key,10) - 1];
+    if (t){ e.preventDefault(); t.click(); }
+  } else if (e.key === 'Enter'){
+    e.preventDefault(); advance();
+  }
+});
+
+function payload(){
+  var responses = QUESTIONS.map(function(q){
+    var o = { id:q.id, question:q.title, type:q.type, answer: answers[q.id] === undefined ? null : answers[q.id] };
+    if (q.followUp) o.followUp = { id:q.followUp.id, question:q.followUp.label, answer: answers[q.followUp.id] || null };
+    return o;
+  });
+  var flat = {};
+  responses.forEach(function(r){
+    flat[r.id] = r.answer;
+    if (r.followUp) flat[r.followUp.id] = r.followUp.answer;
+  });
+  return {
+    survey: SURVEY_ID,
+    surveyTitle: "AI & MCP Day — Pre-Event Survey",
+    submittedAt: new Date().toISOString(),
+    timezoneOffsetMinutes: new Date().getTimezoneOffset(),
+    anonymous: true,
+    answers: flat,
+    responses: responses
+  };
+}
+
+function thanks(demo){
+  document.querySelector('.bar').style.display = 'none';
+  document.querySelector('footer').style.display = 'none';
+  bar.style.width = '100%';
+  body.className = 'done';
+  body.innerHTML =
+    '<div class="mark"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#1AB92D" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>' +
+    '<h1>Thank you</h1><p>Your answers will help us shape the agenda.<br> See you on the day.</p>' +
+    (demo ? '<div class="demo"><b>Demo mode.</b> No webhook is configured yet, so nothing was sent. The payload has been logged to the browser console. Set <code>WEBHOOK_URL</code> near the top of this file to go live.</div>' : '');
+  window.scrollTo(0,0);
+}
+
+function submit(){
+  if (sending) return;
+  var data = payload();
+  if (WEBHOOK_URL.indexOf('REPLACE-ME') > -1){
+    console.log('[' + SURVEY_ID + '] demo mode — payload not sent:', data);
+    console.log(JSON.stringify(data, null, 2));
+    thanks(true);
+    return;
+  }
+  sending = true;
+  nextBtn.disabled = true;
+  nextBtn.textContent = 'Sending…';
+  fetch(WEBHOOK_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }).then(function(r){
+    if (!r.ok) throw new Error('The server replied ' + r.status + ' ' + r.statusText + '.');
+    sending = false; thanks(false);
+  }).catch(function(err){
+    sending = false;
+    nextBtn.disabled = false;
+    nextBtn.textContent = 'Submit';
+    var old = document.querySelector('.err'); if (old) old.remove();
+    var d = document.createElement('div');
+    d.className = 'err';
+    d.innerHTML = '<b>We could not send your response.</b><br>' + esc(err.message) +
+      ' Your answers are still here — try again, and if it keeps failing let the organisers know.' +
+      '<br><button type="button" id="retry">Try again</button>';
+    body.appendChild(d);
+    document.getElementById('retry').onclick = function(){ d.remove(); submit(); };
+    d.scrollIntoView({behavior:'smooth', block:'center'});
+  });
+}
+
+window.addEventListener('beforeunload', function(e){
+  if (Object.keys(answers).length && body.className !== 'done'){ e.preventDefault(); e.returnValue = ''; }
+});
+
+render();
+</script>
+</body>
+</html>
