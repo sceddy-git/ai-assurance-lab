@@ -36,6 +36,29 @@ to a hardcoded Power Automate webhook URL (`WEBHOOK_URL` near the top of the
 script), which writes the response into the corresponding SharePoint List -
 see the `ai-day-reports` skill for which list and the exact field mapping.
 
+## Question 1 (event location) is now synced to the platform (2026-11-11)
+
+Question 1's `options` array in each file is a **fallback only**. On page
+load, before the wizard renders its first question, both forms fetch
+`GET /api/survey/locations` (a new public, unauthenticated, read-only
+route in `app.py`) and - if it returns a non-empty list within 2.5s -
+**replace** Question 1's options with the live, distinct `location` values
+from the `AIAssuranceLab-Classes` table, sorted alphabetically. If the
+fetch fails, times out, or returns nothing, the hardcoded list already in
+the file is used untouched, so the survey can never be blocked by this.
+
+**Known gap, accepted deliberately:** `AIAssuranceLab-Classes` only gets an
+entry for cohorts run through the QR self-registration flow
+(`/admin/classes`). A cohort added via plain CSV bulk-upload
+(`/admin/students`, no QR) has no Class entry and so **won't appear in the
+synced list** until a proctor also creates a Class entry for it (the QR
+code itself doesn't need to ever be shared/used - creating the Class
+record is what matters here). Going forward, **proctors should create a
+Class entry for every cohort**, even CSV-only ones, so that location shows
+up here. The old hardcoded list is left in each file's `QUESTIONS[0]` as a
+static reference of locations covered before this change, but it is
+**not** read if the live fetch succeeds.
+
 ## THE ONE RULE THAT MATTERS: question order is a contract
 
 The destination SharePoint list columns are generic, positional `field_N`

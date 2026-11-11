@@ -2786,6 +2786,41 @@ def _join_rate_limited(ip: str) -> bool:
     return len(attempts) > _JOIN_RATE_LIMIT
 
 
+@app.route('/api/survey/locations', methods=['GET'])
+def api_survey_locations():
+    """
+    Public, read-only, unauthenticated: the distinct event locations known
+    to the platform (from AIAssuranceLab-Classes), for the pre/post-event
+    survey's Question 1 dropdown to sync against instead of a hand-edited
+    hardcoded list (added 2026-11-11 - see survey-forms/README.md in the
+    repo for the full picture, including why this REPLACES rather than
+    merges with the survey's own fallback list, and the implication that a
+    cohort run via CSV bulk-upload only - with no /admin/classes entry -
+    won't appear here until a proctor also creates a Class entry for it).
+
+    Only the `location` field is returned - nothing else from the Classes
+    table (no join_token, no internal ids) is exposed by this public route.
+    No rate limiting: this is a cheap DynamoDB scan on a tiny table (dozens
+    of rows), served to a page that's visited at most a few thousand times
+    total across the whole roadshow, nowhere near worth the complexity of
+    rate limiting like /api/join has for its write path.
+    """
+    try:
+        classes = list_classes()
+        locations = sorted({
+            (c.get('location') or '').strip()
+            for c in classes
+            if (c.get('location') or '').strip()
+        })
+        return jsonify({'status': 'success', 'locations': locations})
+    except Exception as e:
+        logger.error(f"Error listing survey locations: {e}")
+        # Best-effort - the survey page falls back to its own hardcoded
+        # list on any non-200/fetch error, so failing here never breaks
+        # the survey itself.
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/join/<join_token>', methods=['GET'])
 def join_class(join_token):
     """Public self-registration page for one scheduled class."""

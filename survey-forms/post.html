@@ -620,7 +620,34 @@ window.addEventListener('beforeunload', function(e){
   if (Object.keys(answers).length && body.className !== 'done'){ e.preventDefault(); e.returnValue = ''; }
 });
 
-render();
+/* ----------------------------------------------------------------
+   Sync Question 1's location options to the live AIAssuranceLab-Classes
+   table instead of this file's own hardcoded list (added 2026-11-11 -
+   see survey-forms/README.md in the app repo). REPLACES the hardcoded
+   list entirely on success - only falls back to the hardcoded options
+   already in QUESTIONS[0] above if the fetch fails, times out, or
+   returns no locations, so the form never breaks if the platform is
+   unreachable. 2.5s timeout: this must never visibly delay the survey.
+---------------------------------------------------------------- */
+(function syncLocationsThenRender(){
+  var eventQ = QUESTIONS.find(function(q){ return q.id === 'event'; });
+  var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var timer = setTimeout(function(){ if (controller) controller.abort(); }, 2500);
+  fetch('/api/survey/locations', { signal: controller ? controller.signal : undefined })
+    .then(function(r){ return r.ok ? r.json() : Promise.reject(new Error('bad status')); })
+    .then(function(data){
+      clearTimeout(timer);
+      if (eventQ && Array.isArray(data.locations) && data.locations.length > 0) {
+        eventQ.options = data.locations;
+      }
+    })
+    .catch(function(){
+      clearTimeout(timer);
+      // Network error, timeout, or bad response - keep the hardcoded
+      // fallback list already in QUESTIONS[0] untouched.
+    })
+    .finally(function(){ render(); });
+})();
 </script>
 </body>
 </html>

@@ -289,6 +289,14 @@ about when a student asks:
   of the chat by default (not a pop-out tab you have to click to open), and
   students can drag the divider between the guide and chat to resize it.
   Their chosen width is remembered across reloads.
+- **Create a Class entry for every cohort, even CSV-only ones.** The
+  post/pre-event survey's "which event did you attend?" dropdown (Question
+  1) is now synced live to whatever locations exist in `/admin/classes` —
+  you don't need to actually share the QR code or use self-registration,
+  just creating the Class entry (Section 2.3.5) is enough for its location
+  to show up in the survey. If you only bulk-upload a roster via
+  `/admin/students` and never create a matching Class entry, that cohort's
+  location won't appear as a survey option.
 
 ## 8. Cost while idle
 
