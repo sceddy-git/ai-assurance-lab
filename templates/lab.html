@@ -40,6 +40,20 @@
             display: flex;
             flex-direction: column;
             height: 100vh;
+            /* Found 2026-11-11: the shared static/css/style.css also defines
+               a generic ".container" utility class with
+               max-width:1200px; margin:0 auto; padding:0 20px - loaded
+               before this inline <style> block, so (same specificity,
+               this block wins on properties it sets, but silently
+               inherits anything it doesn't) the whole app shell was being
+               capped/centered/padded by that unrelated rule the entire
+               time, regardless of any width changes made to .main or
+               .header-content inside it. Explicitly resetting all three
+               here is what actually makes the layout use the full
+               browser window. */
+            max-width: none;
+            margin: 0;
+            padding: 0;
         }
 
         /* Header */
