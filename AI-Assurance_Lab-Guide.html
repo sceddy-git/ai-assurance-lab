@@ -105,6 +105,9 @@
   .mk .lab-h .n{background:var(--meraki)} .sp .lab-h .n{background:var(--splunk)} .n8 .lab-h .n{background:var(--n8n)} .gb .lab-h .n{background:var(--gabi)}
   .lab-b{padding:14px 16px}
   .lab-b .sub{color:var(--muted);font-size:14px;margin:-2px 0 6px}
+  .tier-badge{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border-radius:5px;margin-left:auto}
+  .tier-badge.core{background:#1e7e34;color:#fff}
+  .tier-badge.stretch{background:var(--line);color:var(--muted)}
 
   .toc{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:16px 20px;margin:22px 0}
   .toc b{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
@@ -171,6 +174,7 @@
         <li><b>No installs, no config files, no Claude Desktop.</b> You're already in the lab platform. The chat on the right talks to Claude on AWS Bedrock, which calls ThousandEyes and Meraki through their official hosted MCP servers on your behalf.</li>
         <li><b>One-time setup per service:</b> open <b>⚙️ Credentials</b> in the header, paste in your ThousandEyes OAuth Bearer token and Meraki API token, and click <b>Test Connection</b>. That's it — no OAuth pop-ups to click through, no local Python servers, no JSON config to edit.</li>
         <li>Once a service shows <b>Connected ✓</b>, just ask Claude questions in the chat — it automatically knows which tools it has available and uses them for you.</li>
+        <li><b>Curious what Claude actually did behind the scenes?</b> Every answer that involved tool calls shows small collapsed rows above the text — <code>🔧 tool name</code> for each tool it called (click to expand and see exactly what was sent and what came back), and <code>💭</code> for any reasoning it wrote along the way. They're collapsed by default so they stay out of your way, but expanding them is a great way to see which MCP tools solved a given question.</li>
       </ul>
     </div>
 
@@ -218,10 +222,11 @@
     <!-- TE LABS -->
     <h3 style="color:var(--te)">ThousandEyes Labs</h3>
     <div class="note"><span class="i">📖</span><div><b>One customer, one story.</b> The 5 labs below are chapters, not one-offs — Lab 1 picks a real customer and creates 5 <code>customer-demo</code>-tagged tests for them; every chapter after that (triage, SLA proof, anomaly detection, final report) works off those exact same tests. Every chapter happens entirely in this chat — you never need to open the ThousandEyes UI to tell this story.</div></div>
+    <div class="note"><span class="i">⏱️</span><div><b>Short on time?</b> Labs 1-2 are marked <span class="tier-badge core" style="margin-left:0">Core</span> — do these first, they're the ones everyone should get to. Labs 3-5 are <span class="tier-badge stretch" style="margin-left:0">Stretch</span> goals — great if you have time, but nothing later in this module or any other module depends on them, so don't worry if class ends before you get there.</div></div>
     <div class="te">
 
     <div class="lab">
-      <div class="lab-h"><span class="n">LAB 1 ★</span> Prospect Demo — from a domain to a customer-ready report</div>
+      <div class="lab-h"><span class="n">LAB 1 ★</span> Prospect Demo — from a domain to a customer-ready report<span class="tier-badge core">Core</span></div>
       <div class="lab-b">
         <div class="sub">The flagship sales-engineering workflow. ~15–20 minutes, start to finish.</div>
         <h4>Step 1 — Discover the prospect's internet services</h4>
@@ -278,18 +283,18 @@ server. No questions; be conservative if anything is ambiguous.
     </div>
 
     <div class="lab">
-      <div class="lab-h"><span class="n">LAB 2</span> The Outage Call</div>
+      <div class="lab-h"><span class="n">LAB 2</span> The Outage Call<span class="tier-badge core">Core</span></div>
       <div class="lab-b">
-        <div class="sub">Three weeks into the trial, your customer's NOC calls — something's alerting. Interrogate it in plain English.</div>
-        <div class="prompt">List all active ThousandEyes alerts right now and tell me which have been firing for more than 15 minutes.</div>
-        <div class="prompt">Troubleshoot the most critical alert. Suggest a probable fault domain and give me the supporting evidence from the test data.</div>
-        <div class="prompt">Which enterprise agents are reporting packet loss greater than 1% to the affected target right now? Show me the path-visualization summary.</div>
+        <div class="sub">Day 1 of the trial — your customer's NOC wants proof ThousandEyes would catch something the moment it happens. Prove the alerting and triage story in plain English, using both your own org and the live internet.</div>
+        <div class="prompt">Check my own ThousandEyes org for alerts in the last 7 days (both triggered and cleared). If there's anything there, summarize it. If there's nothing yet, that's the expected, correct answer this early in a trial with only a few minutes of test history — say so explicitly rather than treating it as a dead end.</div>
+        <div class="prompt">Now prove the platform is watching the whole internet, not just our handful of tests: search for real outages in the last 24 hours. Pick the most significant one and walk me through it like you'd walk a customer through it — what happened, which provider or network, how widespread, and what evidence proves it.</div>
+        <div class="prompt">For that outage, what would a probable fault domain and troubleshooting path look like if this were hitting my customer's traffic instead? Use the supporting evidence from the data to make the case.</div>
         <div class="prompt">Now check on my customer's own tests specifically: look at every test tagged "customer-demo" and tell me if any of them are currently showing errors, failures, or response times noticeably above their baseline. This is what I'd tell the customer if they asked "is our stuff okay right now?"</div>
       </div>
     </div>
 
     <div class="lab">
-      <div class="lab-h"><span class="n">LAB 3</span> Proving the SLA</div>
+      <div class="lab-h"><span class="n">LAB 3</span> Proving the SLA<span class="tier-badge stretch">Stretch</span></div>
       <div class="lab-b">
         <div class="sub">Your customer's champion needs to go to their boss with proof the trial is working — starting from day one, even with just a few minutes of data.</div>
         <div class="prompt">Find the test IDs for every test tagged "demo"="customer-demo" (look them up directly rather than filtering metrics by tag, since tag-based metric filters can silently return nothing). Then pull results for those test IDs since they were created. For each show: uptime %, average time-to-first-byte, and average response time. Rank the 5 hosts best to worst.
@@ -301,7 +306,7 @@ Be honest about the data window: if it's only been a few minutes, say so explici
     </div>
 
     <div class="lab">
-      <div class="lab-h"><span class="n">LAB 4</span> Catching It Before They Do</div>
+      <div class="lab-h"><span class="n">LAB 4</span> Catching It Before They Do<span class="tier-badge stretch">Stretch</span></div>
       <div class="lab-b">
         <div class="sub">The real sales pitch isn't "it works" — it's "we'll know before you do." Prove it on the customer's own tests.</div>
         <div class="prompt">Find the test IDs for every test tagged "demo"="customer-demo" (look them up directly rather than filtering by tag, since tag-based filters can silently return nothing), then analyze those tests for metric anomalies in the time since they were created. Flag anything statistically unusual, even if it hasn't breached an alert threshold.
@@ -314,12 +319,12 @@ Note: anomaly detection needs an established baseline, so on tests this new a cl
     </div>
 
     <div class="lab">
-      <div class="lab-h"><span class="n">LAB 5 ★</span> The Story</div>
+      <div class="lab-h"><span class="n">LAB 5 ★</span> The Story<span class="tier-badge stretch">Stretch</span></div>
       <div class="lab-b">
         <div class="sub">Bring it all together. One narrative, built entirely from this chat — no dashboard, no slides software, no manual copy-paste between tools.</div>
         <div class="prompt">Pull together everything from this session on my customer's "customer-demo" tests: the outage/triage check from earlier, the SLA proof numbers, and the anomaly/live-check result. Write one cohesive executive narrative (under 400 words) that tells the story of this trial's Day 1: what we watched, what we proved, what we caught early, and why that matters for their business — plus one line on what a full week of data will add. Tone: confident, data-backed, written for a Network Manager / IT Director deciding whether to expand the trial.</div>
         <div class="plabel">Push it further</div>
-        <div class="prompt">Turn that narrative into 5 slide talking points I could present live, each with a one-line "so what" for the business.</div>
+        <div class="prompt">Turn that narrative into 5 slide talking points I could present live, each with a one-line "so what" for the business. Deliver it as an interactive HTML slide deck I can click through right here in the chat — one slide per screen with next/back controls, not plain text.</div>
         <div class="prompt">What's the one number or finding from this whole session that would make the strongest case for expanding this trial? Make the case in two sentences.</div>
         <div class="note" style="margin-top:10px"><span class="i">🏆</span><div>Notice what you just did: discovered the customer's services, created real tests, triaged an alert, proved an SLA, caught an anomaly, and wrote an executive narrative — all without opening <code>thousandeyes.com</code> once.</div></div>
       </div>
@@ -342,59 +347,59 @@ Note: anomaly detection needs an established baseline, so on tests this new a cl
     <p>If Claude says it has no Meraki tools, let your proctor know — that would mean something's off with the shared connection, not something you need to fix.</p>
 
     <h3 style="color:var(--meraki)">Meraki Labs</h3>
-    <div class="note"><span class="i">✏️</span><div>Prompts below with a <code>[network]</code>, <code>[MX model]</code>, or <code>[switch model]</code> placeholder need that replaced with a real name from your org before you send it — e.g. <code>[network]</code> → <code>API-Branch</code>. If you paste one verbatim, Claude will just ask you which one you meant, costing you a round trip.</div></div>
-    <div class="note"><span class="i">📖</span><div><b>One network, one story.</b> The chapters below build on each other — Lab 2 investigates a real historical incident on this customer's network using actual connection and latency history (not simulated data), and every chapter after that either proves it's resolved or builds the customer-ready story around it. All of it happens in this chat — you never need to open the Meraki dashboard to tell this story.</div></div>
-    <div class="note"><span class="i">🎯</span><div>For the best results in Lab 2, point Claude at the <code>BR03-Munich</code> network — it currently has the most interesting real activity (an active device alert plus real connection history) to build a story around. You're not limited to it, though — this is a real multi-site org with 6+ branch and hub networks, so feel free to explore others and see what you find.</div></div>
+    <div class="note"><span class="i">📖</span><div><b>One customer, two sites.</b> This customer has multiple branches in the same Meraki org. Lab 2 investigates a real historical wireless incident at their <code>BR03-Munich</code> branch using actual connection and latency history (not simulated data) — that's the one site in this org with real incident history to dig into. Every other lab works on their <code>HUB11-Amsterdam</code> hub: a healthy, well-configured site, which is exactly the right place to practice security review, performance proof, and clean documentation. The capstone (Lab 6) weaves both into one story. All of it happens in this chat — you never need to open the Meraki dashboard to tell it.</div></div>
+    <div class="note"><span class="i">🎯</span><div>The prompts below are already filled in with real network and device names from this org. You're not limited to them, though — this is a real multi-site org with 6+ branch and hub networks, so feel free to swap in a different network/device name and explore.</div></div>
     <div class="note"><span class="i">🧪</span><div>These prompts are a starting point, not a script. You're encouraged to tweak them, combine them, or write your own entirely — ask follow-up questions, dig into something that looks interesting, or try a network/device the prompts don't mention. That experimentation is part of the lab, not a detour from it.</div></div>
+    <div class="note"><span class="i">⏱️</span><div><b>Short on time?</b> Labs 1-2 are marked <span class="tier-badge core" style="margin-left:0">Core</span> — do these first, they're the ones everyone should get to. Labs 3-6 are <span class="tier-badge stretch" style="margin-left:0">Stretch</span> goals — great if you have time, but nothing later in this module or any other module depends on them, so don't worry if class ends before you get there.</div></div>
     <div class="mk">
 
-    <div class="lab"><div class="lab-h"><span class="n">LAB 1</span> Meet the Network</div><div class="lab-b">
+    <div class="lab"><div class="lab-h"><span class="n">LAB 1</span> Meet the Network<span class="tier-badge core">Core</span></div><div class="lab-b">
       <div class="sub">Before you can tell this customer's story, see what you're working with.</div>
       <div class="prompt">Give me a health snapshot of my Meraki organization — how many networks, devices online vs offline, and any active alerts I should know about.</div>
-      <div class="prompt">Draw me a physical diagram of my [network] — show every device, how they connect, and what model they are.</div>
+      <div class="prompt">Draw me a physical diagram of my HUB11-Amsterdam network — show every device, how they connect, and what model they are.</div>
       <div class="prompt">Summarize the IP schema for my organization — networks, VLANs, subnet ranges, and the default gateway for each subnet.</div>
-      <div class="prompt">Check all switch ports on my [switch model] — which are active, and are any showing errors, drops, or a duplex mismatch?</div>
+      <div class="prompt">Check all switch ports on my MS130-24X — which are active, and are any showing errors, drops, or a duplex mismatch?</div>
     </div></div>
 
-    <div class="lab"><div class="lab-h"><span class="n">LAB 2</span> The Trouble Ticket</div><div class="lab-b">
+    <div class="lab"><div class="lab-h"><span class="n">LAB 2</span> The Trouble Ticket<span class="tier-badge core">Core</span></div><div class="lab-b">
       <div class="sub">Users have been complaining about flaky Wi-Fi this past week. Investigate it with real historical data — not guesses.</div>
-      <div class="prompt">Over the last 7 days on [network], pull wireless connection stats and failed-connection history. Identify the worst day and time window, and which band, SSID, or access point shows the most failures.
+      <div class="prompt">Over the last 7 days on BR03-Munich, pull wireless connection stats and failed-connection history. Identify the worst day and time window, and which band, SSID, or access point shows the most failures.
 
 If the data actually looks clean with nothing notable, say so explicitly — don't manufacture an incident that isn't there.</div>
       <div class="prompt">For the worst window you just found, pull client latency history for a few affected clients on that access point/band. Does latency spike too, or is it purely a connection/auth problem? What does that distinction suggest about root cause (RF interference, authentication, capacity, DHCP, etc.)?</div>
-      <div class="prompt">Pull client count history for [network] over the last 7 days — was the network simply over capacity during the worst window, or were there plenty of free client slots? Rule a capacity issue in or out.</div>
+      <div class="prompt">Pull client count history for BR03-Munich over the last 7 days — was the network simply over capacity during the worst window, or were there plenty of free client slots? Rule a capacity issue in or out.</div>
       <div class="prompt">Summarize this for a Network Manager who doesn't look at a dashboard every day: what happened, when, roughly how many users it affected, and your best-supported root cause theory. This is the trouble ticket writeup.</div>
     </div></div>
 
-    <div class="lab"><div class="lab-h"><span class="n">LAB 3</span> The Risk Review</div><div class="lab-b">
-      <div class="sub">Now that the immediate fire is out, prove this network is secure enough to trust with their business.</div>
-      <div class="prompt">Show all firewall rules on my [MX model] and flag any that allow unrestricted inbound traffic from 0.0.0.0/0. Rank by risk and suggest which to tighten.</div>
+    <div class="lab"><div class="lab-h"><span class="n">LAB 3</span> The Risk Review<span class="tier-badge stretch">Stretch</span></div><div class="lab-b">
+      <div class="sub">Now that the Munich fire is out, prove the rest of this customer's deployment is secure enough to trust with their business.</div>
+      <div class="prompt">Show all firewall rules on my MX250 and flag any that allow unrestricted inbound traffic from 0.0.0.0/0. Rank by risk and suggest which to tighten.</div>
       <div class="prompt">Conduct a full security audit of my Meraki organization: risky firewall rules, SSID auth modes, and rogue APs (last 7 days). Give each finding a High/Medium/Low risk and a remediation for the top 3.</div>
     </div></div>
     <p class="tip">💡 On the last prompt: if your org has no VPN peers or firmware CVE data configured, a good answer says so explicitly instead of inventing findings — that's Claude staying grounded in real tool output rather than guessing.</p>
 
-    <div class="lab"><div class="lab-h"><span class="n">LAB 4</span> Proving It's Fixed</div><div class="lab-b">
-      <div class="sub">Show the customer things are healthy now — and tie it back to what you found in Lab 2.</div>
-      <div class="prompt">Draw a performance dashboard for my network — client count per AP, top bandwidth consumers, WAN uplink health, and any high-error devices. Note whether the access point from the Lab 2 trouble ticket looks healthy now.</div>
+    <div class="lab"><div class="lab-h"><span class="n">LAB 4</span> Proving It's Fixed<span class="tier-badge stretch">Stretch</span></div><div class="lab-b">
+      <div class="sub">Munich had the incident — this hub hasn't. Show the customer what "healthy" looks like here, as the contrast to the fix you just made.</div>
+      <div class="prompt">Draw a performance dashboard for my network — client count per AP, top bandwidth consumers, WAN uplink health, and any high-error devices.</div>
       <div class="prompt">Show the top 10 bandwidth consumers this week, broken down by device and application. Flag anyone over 10GB.</div>
-      <div class="prompt">Pull channel utilization for all my APs — are any congested on 2.4GHz or 5GHz? Identify co-channel interference and suggest changes. If this lines up with the root cause from Lab 2, call that out explicitly.</div>
+      <div class="prompt">Pull channel utilization for all my APs — are any congested on 2.4GHz or 5GHz? Identify co-channel interference and suggest changes.</div>
     </div></div>
 
-    <div class="lab"><div class="lab-h"><span class="n">LAB 5</span> The Handoff</div><div class="lab-b">
+    <div class="lab"><div class="lab-h"><span class="n">LAB 5</span> The Handoff<span class="tier-badge stretch">Stretch</span></div><div class="lab-b">
       <div class="sub">Leave this customer with clean documentation, not tribal knowledge.</div>
-      <div class="prompt">Show the VLAN configuration on all switch ports in [network] and flag anything misconfigured — wrong access VLANs, untagged where tagged should be, inconsistencies. Suggest tidy-ups.</div>
+      <div class="prompt">Show the VLAN configuration on all switch ports in HUB11-Amsterdam and flag anything misconfigured — wrong access VLANs, untagged where tagged should be, inconsistencies. Suggest tidy-ups.</div>
       <div class="prompt">Is 802.11r fast roaming enabled on my APs? If not, what are the steps and caveats to turn it on?</div>
-      <div class="prompt">Generate a configuration audit of my [network] — devices &amp; serials, SSIDs &amp; security, firewall rules, and firmware status. Format it as a report I could hand to a customer. If any section isn't available for this network, say so rather than guessing.</div>
+      <div class="prompt">Generate a configuration audit of my HUB11-Amsterdam network — devices &amp; serials, SSIDs &amp; security, firewall rules, and firmware status. Format it as a report I could hand to a customer. If any section isn't available for this network, say so rather than guessing.</div>
     </div></div>
     <p class="tip">💡 The Meraki demo org used in this lab doesn't have routed VLANs or a WAN VPN configured on every network, so questions about them may come back "not configured" — that's expected, and a good sign the AI isn't fabricating an answer.</p>
 
-    <div class="lab"><div class="lab-h"><span class="n">LAB 6 ★</span> The Story</div><div class="lab-b">
-      <div class="sub">Bring it all together. One narrative, built entirely from this chat — no dashboard, no manual copy-paste between tools.</div>
-      <div class="prompt">Pull together everything from this session on this customer's network: the trouble ticket from Lab 2 (what broke and why), the risk review findings, the performance proof that it's fixed, and the config/handoff state. Write one cohesive executive narrative (under 400 words) that tells the story: what we found, what we fixed, what we secured, and why that matters for their business. Tone: confident, data-backed, written for a Network Manager / IT Director deciding whether to expand this engagement.</div>
+    <div class="lab"><div class="lab-h"><span class="n">LAB 6 ★</span> The Story<span class="tier-badge stretch">Stretch</span></div><div class="lab-b">
+      <div class="sub">Bring it all together. One narrative spanning both sites, built entirely from this chat — no dashboard, no manual copy-paste between tools.</div>
+      <div class="prompt">Pull together everything from this session on this customer's multi-site deployment: the trouble ticket from their Munich branch (Lab 2 — what broke and why), plus the risk review, performance proof, and clean handoff documentation from their Amsterdam hub. Write one cohesive executive narrative (under 400 words) that tells the story across both sites: what we found and fixed at the branch, what we proactively hardened and documented at the hub, and why that combination matters for their business as they scale to more sites. Tone: confident, data-backed, written for a Network Manager / IT Director deciding whether to expand this engagement.</div>
       <div class="plabel">Push it further</div>
       <div class="prompt">Turn that narrative into 5 slide talking points I could present live, each with a one-line "so what" for the business.</div>
       <div class="prompt">What's the one number or finding from this whole session that would make the strongest case for expanding this engagement? Make the case in two sentences.</div>
-      <div class="note" style="margin-top:10px"><span class="i">🏆</span><div>Notice what you just did: reviewed the network, investigated a real incident, proved it was fixed, audited security, cleaned up configuration, and wrote an executive narrative — all without opening the Meraki dashboard once.</div></div>
+      <div class="note" style="margin-top:10px"><span class="i">🏆</span><div>Notice what you just did: reviewed a multi-site deployment, investigated a real incident at one branch, proved a fix, audited and documented a second site, and wrote an executive narrative tying both together — all without opening the Meraki dashboard once.</div></div>
     </div></div>
 
     </div>

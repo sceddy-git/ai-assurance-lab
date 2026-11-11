@@ -174,6 +174,7 @@
         <li><b>No installs, no config files, no Claude Desktop.</b> You're already in the lab platform. The chat on the right talks to Claude on AWS Bedrock, which calls ThousandEyes and Meraki through their official hosted MCP servers on your behalf.</li>
         <li><b>One-time setup per service:</b> open <b>⚙️ Credentials</b> in the header, paste in your ThousandEyes OAuth Bearer token and Meraki API token, and click <b>Test Connection</b>. That's it — no OAuth pop-ups to click through, no local Python servers, no JSON config to edit.</li>
         <li>Once a service shows <b>Connected ✓</b>, just ask Claude questions in the chat — it automatically knows which tools it has available and uses them for you.</li>
+        <li><b>Curious what Claude actually did behind the scenes?</b> Every answer that involved tool calls shows small collapsed rows above the text — <code>🔧 tool name</code> for each tool it called (click to expand and see exactly what was sent and what came back), and <code>💭</code> for any reasoning it wrote along the way. They're collapsed by default so they stay out of your way, but expanding them is a great way to see which MCP tools solved a given question.</li>
       </ul>
     </div>
 
