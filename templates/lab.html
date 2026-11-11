@@ -817,6 +817,22 @@
             text-align: center;
             flex-shrink: 0;
         }
+
+        .progress-survey-link {
+            margin-top: 14px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border-subtle);
+        }
+        .progress-survey-link a {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--accent);
+            text-decoration: none;
+        }
+        .progress-survey-link a:hover {
+            text-decoration: underline;
+        }
+
         /* Token usage badge - added 2026-11-10. Soft/informational only
            (see STUDENT_TOKEN_BUDGET in app.py): never blocks chat, just
            warns a student as they approach their budget so a very long
@@ -1223,6 +1239,12 @@
                         `<span class="tick">${tick}</span><span>${cp.label}</span></div>`;
                 }
             }
+            // Post-event survey link, shown after the Splunk section (the
+            // last module in PROGRESS_MODULE_ORDER) - added 2026-11-11.
+            // Anonymous (no name/email collected), so it's fine to leave
+            // this up for every student the whole time rather than only
+            // once they've finished everything.
+            html += `<div class="progress-survey-link"><a href="https://ai.thousandeyeschannel.com/survey/post" target="_blank" rel="noopener noreferrer">📝 Post-event survey</a></div>`;
             listEl.innerHTML = html;
 
             renderTokenUsage(data.tokens_used_total, data.token_budget);
