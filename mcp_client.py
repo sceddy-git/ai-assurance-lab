@@ -12,6 +12,7 @@ import asyncio
 import concurrent.futures
 import logging
 import threading
+import time
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -159,9 +160,33 @@ def _get_loop() -> asyncio.AbstractEventLoop:
         return _loop
 
 
-def _run(coro):
-    """Run an async MCP coroutine from sync Flask request handlers, bounded
-    by MCP_CALL_TIMEOUT_SECONDS regardless of how the transport behaves.
+# Exception class names that indicate a one-off, transient connection
+# problem (vs. a real/persistent failure like bad auth or a 4xx from the
+# vendor) - worth a quick retry rather than failing the whole turn.
+#
+# Added 2026-11-11 after live reports of ThousandEyes/Meraki tool calls
+# "failing with no data available on the first try, then working on
+# retry". Logs showed repeated `ConnectError: [Errno -2] Name or service
+# not known` - a transient DNS resolution blip on the instance (the
+# hostname is fine; a single getaddrinfo() call just failed momentarily) -
+# happening every few minutes throughout the day. Since
+# list_mcp_tools()/call_mcp_tool() previously gave up on the very first
+# exception, a single bad DNS lookup meant Claude had zero tools available
+# for that entire turn and had no way to know data existed at all.
+_TRANSIENT_ERROR_NAMES = (
+    'ConnectError', 'ConnectTimeout', 'ReadTimeout', 'RemoteProtocolError',
+    'ConnectionResetError', 'ConnectionRefusedError',
+)
+_RETRY_ATTEMPTS = 3  # 1 initial try + 2 retries
+_RETRY_BACKOFF_SECONDS = 0.6
+
+
+def _run(coro_factory):
+    """Run an async MCP coroutine (built fresh per attempt by coro_factory,
+    a zero-arg callable - coroutines are single-use so a retry needs a new
+    one each time) from sync Flask request handlers, bounded by
+    MCP_CALL_TIMEOUT_SECONDS per attempt regardless of how the transport
+    behaves.
 
     Dispatches onto the persistent per-process loop (see _get_loop) instead
     of asyncio.run()'ing a fresh one each call. On timeout, explicitly
@@ -169,20 +194,38 @@ def _run(coro):
     run_coroutine_threadsafe (concurrent.futures.Future.cancel() after a
     TimeoutError propagates the cancellation back into the coroutine running
     on the loop), so a hung call gets torn down instead of continuing to
-    occupy the loop/thread pool in the background indefinitely."""
-    future = asyncio.run_coroutine_threadsafe(coro, _get_loop())
-    try:
-        return future.result(timeout=MCP_CALL_TIMEOUT_SECONDS)
-    except concurrent.futures.TimeoutError:
-        future.cancel()
-        logger.error(f"MCP client error: call exceeded {MCP_CALL_TIMEOUT_SECONDS}s hard timeout")
-        raise MCPClientError(
-            f"MCP server did not respond within {MCP_CALL_TIMEOUT_SECONDS}s"
-        )
-    except Exception as e:
-        real_error = _unwrap(e)
-        logger.error(f"MCP client error: {type(real_error).__name__} - {real_error}")
-        raise MCPClientError(f"{type(real_error).__name__}: {str(real_error)}")
+    occupy the loop/thread pool in the background indefinitely.
+
+    Transient connection errors (see _TRANSIENT_ERROR_NAMES) are retried up
+    to _RETRY_ATTEMPTS times with a short fixed backoff; anything else
+    (auth failures, 4xx from the vendor, genuine timeouts) fails immediately
+    since retrying won't help."""
+    last_error = None
+    for attempt in range(1, _RETRY_ATTEMPTS + 1):
+        future = asyncio.run_coroutine_threadsafe(coro_factory(), _get_loop())
+        try:
+            return future.result(timeout=MCP_CALL_TIMEOUT_SECONDS)
+        except concurrent.futures.TimeoutError:
+            future.cancel()
+            logger.error(f"MCP client error: call exceeded {MCP_CALL_TIMEOUT_SECONDS}s hard timeout")
+            raise MCPClientError(
+                f"MCP server did not respond within {MCP_CALL_TIMEOUT_SECONDS}s"
+            )
+        except Exception as e:
+            real_error = _unwrap(e)
+            last_error = real_error
+            if type(real_error).__name__ in _TRANSIENT_ERROR_NAMES and attempt < _RETRY_ATTEMPTS:
+                logger.warning(
+                    f"MCP client transient error (attempt {attempt}/{_RETRY_ATTEMPTS}): "
+                    f"{type(real_error).__name__} - {real_error} - retrying"
+                )
+                time.sleep(_RETRY_BACKOFF_SECONDS * attempt)
+                continue
+            logger.error(f"MCP client error: {type(real_error).__name__} - {real_error}")
+            raise MCPClientError(f"{type(real_error).__name__}: {str(real_error)}")
+    # Unreachable in practice (loop always returns or raises), but keeps
+    # type checkers happy and fails loudly if it ever is reached.
+    raise MCPClientError(f"{type(last_error).__name__}: {str(last_error)}")
 
 
 def list_mcp_tools(url: str, token: Optional[str] = None, require_token: bool = True,
@@ -202,7 +245,7 @@ def list_mcp_tools(url: str, token: Optional[str] = None, require_token: bool = 
         return []
     if require_token and not token:
         return []
-    return _run(_list_tools_async(url, token, verify_tls))
+    return _run(lambda: _list_tools_async(url, token, verify_tls))
 
 
 def call_mcp_tool(url: str, token: Optional[str], tool_name: str, arguments: Optional[Dict[str, Any]] = None,
@@ -212,4 +255,4 @@ def call_mcp_tool(url: str, token: Optional[str], tool_name: str, arguments: Opt
         return {"error": "MCP server URL not configured"}
     if require_token and not token:
         return {"error": "Token not configured"}
-    return _run(_call_tool_async(url, token, tool_name, arguments or {}, verify_tls))
+    return _run(lambda: _call_tool_async(url, token, tool_name, arguments or {}, verify_tls))
