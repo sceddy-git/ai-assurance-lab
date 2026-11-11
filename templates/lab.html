@@ -759,9 +759,6 @@
            (see STUDENT_TOKEN_BUDGET in app.py): never blocks chat, just
            warns a student as they approach their budget so a very long
            session doesn't run out unexpectedly near the end of the lab. */
-        #token-usage-section {
-            margin-top: 14px;
-        }
         #token-usage-bar-track {
             height: 6px;
             border-radius: 3px;
@@ -950,17 +947,18 @@
                         <div class="info-value" id="availability-status">Loading...</div>
                     </div>
 
+                    <div class="info-section" id="token-usage-section" style="display:none;">
+                        <div class="info-title">🔋 Token Usage</div>
+                        <div id="token-usage-label">Loading...</div>
+                        <div id="token-usage-bar-track">
+                            <div id="token-usage-bar-fill"></div>
+                        </div>
+                    </div>
+
                     <div class="info-section" id="progress-section">
                         <div class="info-title">📋 My Progress</div>
                         <div class="info-value" id="progress-summary">Loading...</div>
                         <div id="progress-checklist"></div>
-                        <div id="token-usage-section" style="display:none;">
-                            <div class="progress-module" style="margin-top:14px;">Token Usage</div>
-                            <div id="token-usage-label">Loading...</div>
-                            <div id="token-usage-bar-track">
-                                <div id="token-usage-bar-fill"></div>
-                            </div>
-                        </div>
                     </div>
 
                     <div class="quick-links">
