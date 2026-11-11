@@ -1173,11 +1173,15 @@
         const PROGRESS_MODULE_LABELS = { te: 'ThousandEyes', meraki: 'Meraki', splunk: 'Splunk (bonus)' };
         const PROGRESS_MODULE_ORDER = ['te', 'meraki', 'splunk'];
 
-        // The last checkpoint in each module's "story" - reaching one of
-        // these triggers the one-time feedback nudge (see sendMessage's
-        // labs_matched handling below), since it means the student finished
-        // that module's whole arc.
-        const PROGRESS_FINAL_CHECKPOINTS = ['te_lab5', 'meraki_lab6', 'splunk_cloudspend'];
+        // Checkpoint id -> label lookup (e.g. 'te_lab2' -> 'Lab 2: The
+        // Outage Call'), populated from /api/my-progress the first time it
+        // loads - used by maybeShowFeedbackNudge below to name the lab in
+        // its "did you enjoy this?" prompt without hardcoding labels here.
+        let checkpointLabels = {};
+
+        // Checkpoints ending in "_verify" are just connection checks, not
+        // an actual lab with content to enjoy - never nudge for those.
+        const VERIFY_CHECKPOINT_RE = /_verify$/;
 
         async function loadMyProgress() {
             try {
@@ -1197,6 +1201,10 @@
             if (!summaryEl || !listEl || !data || !Array.isArray(data.checkpoints)) return;
 
             summaryEl.textContent = `${data.core_done} / ${data.core_total} core labs done`;
+
+            for (const cp of data.checkpoints) {
+                checkpointLabels[cp.id] = cp.label;
+            }
 
             const byModule = {};
             for (const cp of data.checkpoints) {
@@ -1265,21 +1273,24 @@
             labelEl.textContent = `${fmt(tokensUsed)} / ${fmt(tokenBudget)} tokens (${pctLabel}%)${note}`;
         }
 
-        // One-time, low-key feedback nudge shown inline in chat the first
-        // time a student hits the last checkpoint of a module's story. Keyed
-        // per-user in localStorage so it never repeats across reloads/visits.
+        // One-time, low-key "did you enjoy this lab?" nudge shown inline in
+        // chat the first time a student completes each individual lab
+        // checkpoint (added 2026-11-11 - previously only fired once per
+        // module, at its very last lab). Keyed per-user per-checkpoint in
+        // localStorage so it never repeats across reloads/visits, and never
+        // fires twice for the same lab.
         function maybeShowFeedbackNudge(labsMatchedThisTurn) {
             if (!Array.isArray(labsMatchedThisTurn)) return;
-            const hit = labsMatchedThisTurn.find(id => PROGRESS_FINAL_CHECKPOINTS.includes(id));
+            const hit = labsMatchedThisTurn.find(id => !VERIFY_CHECKPOINT_RE.test(id));
             if (!hit) return;
             const flagKey = 'feedbackNudgeShown_' + hit + '_' + {{ email | tojson }};
             if (localStorage.getItem(flagKey)) return;
             localStorage.setItem(flagKey, '1');
 
-            const nudgeText = "🎉 Looks like you just finished this module's story. If you've got a sec, " +
-                "your proctor would love to hear what worked or didn't — just reply here and I'll pass it " +
-                "along. No need to wait around for a response first, either: you're all set to go ahead and " +
-                "start the next lab whenever you're ready.";
+            const label = checkpointLabels[hit] || 'this lab';
+            const nudgeText = `🎉 Nice work finishing **${label}**! Did you enjoy this lab? Reply here to let ` +
+                "me know (your proctor will see it) — then jump into the next one whenever you're ready, no " +
+                "need to wait for a response first.";
             addMessage(nudgeText, false);
 
             // Fixes a real bug found 2026-11-09: this nudge is purely a

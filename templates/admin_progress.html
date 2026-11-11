@@ -283,15 +283,15 @@
 
             <h2 style="margin:36px 0 12px; font-size:18px; color:#333;">💬 Feedback</h2>
             <p class="muted" style="margin-bottom:14px;">
-                Replies students left to the one-time "how'd it go?" nudge shown in chat when they finish a module's
-                story (ThousandEyes, Meraki, or Splunk). Captured automatically — nothing for the student to submit
-                separately.
+                Replies students left to the one-time "did you enjoy this lab?" nudge shown in chat right after they
+                finish each individual lab. Captured automatically — nothing for the student to submit separately.
             </p>
             <div id="feedbackWrap" style="overflow-x:auto;">
                 <table>
                     <thead>
                         <tr>
                             <th>Feedback</th>
+                            <th>Lab</th>
                             <th>Module</th>
                             <th>Student</th>
                             <th>When</th>
@@ -301,7 +301,7 @@
                 </table>
             </div>
             <div id="feedbackEmpty" style="display:none; text-align:center; padding:20px; color:#999;">
-                No feedback recorded yet — this fills in as students finish a module.
+                No feedback recorded yet — this fills in as students finish labs.
             </div>
 
             <h2 style="margin:36px 0 12px; font-size:18px; color:#333;">👍 Message Ratings</h2>
@@ -475,6 +475,15 @@
 
         const FEEDBACK_MODULE_LABELS = { te: 'ThousandEyes', meraki: 'Meraki', splunk: 'Splunk' };
 
+        // Turns a LAB_CHECKPOINTS id (e.g. 'te_lab2') into a readable label
+        // (e.g. 'Te Lab2') without needing to duplicate app.py's full
+        // LAB_CHECKPOINTS label strings here - good enough for a proctor to
+        // tell at a glance which lab a piece of feedback is about.
+        function fmtCheckpointLabel(checkpointId) {
+            if (!checkpointId) return '—';
+            return checkpointId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
+
         // Feedback is free-form text typed by students, rendered here via
         // innerHTML on an authenticated proctor page - escape it so a
         // student can't inject script/markup into another user's session.
@@ -494,6 +503,7 @@
                     document.getElementById('feedbackBody').innerHTML = feedback.map(f => `
                         <tr>
                             <td>${escapeHtml(f.text)}</td>
+                            <td>${escapeHtml(fmtCheckpointLabel(f.checkpoint_id))}</td>
                             <td>${FEEDBACK_MODULE_LABELS[f.module] || escapeHtml(f.module) || '<span class="muted">—</span>'}</td>
                             <td>${escapeHtml(f.email)}</td>
                             <td>${fmtTime(f.recorded_at)}</td>
