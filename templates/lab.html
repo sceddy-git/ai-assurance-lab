@@ -64,11 +64,15 @@
         }
 
         .header-content {
-            /* Spans the full window width (2026-11-11) to match the
-               edge-to-edge guide/chat/session-info layout below - used to
-               be capped and centered at 1200px, which looked misaligned
-               once the panels under it started using the whole window. */
-            width: 100%;
+            /* The header bar background still spans the full window, but
+               its content (title + nav links) is centered as a group
+               within a reasonable max width (2026-11-11) - letting it
+               stretch edge-to-edge instead just pushed the title and nav
+               apart with a lot of dead space between them on wide
+               monitors, which looked disconnected/broken rather than
+               "using the full window" in any useful way. */
+            max-width: 1400px;
+            margin: 0 auto;
             display: flex;
             justify-content: space-between;
             align-items: center;
