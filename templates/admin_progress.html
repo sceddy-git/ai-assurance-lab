@@ -247,6 +247,7 @@
                             <th>Meraki Labs</th>
                             <th>Splunk</th>
                             <th>Messages</th>
+                            <th>Tokens</th>
                             <th>Last Active</th>
                         </tr>
                     </thead>
@@ -349,6 +350,19 @@
             }).join('') + '</div>';
         }
 
+        // Mirrors the 10M soft budget (STUDENT_TOKEN_BUDGET in app.py) and
+        // the same 80%/95% warning thresholds shown to students themselves
+        // in lab.html, so a proctor scanning this table catches anyone
+        // approaching their budget before the student even mentions it.
+        const TOKEN_BUDGET = 10_000_000;
+        function fmtTokens(n) {
+            n = n || 0;
+            const fmt = n >= 1_000_000 ? (n / 1_000_000).toFixed(1) + 'M' : n >= 1_000 ? Math.round(n / 1000) + 'K' : String(n);
+            const pct = n / TOKEN_BUDGET;
+            const cls = pct >= 0.95 ? 'color:#c0392b;font-weight:600;' : pct >= 0.8 ? 'color:#a87400;' : '';
+            return `<span style="${cls}">${fmt}</span>`;
+        }
+
         function renderBadge(connected) {
             return connected
                 ? '<span class="badge on">Connected</span>'
@@ -374,6 +388,7 @@
                     <td>${labDots(s.labs_completed, 'meraki', 'mk')}</td>
                     <td>${renderBadge(s.splunk_connected)}</td>
                     <td>${s.chat_message_count || 0}</td>
+                    <td>${fmtTokens(s.total_tokens)}</td>
                     <td>${fmtTime(s.last_active_at)}</td>
                 </tr>`;
             }).join('');

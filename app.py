@@ -33,6 +33,7 @@ from dynamo_db import (
     update_connection_status,
     delete_user_credentials,
     record_lab_activity,
+    record_token_usage,
     get_progress_summary,
     record_prospect,
     get_all_prospects,
@@ -386,6 +387,13 @@ def _extract_prospect_domain_from_screenshot(image_block: dict) -> Optional[dict
 # ----------------------------------------------------------------------
 MAX_TOOL_RESULT_CHARS = 30_000
 MAX_TOTAL_MESSAGE_CHARS = 350_000
+
+# Soft per-student token budget for the whole lab, used to drive the
+# usage badge in lab.html (warns as a student approaches it; never blocks
+# chat - see dynamo_db.record_token_usage). Sized from real lab-day data
+# (2026-10-13): the heaviest real student session used ~5M tokens across a
+# full ~4 hour run-through, so 10M gives comfortable headroom above that.
+STUDENT_TOKEN_BUDGET = 10_000_000
 
 
 def _cap_tool_result_text(text: str, max_chars: int = MAX_TOOL_RESULT_CHARS) -> str:
@@ -1090,9 +1098,11 @@ def my_progress():
     try:
         summary = get_progress_summary().get(email.lower(), {})
         completed = set(summary.get('labs_completed', []))
+        tokens_used_total = summary.get('total_tokens', 0)
     except Exception as e:
         logger.warning(f"Failed to load self-progress for {email}: {e}")
         completed = set()
+        tokens_used_total = 0
 
     checkpoints = [
         {
@@ -1110,6 +1120,8 @@ def my_progress():
         'checkpoints': checkpoints,
         'core_total': len(core_ids),
         'core_done': core_done,
+        'tokens_used_total': tokens_used_total,
+        'token_budget': STUDENT_TOKEN_BUDGET,
     })
 
 
@@ -1365,6 +1377,8 @@ def chat():
         CHAT_WALL_CLOCK_BUDGET_SECONDS = 140
         chat_loop_started_at = time.monotonic()
         total_tools_used = 0
+        turn_input_tokens = 0
+        turn_output_tokens = 0
         content = []
         system_prompt = _build_system_prompt(meraki_org_id)
         active_model_id = CLAUDE_MODEL_ID_HTML if _wants_html_output(user_message) else CLAUDE_MODEL_ID
@@ -1384,7 +1398,7 @@ def chat():
             Any exception here can't be caught by chat()'s outer try/except
             (that only covers code before streaming starts, which is why
             this has its own try/except yielding an ERROR: line)."""
-            nonlocal content, total_tools_used, messages, ao_last_span_id
+            nonlocal content, total_tools_used, messages, ao_last_span_id, turn_input_tokens, turn_output_tokens
             try:
                 for iteration in range(MAX_TOOL_ITERATIONS):
                     if time.monotonic() - chat_loop_started_at > CHAT_WALL_CLOCK_BUDGET_SECONDS:
@@ -1411,6 +1425,9 @@ def chat():
                         )
                         result = json.loads(response['body'].read())
                         content = result.get('content', [])
+                        _usage = result.get('usage', {}) or {}
+                        turn_input_tokens += int(_usage.get('input_tokens') or 0)
+                        turn_output_tokens += int(_usage.get('output_tokens') or 0)
                         ao_last_span_id = _run_with_timeout(
                             splunk_ao_telemetry.add_llm_span, TELEMETRY_CALL_TIMEOUT_SECONDS, None,
                             ao_logger, request_body, result, model_id=active_model_id,
@@ -1530,6 +1547,17 @@ def chat():
                 except Exception as e:
                     logger.warning(f"Failed to record lab activity for {email}: {e}")
 
+                # Best-effort token usage tracking (see STUDENT_TOKEN_BUDGET) -
+                # must never break the chat response if it fails. None on
+                # failure (rather than 0) tells the frontend to leave its
+                # existing badge value alone instead of showing a false reset.
+                tokens_used_total = None
+                try:
+                    token_totals = record_token_usage(email, turn_input_tokens, turn_output_tokens)
+                    tokens_used_total = token_totals['total_input_tokens'] + token_totals['total_output_tokens']
+                except Exception as e:
+                    logger.warning(f"Failed to record token usage for {email}: {e}")
+
                 _run_with_timeout(
                     splunk_ao_telemetry.conclude_and_flush, TELEMETRY_CALL_TIMEOUT_SECONDS, None,
                     ao_logger, assistant_message,
@@ -1556,6 +1584,12 @@ def chat():
                     # None if Splunk AO telemetry is disabled/unavailable -
                     # frontend must hide the feedback buttons in that case.
                     "feedback_id": ao_last_span_id,
+                    # Cumulative tokens used by this student across the whole
+                    # lab so far (None if the DynamoDB write failed - frontend
+                    # should leave its last-known badge value as-is in that
+                    # case rather than treating it as zero).
+                    "tokens_used_total": tokens_used_total,
+                    "token_budget": STUDENT_TOKEN_BUDGET,
                     # True if this turn hit the wall-clock budget or iteration cap
                     # with a tool call still pending. Frontend auto-continues (see
                     # lab.html) rather than showing this as a dead end to the
@@ -1692,6 +1726,7 @@ def api_admin_progress():
                 'chat_message_count': p.get('chat_message_count', 0),
                 'last_active_at': p.get('last_active_at'),
                 'prospect_count': p.get('prospect_count', 0),
+                'total_tokens': p.get('total_tokens', 0),
                 'percent_complete': percent,
                 'cognito_status': cognito_status,
                 'never_logged_in': never_logged_in

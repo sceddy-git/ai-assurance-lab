@@ -461,6 +461,76 @@ def record_lab_activity(email: str, labs_matched: set, modules_used: set) -> Non
     )
 
 
+def record_token_usage(email: str, input_tokens: int, output_tokens: int) -> Dict[str, int]:
+    """
+    Atomically add this turn's Bedrock token usage to the student's running
+    total - called once per chat turn from the chat endpoint. Real lab-day
+    data (2026-10-13) showed a single thorough student can use 5M+ tokens
+    across a full lab session (average ~72K input tokens per turn, since
+    each turn resends the full accumulated conversation history plus tool
+    results), which is what the 10M per-student budget below is sized
+    against.
+
+    Uses a DynamoDB ADD update expression, which is atomic server-side -
+    safe even if a student somehow has two requests in flight at once,
+    without needing a separate read-modify-write round trip. ReturnValues
+    hands back the post-increment totals in the same call so the caller can
+    include them in the chat response without a second read.
+
+    Best-effort - callers should wrap this in a try/except so a DynamoDB
+    hiccup never breaks the chat response the student is waiting on.
+
+    Args:
+        email: User's email address
+        input_tokens: This turn's input token count (0 if unknown/missing)
+        output_tokens: This turn's output token count (0 if unknown/missing)
+
+    Returns:
+        {"total_input_tokens": int, "total_output_tokens": int}
+    """
+    if not email or (not input_tokens and not output_tokens):
+        return {"total_input_tokens": 0, "total_output_tokens": 0}
+
+    table = get_table()
+    response = table.update_item(
+        Key={"email": email},
+        UpdateExpression="ADD total_input_tokens :inp, total_output_tokens :out",
+        ExpressionAttributeValues={
+            ":inp": int(input_tokens or 0),
+            ":out": int(output_tokens or 0)
+        },
+        ReturnValues="UPDATED_NEW"
+    )
+    attrs = response.get('Attributes', {})
+    return {
+        "total_input_tokens": int(attrs.get('total_input_tokens', 0)),
+        "total_output_tokens": int(attrs.get('total_output_tokens', 0))
+    }
+
+
+def get_token_usage(email: str) -> Dict[str, int]:
+    """
+    Read a student's running token totals without modifying them - used to
+    restore the usage badge on page load (e.g. after a refresh), since the
+    chat endpoint only returns updated totals on its own responses.
+
+    Returns:
+        {"total_input_tokens": int, "total_output_tokens": int}
+    """
+    if not email:
+        return {"total_input_tokens": 0, "total_output_tokens": 0}
+    table = get_table()
+    response = table.get_item(
+        Key={"email": email},
+        ProjectionExpression="total_input_tokens, total_output_tokens"
+    )
+    item = response.get('Item', {})
+    return {
+        "total_input_tokens": int(item.get('total_input_tokens', 0)),
+        "total_output_tokens": int(item.get('total_output_tokens', 0))
+    }
+
+
 def get_progress_summary() -> Dict[str, Dict]:
     """
     Scan the credentials table for lab-progress fields for every student who
@@ -493,6 +563,7 @@ def get_progress_summary() -> Dict[str, Dict]:
                 "meraki_connected": bool(item.get("meraki_connected", False)),
                 "splunk_connected": bool(item.get("splunk_connected", False)),
                 "prospect_count": len(item.get("prospects") or []),
+                "total_tokens": int(item.get("total_input_tokens") or 0) + int(item.get("total_output_tokens") or 0),
             }
         last_key = response.get('LastEvaluatedKey')
         if not last_key:

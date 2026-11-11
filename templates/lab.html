@@ -755,6 +755,46 @@
             opacity: 0.6;
         }
 
+        /* Token usage badge - added 2026-11-10. Soft/informational only
+           (see STUDENT_TOKEN_BUDGET in app.py): never blocks chat, just
+           warns a student as they approach their budget so a very long
+           session doesn't run out unexpectedly near the end of the lab. */
+        #token-usage-section {
+            margin-top: 14px;
+        }
+        #token-usage-bar-track {
+            height: 6px;
+            border-radius: 3px;
+            background: var(--bg-page);
+            border: 1px solid var(--border-subtle);
+            overflow: hidden;
+            margin-top: 6px;
+        }
+        #token-usage-bar-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--accent);
+            transition: width 0.3s ease, background-color 0.3s ease;
+        }
+        #token-usage-bar-fill.warn {
+            background: #d9a400;
+        }
+        #token-usage-bar-fill.critical {
+            background: #c0392b;
+        }
+        #token-usage-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+        #token-usage-label.warn {
+            color: #a87400;
+        }
+        #token-usage-label.critical {
+            color: #c0392b;
+            font-weight: 600;
+        }
+
         .quick-links {
             border-top: 1px solid var(--border-subtle);
             padding-top: 15px;
@@ -914,6 +954,13 @@
                         <div class="info-title">📋 My Progress</div>
                         <div class="info-value" id="progress-summary">Loading...</div>
                         <div id="progress-checklist"></div>
+                        <div id="token-usage-section" style="display:none;">
+                            <div class="progress-module" style="margin-top:14px;">Token Usage</div>
+                            <div id="token-usage-label">Loading...</div>
+                            <div id="token-usage-bar-track">
+                                <div id="token-usage-bar-fill"></div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="quick-links">
@@ -1106,6 +1153,53 @@
                 }
             }
             listEl.innerHTML = html;
+
+            renderTokenUsage(data.tokens_used_total, data.token_budget);
+        }
+
+        // Warning thresholds are intentionally soft/informational only -
+        // nothing here ever blocks the student from sending another
+        // message (see STUDENT_TOKEN_BUDGET docstring in app.py for why).
+        const TOKEN_WARN_PCT = 0.8;
+        const TOKEN_CRITICAL_PCT = 0.95;
+
+        function renderTokenUsage(tokensUsed, tokenBudget) {
+            const sectionEl = document.getElementById('token-usage-section');
+            const labelEl = document.getElementById('token-usage-label');
+            const fillEl = document.getElementById('token-usage-bar-fill');
+            if (!sectionEl || !labelEl || !fillEl) return;
+
+            // null/undefined means "unknown" (e.g. a failed DynamoDB write
+            // for this turn, or telemetry disabled) - leave whatever was
+            // last shown alone rather than falsely resetting to 0/hiding it.
+            if (tokensUsed === null || tokensUsed === undefined || !tokenBudget) {
+                if (!sectionEl.dataset.everShown) sectionEl.style.display = 'none';
+                return;
+            }
+
+            sectionEl.style.display = 'block';
+            sectionEl.dataset.everShown = '1';
+
+            const pct = Math.min(1, tokensUsed / tokenBudget);
+            const pctLabel = Math.round(pct * 100);
+            const fmt = n => n >= 1_000_000 ? (n / 1_000_000).toFixed(1) + 'M' : n >= 1_000 ? Math.round(n / 1000) + 'K' : String(n);
+
+            fillEl.style.width = (pct * 100) + '%';
+            fillEl.classList.remove('warn', 'critical');
+            labelEl.classList.remove('warn', 'critical');
+
+            let note = '';
+            if (pct >= TOKEN_CRITICAL_PCT) {
+                fillEl.classList.add('critical');
+                labelEl.classList.add('critical');
+                note = ' — almost out, wrap up soon';
+            } else if (pct >= TOKEN_WARN_PCT) {
+                fillEl.classList.add('warn');
+                labelEl.classList.add('warn');
+                note = ' — getting close to your budget';
+            }
+
+            labelEl.textContent = `${fmt(tokensUsed)} / ${fmt(tokenBudget)} tokens (${pctLabel}%)${note}`;
         }
 
         // One-time, low-key feedback nudge shown inline in chat the first
@@ -1706,6 +1800,10 @@
 
                 // Reload credential status (may have changed)
                 loadCredentialStatus();
+
+                // Update the token usage badge from this turn's response
+                // directly (no extra request needed - see tokens_used_total).
+                renderTokenUsage(data.tokens_used_total, data.token_budget);
 
                 // Only hit /api/my-progress when this turn actually matched a
                 // checkpoint, instead of after every single message.
