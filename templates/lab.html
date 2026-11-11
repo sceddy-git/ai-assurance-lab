@@ -185,13 +185,53 @@
             flex-direction: column;
             overflow: hidden;
             flex-shrink: 0;
-            resize: horizontal;
             min-width: 260px;
             max-width: 50vw;
         }
 
         .main.guide-open .guide-sidebar {
             display: flex;
+        }
+
+        /* Drag-to-resize divider on the guide's right edge - added
+           2026-11-11, replacing the native CSS `resize: horizontal`
+           handle (a tiny diagonal grip tucked in the bottom-right corner,
+           easy to miss entirely) with an obvious full-height slider
+           that's draggable from anywhere along the edge. */
+        .guide-resize-handle {
+            display: none;
+            width: 6px;
+            flex-shrink: 0;
+            cursor: col-resize;
+            background: transparent;
+            position: relative;
+        }
+
+        .main.guide-open .guide-resize-handle {
+            display: block;
+        }
+
+        .guide-resize-handle::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 2px;
+            width: 2px;
+            background: var(--border-subtle);
+            transition: background 0.15s;
+        }
+
+        .guide-resize-handle:hover::after,
+        .guide-resize-handle.dragging::after {
+            background: var(--accent);
+        }
+
+        /* Applied to <body> while dragging so text elsewhere on the page
+           doesn't get selected as the mouse moves across it. */
+        body.resizing-guide {
+            cursor: col-resize;
+            user-select: none;
         }
 
         .guide-sidebar .sidebar-title {
@@ -977,6 +1017,9 @@
                 <iframe class="guide-frame" id="guideFrame" title="AI Assurance Lab Guide"></iframe>
             </div>
 
+            <!-- Drag this to resize the Lab Guide -->
+            <div class="guide-resize-handle" id="guideResizeHandle" title="Drag to resize"></div>
+
             <!-- Chat Area -->
             <div class="chat-area">
                 <div class="messages" id="messages">
@@ -1154,6 +1197,66 @@
             if (localStorage.getItem('labGuideOpen') !== '0') {
                 toggleGuide();
             }
+        })();
+
+        // ---- Lab Guide drag-to-resize (added 2026-11-11) ----
+        const GUIDE_WIDTH_KEY = 'labGuideWidth';
+        const GUIDE_MIN_WIDTH = 260;
+
+        function guideMaxWidth() {
+            return window.innerWidth * 0.6;
+        }
+
+        // Restore a previously dragged width, if any (clamped in case the
+        // window is now narrower than when it was saved).
+        (function restoreGuideWidth() {
+            const saved = parseInt(localStorage.getItem(GUIDE_WIDTH_KEY) || '', 10);
+            if (!saved) return;
+            const clamped = Math.max(GUIDE_MIN_WIDTH, Math.min(saved, guideMaxWidth()));
+            document.getElementById('guideSidebar').style.width = clamped + 'px';
+        })();
+
+        (function setUpGuideResize() {
+            const handle = document.getElementById('guideResizeHandle');
+            const guide = document.getElementById('guideSidebar');
+            const frame = document.getElementById('guideFrame');
+            if (!handle || !guide) return;
+
+            let startX = 0;
+            let startWidth = 0;
+
+            function onMouseMove(e) {
+                const delta = e.clientX - startX;
+                const newWidth = Math.max(GUIDE_MIN_WIDTH, Math.min(startWidth + delta, guideMaxWidth()));
+                guide.style.width = newWidth + 'px';
+            }
+
+            function onMouseUp() {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+                document.body.classList.remove('resizing-guide');
+                handle.classList.remove('dragging');
+                // Re-enable the iframe's own mouse handling now that we're
+                // not relying on tracking the cursor across the page.
+                if (frame) frame.style.pointerEvents = '';
+                localStorage.setItem(GUIDE_WIDTH_KEY, parseInt(guide.style.width, 10));
+            }
+
+            handle.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                startX = e.clientX;
+                startWidth = guide.getBoundingClientRect().width;
+                document.body.classList.add('resizing-guide');
+                handle.classList.add('dragging');
+                // While dragging, the iframe would otherwise swallow
+                // mousemove events the instant the cursor crosses over it
+                // (it has its own document/window), breaking the drag
+                // mid-motion - disabling pointer events on it for the
+                // duration fixes that.
+                if (frame) frame.style.pointerEvents = 'none';
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            });
         })();
 
         // ---- Session Info sidebar (collapsible to make room for chat) ----
