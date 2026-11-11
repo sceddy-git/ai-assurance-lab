@@ -228,14 +228,23 @@ REQUIRED_CHECKPOINTS = [cid for cid, c in LAB_CHECKPOINTS.items() if c['module']
 
 
 def _detect_lab_checkpoints(user_message: str) -> set:
-    """Return the set of lab checkpoint IDs whose distinctive phrase(s)
-    appear in this chat message (case-insensitive, whitespace-normalized)."""
+    """Return the set of lab checkpoint IDs whose COMPLETION phrase appears
+    in this chat message (case-insensitive, whitespace-normalized).
+
+    Each checkpoint's `phrases` list is the ORDERED sequence of that lab's
+    successive guide prompts (first prompt, middle prompt(s), final
+    deliverable prompt) - not interchangeable synonyms for "touched this
+    lab". Only the LAST phrase in the list marks the lab as actually done;
+    matching on any earlier phrase (fixed 2026-11-11) caused both the
+    progress checklist and the end-of-lab feedback nudge to fire as soon as
+    a student sent the lab's FIRST prompt, rather than its last."""
     if not user_message:
         return set()
     normalized = ' '.join(user_message.lower().split())
     matched = set()
     for checkpoint_id, checkpoint in LAB_CHECKPOINTS.items():
-        if any(phrase in normalized for phrase in checkpoint['phrases']):
+        completion_phrase = checkpoint['phrases'][-1]
+        if completion_phrase in normalized:
             matched.add(checkpoint_id)
     return matched
 
