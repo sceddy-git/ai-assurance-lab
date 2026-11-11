@@ -137,46 +137,67 @@
             background-color: #F5E3DE;
         }
 
-        /* Main Content */
+        /* Main Content - widened 2026-11-11 (was capped at 1200/1900px,
+           wasting a lot of horizontal space on anything wider than a
+           laptop screen while the chat column got squeezed between the
+           guide and session-info panels). Now uses most of the viewport,
+           with a generous ceiling just to keep chat line-length sane on
+           ultrawide monitors. */
         .main {
             flex: 1;
             overflow: hidden;
             display: flex;
-            max-width: 1200px;
+            max-width: 1800px;
             width: 100%;
             margin: 0 auto;
             transition: max-width 0.2s;
         }
 
-        .main.guide-open {
-            max-width: 1900px;
+        /* When the session-info sidebar is collapsed, let chat use the rest */
+        .main.info-collapsed {
+            max-width: 2000px;
         }
 
-        /* Lab Guide Sidebar (left) — docked, compact by default, user-resizable */
+        /* Lab Guide - floating overlay drawer (changed 2026-11-11 from a
+           docked sidebar). It used to push into the flex row and shrink
+           the chat column every time a student opened it; now it slides
+           in over the page instead, so chat stays full width whether the
+           guide is open or not. A click on the dimmed backdrop (or the
+           existing ✕ button) closes it. */
+        .guide-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.25);
+            z-index: 40;
+        }
+
+        .main.guide-open .guide-backdrop {
+            display: block;
+        }
+
         .guide-sidebar {
-            width: clamp(300px, 26vw, 420px);
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            width: clamp(320px, 32vw, 520px);
             background: var(--bg-panel);
             border-right: 1px solid var(--border-subtle);
-            display: none;
+            box-shadow: 4px 0 24px rgba(0, 0, 0, 0.18);
+            display: flex;
             flex-direction: column;
             overflow: hidden;
-            flex-shrink: 0;
             resize: horizontal;
-            min-width: 260px;
-            max-width: 60vw;
+            min-width: 280px;
+            max-width: 90vw;
+            z-index: 50;
+            transform: translateX(-100%);
+            transition: transform 0.25s ease;
         }
 
         .main.guide-open .guide-sidebar {
-            display: flex;
-        }
-
-        /* When the session-info sidebar is collapsed, give the guide/chat more room */
-        .main.info-collapsed {
-            max-width: 1500px;
-        }
-
-        .main.guide-open.info-collapsed {
-            max-width: 1700px;
+            transform: translateX(0);
         }
 
         .guide-sidebar .sidebar-title {
@@ -209,7 +230,7 @@
 
         @media (max-width: 1300px) {
             .guide-sidebar {
-                width: clamp(280px, 40vw, 400px);
+                width: clamp(280px, 60vw, 420px);
             }
         }
 
@@ -856,8 +877,12 @@
                 display: none;
             }
 
-            .main.guide-open .guide-sidebar {
-                display: none;
+            /* Guide is a full-screen overlay drawer on small screens now
+               that it's not docked inline - no reason to hide it here
+               anymore like the old docked layout had to. */
+            .guide-sidebar {
+                width: 100vw;
+                max-width: 100vw;
             }
 
             .message.user .message-content {
@@ -923,7 +948,10 @@
 
         <!-- Main Content -->
         <div class="main" id="mainArea">
-            <!-- Lab Guide Sidebar (left) -->
+            <!-- Dimmed backdrop behind the floating guide drawer; click to close -->
+            <div class="guide-backdrop" id="guideBackdrop" onclick="toggleGuide(event)"></div>
+
+            <!-- Lab Guide (floating overlay drawer, not docked - see CSS) -->
             <div class="guide-sidebar" id="guideSidebar">
                 <div class="sidebar-title">
                     <span>📘 Lab Guide</span>
