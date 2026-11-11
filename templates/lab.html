@@ -740,21 +740,6 @@
             text-align: center;
             flex-shrink: 0;
         }
-        .progress-item .tier-tag {
-            margin-left: auto;
-            font-size: 9px;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            padding: 1px 5px;
-            border-radius: 4px;
-            background: var(--bg-page);
-            border: 1px solid var(--border-subtle);
-            flex-shrink: 0;
-        }
-        .progress-item.stretch-item .tier-tag {
-            opacity: 0.6;
-        }
-
         /* Token usage badge - added 2026-11-10. Soft/informational only
            (see STUDENT_TOKEN_BUDGET in app.py): never blocks chat, just
            warns a student as they approach their budget so a very long
@@ -1142,12 +1127,10 @@
                 if (!items || !items.length) continue;
                 html += `<div class="progress-module">${PROGRESS_MODULE_LABELS[mod] || mod}</div>`;
                 for (const cp of items) {
-                    const tierClass = cp.tier === 'stretch' ? ' stretch-item' : '';
                     const doneClass = cp.done ? ' done' : '';
                     const tick = cp.done ? '✅' : '⬜';
-                    html += `<div class="progress-item${doneClass}${tierClass}">` +
-                        `<span class="tick">${tick}</span><span>${cp.label}</span>` +
-                        `<span class="tier-tag">${cp.tier}</span></div>`;
+                    html += `<div class="progress-item${doneClass}">` +
+                        `<span class="tick">${tick}</span><span>${cp.label}</span></div>`;
                 }
             }
             listEl.innerHTML = html;
