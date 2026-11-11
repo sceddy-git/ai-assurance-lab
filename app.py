@@ -1379,6 +1379,12 @@ def chat():
         total_tools_used = 0
         turn_input_tokens = 0
         turn_output_tokens = 0
+        # Collapsed "explainer" steps shown in the UI above the final answer
+        # (see lab.html's addMessage) - each intermediate reasoning blurb
+        # Claude writes before calling a tool, plus every tool call itself
+        # (name/input/result). Purely for transparency; never fed back into
+        # the model - the actual conversation history is `messages`, not this.
+        turn_steps = []
         content = []
         system_prompt = _build_system_prompt(meraki_org_id)
         active_model_id = CLAUDE_MODEL_ID_HTML if _wants_html_output(user_message) else CLAUDE_MODEL_ID
@@ -1398,7 +1404,7 @@ def chat():
             Any exception here can't be caught by chat()'s outer try/except
             (that only covers code before streaming starts, which is why
             this has its own try/except yielding an ERROR: line)."""
-            nonlocal content, total_tools_used, messages, ao_last_span_id, turn_input_tokens, turn_output_tokens
+            nonlocal content, total_tools_used, messages, ao_last_span_id, turn_input_tokens, turn_output_tokens, turn_steps
             try:
                 for iteration in range(MAX_TOOL_ITERATIONS):
                     if time.monotonic() - chat_loop_started_at > CHAT_WALL_CLOCK_BUDGET_SECONDS:
@@ -1463,6 +1469,18 @@ def chat():
                         # Claude is done calling tools; this is the final answer.
                         break
 
+                    # Any text Claude wrote alongside this round's tool call(s)
+                    # (e.g. "Let me check the test results...") used to be
+                    # silently discarded once a later iteration produced the
+                    # real final answer. Surface it as a "reasoning" step
+                    # instead, so the explainer trail in the UI shows *why*
+                    # each tool was called, not just that it was.
+                    reasoning_text = ' '.join(
+                        c.get('text', '').strip() for c in content if c.get('type') == 'text' and c.get('text', '').strip()
+                    )
+                    if reasoning_text:
+                        turn_steps.append({"type": "reasoning", "text": _cap_tool_result_text(reasoning_text, max_chars=2000)})
+
                     total_tools_used += len(tool_calls)
                     tool_results = []
 
@@ -1509,6 +1527,21 @@ def chat():
                             "type": "tool_result",
                             "tool_use_id": tool_use_id,
                             "content": _cap_tool_result_text(tool_result_text)
+                        })
+
+                        # Display-only copy for the UI's collapsed explainer
+                        # (see turn_steps above) - capped much tighter than
+                        # the actual model-facing tool result above, since
+                        # this is just for a student to skim, not for Claude
+                        # to reason over.
+                        turn_steps.append({
+                            "type": "tool_call",
+                            "tool_name": tool_name,
+                            "label": _tool_progress_label(tool_name),
+                            "module": tool_module,
+                            "input": _cap_tool_result_text(json.dumps(tool_input), max_chars=1000),
+                            "result": _cap_tool_result_text(tool_result_text, max_chars=2000),
+                            "had_error": bool(isinstance(tool_result, dict) and tool_result.get('error'))
                         })
 
                     # Feed the tool results back and let Claude continue (may call more tools)
@@ -1572,6 +1605,11 @@ def chat():
 
                 yield "FINAL:" + json.dumps({
                     "response": assistant_message,
+                    # Collapsed "explainer" trail (reasoning blurbs + tool
+                    # calls) shown above the final answer in the UI - see
+                    # turn_steps above. Empty list if the answer didn't need
+                    # any tools.
+                    "steps": turn_steps,
                     # Checkpoint IDs this exact turn matched (see
                     # _detect_lab_checkpoints) - lets the frontend refresh its
                     # self-progress checklist only when something changed,

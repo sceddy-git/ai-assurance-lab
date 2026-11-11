@@ -309,6 +309,57 @@
             display: none;
         }
 
+        /* Collapsed "explainer" trail (reasoning + tool calls) shown above
+           an assistant message's final text - added 2026-11-11. */
+        .steps-trail {
+            margin-bottom: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .tool-step {
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            background: var(--bg-page);
+            font-size: 12px;
+        }
+        .tool-step summary {
+            cursor: pointer;
+            padding: 6px 10px;
+            color: var(--text-secondary);
+            list-style: none;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .tool-step summary::-webkit-details-marker {
+            display: none;
+        }
+        .tool-step summary::before {
+            content: '▸ ';
+        }
+        .tool-step[open] summary::before {
+            content: '▾ ';
+        }
+        .tool-step[open] summary {
+            white-space: normal;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        .tool-step-body {
+            padding: 8px 10px;
+        }
+        .tool-step-body pre {
+            font-family: "SF Mono", Consolas, Monaco, monospace;
+            font-size: 11px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            color: var(--text-secondary);
+            margin: 0 0 6px 0;
+        }
+        .tool-step-body pre:last-child {
+            margin-bottom: 0;
+        }
+
         /* Markdown content styling (rendered assistant responses) */
         .markdown-body p {
             margin: 0 0 12px 0;
@@ -1002,7 +1053,7 @@
             conversationHistory = saved;
             for (const turn of saved) {
                 if (typeof turn.content === 'string') {
-                    addMessage(turn.content, turn.role === 'user', null, turn.feedback_id);
+                    addMessage(turn.content, turn.role === 'user', null, turn.feedback_id, turn.steps);
                 }
             }
         }
@@ -1284,7 +1335,7 @@
             return DOMPurify.sanitize(rawHtml, { ADD_ATTR: ['target', 'rel'] });
         }
 
-        function addMessage(text, isUser, fileNames, feedbackId) {
+        function addMessage(text, isUser, fileNames, feedbackId, steps) {
             const messagesContainer = document.getElementById('messages');
             const messagesInner = document.getElementById('messages-inner');
 
@@ -1323,14 +1374,21 @@
                     content.appendChild(textDiv);
                 }
             } else {
-                content.classList.add('markdown-body');
-                content.innerHTML = renderMarkdown(text);
+                if (Array.isArray(steps) && steps.length) {
+                    content.appendChild(buildStepsTrail(steps));
+                }
+
+                const markdownWrap = document.createElement('div');
+                markdownWrap.className = 'markdown-body';
+                markdownWrap.innerHTML = renderMarkdown(text);
+                content.appendChild(markdownWrap);
+
                 // Open any links in a new tab safely.
-                content.querySelectorAll('a').forEach(link => {
+                markdownWrap.querySelectorAll('a').forEach(link => {
                     link.setAttribute('target', '_blank');
                     link.setAttribute('rel', 'noopener noreferrer');
                 });
-                addHtmlDownloadButtons(content);
+                addHtmlDownloadButtons(markdownWrap);
                 if (feedbackId) {
                     content.appendChild(buildFeedbackButtons(feedbackId));
                 }
@@ -1341,6 +1399,48 @@
 
             // Scroll to bottom
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        // Builds the collapsed "explainer" trail shown above an assistant
+        // message's final text - one <details> per reasoning blurb or tool
+        // call the model made this turn (see turn_steps in app.py). Purely
+        // transparency/debugging for the student; collapsed by default so
+        // it never gets in the way of just reading the answer.
+        function buildStepsTrail(steps) {
+            const wrap = document.createElement('div');
+            wrap.className = 'steps-trail';
+
+            for (const step of steps) {
+                const details = document.createElement('details');
+                details.className = 'tool-step';
+
+                const summary = document.createElement('summary');
+                if (step.type === 'reasoning') {
+                    summary.textContent = '💭 ' + (step.text.length > 100 ? step.text.slice(0, 100) + '…' : step.text);
+                    const body = document.createElement('div');
+                    body.className = 'tool-step-body';
+                    body.textContent = step.text;
+                    details.appendChild(summary);
+                    details.appendChild(body);
+                } else {
+                    const icon = step.had_error ? '⚠️' : '🔧';
+                    summary.textContent = `${icon} ${step.label || step.tool_name}`;
+                    const body = document.createElement('div');
+                    body.className = 'tool-step-body';
+                    const inputPre = document.createElement('pre');
+                    inputPre.textContent = 'Input: ' + step.input;
+                    const resultPre = document.createElement('pre');
+                    resultPre.textContent = 'Result: ' + step.result;
+                    body.appendChild(inputPre);
+                    body.appendChild(resultPre);
+                    details.appendChild(summary);
+                    details.appendChild(body);
+                }
+
+                wrap.appendChild(details);
+            }
+
+            return wrap;
         }
 
         // Builds the thumbs up/down row shown under an assistant message
@@ -1714,6 +1814,7 @@
                 let files = filesToSend;
                 let data = null;
                 let continues = 0;
+                let allSteps = [];
 
                 while (true) {
                     updateLoadingStatus('');
@@ -1749,6 +1850,9 @@
                         return;
                     }
                     data = finalData;
+                    if (Array.isArray(data.steps)) {
+                        allSteps = allSteps.concat(data.steps);
+                    }
 
                     if (!data.truncated || continues >= MAX_AUTO_CONTINUES) {
                         break;
@@ -1775,8 +1879,8 @@
                 }
 
                 // Add assistant response
-                addMessage(displayResponse, false, null, data.feedback_id);
-                conversationHistory.push({ role: 'assistant', content: displayResponse, feedback_id: data.feedback_id });
+                addMessage(displayResponse, false, null, data.feedback_id, allSteps);
+                conversationHistory.push({ role: 'assistant', content: displayResponse, feedback_id: data.feedback_id, steps: allSteps });
                 saveChatHistory();
 
                 // Reload credential status (may have changed)
