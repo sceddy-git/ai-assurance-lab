@@ -215,9 +215,9 @@
 
     <h4>Find and select your Account Group</h4>
     <div class="te"><div class="prompt">List all ThousandEyes account groups you have access to.</div></div>
-    <div class="note"><span class="i">🏷️</span><div><b>Know which Account Group you're in.</b> Every student gets their own dedicated ThousandEyes Account Group inside the shared organization <b>"AI-Powered Network Observability Day"</b>, named after you — <code>Your Name (your.email@example.com)</code>. All the tests, alerts, and data you see and create in the labs live in <em>that</em> group only, not your classmates'. In the list Claude returns, find the account group with <em>your own</em> name and email, then tell it explicitly to use that one, for example:</div></div>
-    <div class="te"><div class="prompt">Use the account group "Your Name (your.email@example.com)" for everything from here on.</div></div>
-    <p>If you ever see someone else's name there, double-check you picked the right group before running any lab prompts below — tests created against the wrong account group won't show up as yours.</p>
+    <div class="note"><span class="i">🏷️</span><div><b>Know which Account Group you're in.</b> Every student gets their own dedicated ThousandEyes Account Group inside the shared organization <b>"AI-Powered Network Observability Day"</b>, named after you — <code>Your Name (your.email@example.com)</code>. All the tests, alerts, and data you see and create in the labs live in <em>that</em> group only, not your classmates'. In the list Claude returns, find the account group with <em>your own</em> name and email, note its <b>AID</b> (account group ID), then tell Claude to use that AID, for example:</div></div>
+    <div class="te"><div class="prompt">Use the account group with AID [your AID] for everything from here on.</div></div>
+    <p>If you ever see someone else's name there, double-check you picked the right AID before running any lab prompts below — tests created against the wrong account group won't show up as yours.</p>
 
     <!-- TE LABS -->
     <h3 style="color:var(--te)">ThousandEyes Labs</h3>
