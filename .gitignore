@@ -15,5 +15,15 @@ build/
 htmlcov/
 node_modules/
 .playwright-mcp/
+.ipynb_checkpoints/
+
+# Instance-only ops scripts (documented in TECHNICAL_REFERENCE.md as
+# deliberately not tracked here - lives only on the EC2 instance)
+thread_watchdog.sh
+
+# Generated business/prospect reports (AI Day reports skill output) -
+# unrelated to this app's code, contains partner/student PII
+Prospect-Customer-Report*.csv
+Prospect-Customer-Report*.html
 *.png
 certificates/

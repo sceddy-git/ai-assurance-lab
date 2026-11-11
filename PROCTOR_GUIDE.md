@@ -18,7 +18,7 @@ lab session**.
 |---|---|
 | Student URL | **https://ai.thousandeyeschannel.com** |
 | Login | AWS Cognito (email + password), Hosted UI |
-| AI backend | AWS Bedrock, Claude Sonnet 4.5 |
+| AI backend | AWS Bedrock, Claude Haiku 4.5 |
 | Credential storage | Encrypted per-user in DynamoDB (`AIAssuranceLab-UserMCPCredentials`) |
 | MCP integrations | ThousandEyes (hosted), Meraki (hosted), Splunk (student/facilitator-provided URL) |
 | Class scheduling | `/admin/classes` - QR self-registration per class, roster view, disable/TE-cleanup actions |
@@ -261,7 +261,36 @@ Then add `YOUR_EMAIL` to `PROCTOR_EMAILS` as above.
 
 ---
 
-## 7. Cost while idle
+## 7. Student-facing features added since this guide was last reviewed (Nov 2026)
+
+These don't require you to do anything to enable, but are useful to know
+about when a student asks:
+
+- **Collapsed "explainer" rows in chat** — each tool call (🔧) and
+  reasoning step (💭) Claude takes is shown as a collapsible row above its
+  final answer, so students can inspect exactly which MCP tool was called
+  and with what inputs. The Lab Guide tells students about this.
+- **Token usage badge** — students see a progress bar in the sidebar
+  tracking their cumulative token usage against a **10M token soft
+  budget**. This is informational only — it never blocks chat, even if a
+  student goes over. You can see every student's running total on the
+  `/admin/progress` dashboard (new "Tokens" column), color-coded amber at
+  80% and red at 95% of budget, in case anyone is burning through usage
+  unusually fast.
+- **End-of-lab feedback nudge** — after a student completes *any* lab
+  checkpoint (not just the last one in a module), the chat asks "did you
+  enjoy this lab?" once per lab per student. Replies are recorded to
+  DynamoDB and visible on `/admin/progress` (feedback table now has a
+  "Lab" column showing which specific lab each comment is about).
+- **Post-event survey link** — the "My Progress" sidebar now shows a link
+  to the anonymous post-event survey (`/survey/post`) after a student's
+  module checklists.
+- **Docked, resizable Lab Guide** — the Lab Guide is now docked to the left
+  of the chat by default (not a pop-out tab you have to click to open), and
+  students can drag the divider between the guide and chat to resize it.
+  Their chosen width is remembered across reloads.
+
+## 8. Cost while idle
 
 The instance is a single `t3.micro` — leaving it running between sessions
 costs roughly $7–8/month (EC2) + a few cents/month (Elastic IP, Route 53,

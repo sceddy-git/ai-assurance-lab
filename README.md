@@ -15,12 +15,20 @@ live MCP (Model Context Protocol) integrations to ThousandEyes, Meraki, and
 
 - Email-based login via AWS Cognito, each student manages their own
   encrypted API credentials — never shared, never sent to the frontend
-- Claude (Sonnet 4.5) via AWS Bedrock, with agentic multi-step tool use
+- Claude (Haiku 4.5) via AWS Bedrock, with agentic multi-step tool use
 - ThousandEyes and Meraki via Cisco's hosted MCP servers; Splunk via a
   user-supplied MCP server URL
+- Collapsed "explainer" trail in chat — each tool call and reasoning step
+  Claude takes is shown as a collapsible row above its final answer
+- Per-student token usage tracking against a soft 10M-token budget (shown
+  to students in the sidebar, and to proctors on the progress dashboard) —
+  informational only, never blocks chat
+- Progress checklist per module, an end-of-lab "did you enjoy this lab?"
+  feedback nudge recorded to DynamoDB, and a post-event survey link
 - File attachments (images, PDF, Excel/CSV) and downloadable HTML report
   generation in chat
-- In-app lab guide sidebar with pop-out tab
+- In-app lab guide, docked to the left of the chat with a drag-to-resize
+  divider, plus a pop-out tab
 - Proctor tools built into the app: bulk/single student add via CSV/Excel,
   system status, logs, restart, and git-pull-to-deploy — no AWS CLI needed
   day-to-day

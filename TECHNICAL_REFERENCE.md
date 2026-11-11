@@ -376,6 +376,64 @@ already fixed on `main` / live:
      watchdog cron job from scratch, or restore them from an instance
      snapshot/backup.
 
+## Token usage tracking, explainer trails, and per-lab feedback (Nov 2026)
+
+Three related student-facing features, all added the same week:
+
+- **Token budget tracking.** `STUDENT_TOKEN_BUDGET = 10_000_000` (soft limit,
+  never enforced/blocking) in `app.py`. Each Bedrock `invoke_model` response's
+  `usage.input_tokens`/`usage.output_tokens` are accumulated per-turn and
+  persisted via `dynamo_db.record_token_usage()`, which does an atomic
+  DynamoDB `ADD` update (no read-modify-write race) and returns the new
+  running totals. `get_progress_summary()` surfaces a combined
+  `total_tokens` field per student, used by both `/api/my-progress` (student
+  sidebar badge) and `/api/admin/progress` (proctor dashboard "Tokens"
+  column). Recording is best-effort — wrapped in try/except so a DynamoDB
+  hiccup never breaks the chat response itself.
+- **Explainer trails.** Each turn's reasoning text and tool calls are
+  collected into a `turn_steps` list in `app.py` (one entry per reasoning
+  block and per tool call, each capped via `_cap_tool_result_text()` to
+  bound payload size) and returned in the `FINAL:` JSON payload as
+  `"steps"`. `templates/lab.html`'s `buildStepsTrail()` renders these as
+  collapsed `<details>` elements above the assistant's markdown response;
+  steps are persisted in `localStorage` (`chatHistory_<email>`) so they
+  survive a page reload.
+- **Per-lab feedback nudge.** Originally fired only at each module's final
+  checkpoint (`PROGRESS_FINAL_CHECKPOINTS`); generalized to fire once per
+  *individual* lab checkpoint (excluding `_verify` connectivity-check
+  checkpoints) via a `VERIFY_CHECKPOINT_RE` filter in `lab.html`'s
+  `maybeShowFeedbackNudge()`. Reuses the pre-existing, fully generic
+  `record_feedback()`/`get_all_feedback()` DynamoDB functions and
+  `/api/feedback` route — no backend schema change was needed, only the
+  frontend trigger condition. The proctor feedback table
+  (`admin_progress.html`) gained a "Lab" column (`fmtCheckpointLabel()`)
+  showing which specific lab each piece of feedback is about.
+
+## Lab Guide docked layout (Nov 2026)
+
+The Lab Guide sidebar (`guide.html`, rendered in an iframe) is docked to the
+left of the chat by default (`localStorage['labGuideOpen']`, defaults open)
+rather than a pop-out-only tab, with Session Info docked to the right. Two
+CSS/layout gotchas worth knowing if this breaks again:
+
+- `templates/lab.html`'s own `.container` rule must explicitly set
+  `max-width: none; margin: 0; padding: 0;` — the shared `static/css/
+  style.css` stylesheet defines a *same-named* generic `.container` utility
+  class (`max-width:1200px; margin:0 auto; padding:0 20px`) that otherwise
+  silently wins for any property `lab.html`'s own rule doesn't explicitly
+  override, since both stylesheets target the same selector. If the chat
+  area ever looks squeezed to the center of a wide screen again, check this
+  collision first before touching flex ratios.
+- `.header-content` intentionally keeps `max-width: 1400px; margin: 0 auto`
+  so the header title/nav stay centered as a group, even though `.header`'s
+  background and `.container`/`.main` below it span the full browser width.
+- The guide panel is resizable via a custom `.guide-resize-handle` divider
+  (not native CSS `resize: horizontal`) with width persisted in
+  `localStorage['labGuideWidth']`, clamped to `260px`–`60vw`. While
+  dragging, the guide iframe's `pointer-events` are set to `none` — without
+  this, the cursor crossing into the iframe's own document stops the parent
+  page's `mousemove` listener from firing, breaking the drag.
+
 ## Adding a new MCP-backed service (e.g. a 4th tool)
 
 Follow the Splunk pattern, since it's the "bring your own URL/token" template
