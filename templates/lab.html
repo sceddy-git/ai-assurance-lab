@@ -158,6 +158,103 @@
             background-color: #F5E3DE;
         }
 
+        /* "Past Chats" dropdown (added 2026-11-11) - lets a student return
+           to a previous chat session instead of New Chat being destructive. */
+        .past-chats-dropdown {
+            position: relative;
+        }
+
+        .past-chats-panel {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            right: 0;
+            width: 320px;
+            max-height: 420px;
+            overflow-y: auto;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            z-index: 50;
+        }
+
+        .past-chats-dropdown.open .past-chats-panel {
+            display: block;
+        }
+
+        .past-chats-empty {
+            padding: 16px 14px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .past-chat-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            transition: background-color 0.15s;
+        }
+
+        .past-chat-item:last-child {
+            border-bottom: none;
+        }
+
+        .past-chat-item:hover {
+            background-color: var(--accent-soft);
+        }
+
+        .past-chat-item.active {
+            background-color: var(--accent-soft);
+        }
+
+        .past-chat-info {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .past-chat-title {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .past-chat-current {
+            font-weight: 400;
+            color: var(--accent);
+            font-size: 11px;
+        }
+
+        .past-chat-time {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .past-chat-delete {
+            flex-shrink: 0;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 13px;
+            padding: 4px 6px;
+            border-radius: 4px;
+        }
+
+        .past-chat-delete:hover {
+            background-color: #F5E3DE;
+            color: var(--danger);
+        }
+
         /* Main Content - uses the full browser width (2026-11-11). Used to
            be capped at a fixed max-width and centered, wasting space on
            anything wider than a laptop screen; now the three columns
@@ -992,7 +1089,11 @@
                     <div class="header-links">
                         <a href="#" id="guideToggle" onclick="toggleGuide(event)">📘 Lab Guide</a>
                         <a href="#" id="infoToggle" onclick="toggleInfoSidebar(event)">ℹ️ Session Info</a>
-                        <a href="#" id="newChatLink" onclick="clearChatHistory(event)" title="Clear this conversation and start fresh">🗑️ New Chat</a>
+                        <a href="#" id="newChatLink" onclick="clearChatHistory(event)" title="Start a new chat (your current conversation is saved under Past Chats)">🗑️ New Chat</a>
+                        <div class="past-chats-dropdown" id="pastChatsDropdown">
+                            <a href="#" id="pastChatsToggle" onclick="togglePastChatsDropdown(event)" title="Return to a previous chat session">🕑 Past Chats</a>
+                            <div class="past-chats-panel" id="pastChatsList"></div>
+                        </div>
                         <a href="/credentials">⚙️ Credentials</a>
                         <a href="/admin/students" id="adminLink" style="display: none;">👥 Students</a>
                         <a href="/admin/progress" id="progressLink" style="display: none;">📊 Progress</a>
@@ -1107,49 +1208,121 @@
         // continuing through the normal chat flow.
         let pendingFeedbackCheckpoint = null;
 
-        // ---- Chat persistence (survive navigating away / reloading) ----
+        // ---- Chat persistence: multiple named sessions (added 2026-11-11) ----
         // Keyed per-user so a shared machine doesn't mix conversations. Only
         // plain text role/content pairs are ever stored here (attachments
         // are never added to conversationHistory - see sendMessage()), so
         // this stays well within localStorage's ~5MB per-origin quota.
-        const CHAT_HISTORY_KEY = 'chatHistory_' + {{ email | tojson }};
+        //
+        // Previously a single `chatHistory_<email>` key held one ongoing
+        // conversation, and "New Chat" destructively wiped it. Now we keep
+        // an array of session objects under SESSIONS_KEY, each with its own
+        // id/title/messages, so clicking "New Chat" starts a fresh one
+        // without losing old ones - students can switch back via the
+        // "Past Chats" dropdown in the header. SESSIONS_MAX caps how many
+        // are kept (oldest trimmed first, never the active one) so this
+        // can't grow unbounded against the localStorage quota.
+        const SESSIONS_KEY = 'chatSessions_' + {{ email | tojson }};
+        const ACTIVE_SESSION_KEY = 'activeSessionId_' + {{ email | tojson }};
+        const LEGACY_CHAT_HISTORY_KEY = 'chatHistory_' + {{ email | tojson }};
         const CHAT_HISTORY_MAX_MESSAGES = 60;
+        const SESSIONS_MAX = 20;
 
-        function saveChatHistory() {
-            try {
-                const trimmed = conversationHistory.slice(-CHAT_HISTORY_MAX_MESSAGES);
-                localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(trimmed));
-            } catch (e) {
-                // Quota exceeded or storage disabled (private browsing) -
-                // chat still works for this session, it just won't persist.
-                console.warn('Could not save chat history:', e);
-            }
+        let chatSessions = [];
+        let activeSessionId = null;
+
+        function _newSessionId() {
+            return 's_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
         }
 
-        function restoreChatHistory() {
+        function _sessionTitle(session) {
+            if (session.title) return session.title;
+            const firstUserMsg = (session.messages || []).find(m => m.role === 'user' && typeof m.content === 'string');
+            if (firstUserMsg) {
+                const text = firstUserMsg.content.trim().replace(/\s+/g, ' ');
+                return text.length > 48 ? text.slice(0, 48) + '…' : text;
+            }
+            return 'New conversation';
+        }
+
+        function loadSessions() {
             let saved = null;
             try {
-                saved = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || 'null');
+                saved = JSON.parse(localStorage.getItem(SESSIONS_KEY) || 'null');
             } catch (e) {
                 saved = null;
             }
-            if (!Array.isArray(saved) || saved.length === 0) return;
-
-            conversationHistory = saved;
-            for (const turn of saved) {
-                if (typeof turn.content === 'string') {
-                    addMessage(turn.content, turn.role === 'user', null, turn.feedback_id, turn.steps);
+            if (Array.isArray(saved) && saved.length > 0) {
+                chatSessions = saved;
+            } else {
+                // One-time migration from the old single-conversation key.
+                let legacy = null;
+                try {
+                    legacy = JSON.parse(localStorage.getItem(LEGACY_CHAT_HISTORY_KEY) || 'null');
+                } catch (e) {
+                    legacy = null;
                 }
+                const now = Date.now();
+                if (Array.isArray(legacy) && legacy.length > 0) {
+                    chatSessions = [{ id: _newSessionId(), title: null, createdAt: now, updatedAt: now, messages: legacy }];
+                } else {
+                    chatSessions = [];
+                }
+            }
+
+            activeSessionId = localStorage.getItem(ACTIVE_SESSION_KEY);
+            let active = chatSessions.find(s => s.id === activeSessionId);
+            if (!active) {
+                // No valid active session (first visit, or it was deleted) -
+                // resume the most recently updated one if any exist.
+                if (chatSessions.length > 0) {
+                    active = chatSessions.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+                } else {
+                    const nowTs = Date.now();
+                    active = { id: _newSessionId(), title: null, createdAt: nowTs, updatedAt: nowTs, messages: [] };
+                    chatSessions.push(active);
+                }
+                activeSessionId = active.id;
+            }
+            conversationHistory = active.messages || [];
+        }
+
+        function persistSessions() {
+            try {
+                // Trim each session's message list, and cap the number of
+                // sessions kept (oldest-updated first, but never the active
+                // one) before writing, so this can't grow unbounded.
+                let toSave = chatSessions.map(s => ({
+                    ...s,
+                    messages: (s.messages || []).slice(-CHAT_HISTORY_MAX_MESSAGES)
+                }));
+                if (toSave.length > SESSIONS_MAX) {
+                    toSave.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+                    const kept = toSave.filter(s => s.id === activeSessionId);
+                    const rest = toSave.filter(s => s.id !== activeSessionId).slice(0, SESSIONS_MAX - kept.length);
+                    toSave = kept.concat(rest);
+                }
+                localStorage.setItem(SESSIONS_KEY, JSON.stringify(toSave));
+                localStorage.setItem(ACTIVE_SESSION_KEY, activeSessionId);
+                localStorage.removeItem(LEGACY_CHAT_HISTORY_KEY);
+            } catch (e) {
+                // Quota exceeded or storage disabled (private browsing) -
+                // chat still works for this session, it just won't persist.
+                console.warn('Could not save chat sessions:', e);
             }
         }
 
-        function clearChatHistory(event) {
-            if (event) event.preventDefault();
-            if (conversationHistory.length && !confirm('Start a new conversation? This clears the current chat history.')) {
-                return;
+        function saveChatHistory() {
+            const active = chatSessions.find(s => s.id === activeSessionId);
+            if (active) {
+                active.messages = conversationHistory;
+                active.updatedAt = Date.now();
+                if (!active.title) active.title = _sessionTitle(active);
             }
-            conversationHistory = [];
-            localStorage.removeItem(CHAT_HISTORY_KEY);
+            persistSessions();
+        }
+
+        function showEmptyState() {
             document.getElementById('messages-inner').innerHTML = `
                 <div class="empty-state">
                     <div class="empty-state-icon">💬</div>
@@ -1158,6 +1331,130 @@
                         <p style="font-size: 12px; margin-top: 5px;">Start by sending a message. The AI will help you troubleshoot your network with ThousandEyes and Meraki data.</p>
                     </div>
                 </div>`;
+        }
+
+        function renderActiveSession() {
+            document.getElementById('messages-inner').innerHTML = '';
+            if (!conversationHistory.length) {
+                showEmptyState();
+                return;
+            }
+            for (const turn of conversationHistory) {
+                if (typeof turn.content === 'string') {
+                    addMessage(turn.content, turn.role === 'user', null, turn.feedback_id, turn.steps);
+                }
+            }
+        }
+
+        function restoreChatHistory() {
+            loadSessions();
+            renderActiveSession();
+        }
+
+        function clearChatHistory(event) {
+            if (event) event.preventDefault();
+            if (conversationHistory.length && !confirm('Start a new chat? Your current conversation will be saved under "Past Chats" so you can come back to it.')) {
+                return;
+            }
+            saveChatHistory(); // make sure the outgoing session's title/messages are saved first
+            const session = { id: _newSessionId(), title: null, createdAt: Date.now(), updatedAt: Date.now(), messages: [] };
+            chatSessions.push(session);
+            activeSessionId = session.id;
+            conversationHistory = [];
+            persistSessions();
+            showEmptyState();
+            renderPastChatsList();
+        }
+
+        function switchToSession(sessionId) {
+            if (sessionId === activeSessionId) { closePastChatsDropdown(); return; }
+            saveChatHistory(); // persist whatever we're navigating away from
+            const session = chatSessions.find(s => s.id === sessionId);
+            if (!session) return;
+            activeSessionId = sessionId;
+            conversationHistory = session.messages || [];
+            persistSessions();
+            renderActiveSession();
+            closePastChatsDropdown();
+        }
+
+        function deleteSession(event, sessionId) {
+            event.stopPropagation();
+            if (!confirm('Delete this past chat? This cannot be undone.')) return;
+            chatSessions = chatSessions.filter(s => s.id !== sessionId);
+            if (sessionId === activeSessionId) {
+                // Deleted the one we were viewing - fall back to the most
+                // recent remaining session, or start a fresh empty one.
+                if (chatSessions.length > 0) {
+                    const next = chatSessions.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+                    activeSessionId = next.id;
+                    conversationHistory = next.messages || [];
+                } else {
+                    const session = { id: _newSessionId(), title: null, createdAt: Date.now(), updatedAt: Date.now(), messages: [] };
+                    chatSessions.push(session);
+                    activeSessionId = session.id;
+                    conversationHistory = [];
+                }
+                renderActiveSession();
+            }
+            persistSessions();
+            renderPastChatsList();
+        }
+
+        function _relativeTime(ts) {
+            if (!ts) return '';
+            const diffMs = Date.now() - ts;
+            const mins = Math.round(diffMs / 60000);
+            if (mins < 1) return 'just now';
+            if (mins < 60) return mins + 'm ago';
+            const hours = Math.round(mins / 60);
+            if (hours < 24) return hours + 'h ago';
+            const days = Math.round(hours / 24);
+            if (days < 7) return days + 'd ago';
+            return new Date(ts).toLocaleDateString();
+        }
+
+        function renderPastChatsList() {
+            const list = document.getElementById('pastChatsList');
+            if (!list) return;
+            const sorted = chatSessions.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+            if (sorted.length <= 1) {
+                list.innerHTML = '<div class="past-chats-empty">No past chats yet \u2014 click "New Chat" to start one and come back to this conversation later.</div>';
+                return;
+            }
+            list.innerHTML = sorted.map(s => {
+                const isActive = s.id === activeSessionId;
+                const title = _sessionTitle(s).replace(/</g, '&lt;');
+                return `<div class="past-chat-item${isActive ? ' active' : ''}" onclick="switchToSession('${s.id}')">
+                    <div class="past-chat-info">
+                        <div class="past-chat-title">${title}${isActive ? ' <span class="past-chat-current">(current)</span>' : ''}</div>
+                        <div class="past-chat-time">${_relativeTime(s.updatedAt)} \u00b7 ${(s.messages || []).length} messages</div>
+                    </div>
+                    <button class="past-chat-delete" onclick="deleteSession(event, '${s.id}')" title="Delete this chat">\u2715</button>
+                </div>`;
+            }).join('');
+        }
+
+        function togglePastChatsDropdown(event) {
+            if (event) event.preventDefault();
+            const dropdown = document.getElementById('pastChatsDropdown');
+            const isOpen = dropdown.classList.toggle('open');
+            if (isOpen) {
+                renderPastChatsList();
+                document.addEventListener('click', _onPastChatsOutsideClick);
+            }
+        }
+
+        function closePastChatsDropdown() {
+            document.getElementById('pastChatsDropdown').classList.remove('open');
+            document.removeEventListener('click', _onPastChatsOutsideClick);
+        }
+
+        function _onPastChatsOutsideClick(e) {
+            const dropdown = document.getElementById('pastChatsDropdown');
+            if (dropdown && !dropdown.contains(e.target)) {
+                closePastChatsDropdown();
+            }
         }
 
         // Restore any previous conversation for this user. Must run after
