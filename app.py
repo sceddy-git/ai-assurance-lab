@@ -165,10 +165,12 @@ LAB_CHECKPOINTS = {
         'alerts in the last 7 days (both triggered and cleared)',
         "walk me through it like you'd walk a customer through it",
         'what would a probable fault domain and troubleshooting path look like',
+        'is our stuff okay right now',
     ]},
     'te_lab3': {'module': 'te', 'label': 'Lab 3: Proving the SLA', 'tier': 'stretch', 'phrases': [
         'pull results for those test ids since they were created',
         'call out anything that dropped below a 99.5% uptime sla',
+        "paste into an email to the customer's it director",
     ]},
     'te_lab4': {'module': 'te', 'label': "Lab 4: Catching It Before They Do", 'tier': 'stretch', 'phrases': [
         'analyze those tests for metric anomalies in the time since they were created',
@@ -185,6 +187,7 @@ LAB_CHECKPOINTS = {
     'meraki_lab1': {'module': 'meraki', 'label': 'Lab 1: Meet the Network', 'tier': 'core', 'phrases': [
         'health snapshot of my meraki organization',
         'draw me a physical diagram of my',
+        'any showing errors, drops, or a duplex mismatch',
     ]},
     'meraki_lab2': {'module': 'meraki', 'label': 'Lab 2: The Trouble Ticket', 'tier': 'core', 'phrases': [
         'pull wireless connection stats and failed-connection history',
@@ -198,6 +201,7 @@ LAB_CHECKPOINTS = {
     'meraki_lab4': {'module': 'meraki', 'label': "Lab 4: Proving It's Fixed", 'tier': 'stretch', 'phrases': [
         'draw a performance dashboard for my network',
         'show the top 10 bandwidth consumers this week',
+        'identify co-channel interference and suggest changes',
     ]},
     'meraki_lab5': {'module': 'meraki', 'label': 'Lab 5: The Handoff', 'tier': 'stretch', 'phrases': [
         'is 802.11r fast roaming enabled on my aps',
