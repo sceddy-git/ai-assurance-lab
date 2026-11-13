@@ -708,6 +708,24 @@ CLAUDE_MODEL_ID = os.getenv('CLAUDE_MODEL_ID', 'us.anthropic.claude-haiku-4-5-20
 # every turn.
 CLAUDE_MODEL_ID_HTML = os.getenv('CLAUDE_MODEL_ID_HTML', 'us.anthropic.claude-sonnet-4-5-20250929-v1:0')
 
+# max_tokens for the tool-calling loop's ordinary turns (parameter selection,
+# summarizing tool results, etc.) - 4096 is plenty for that and keeps
+# per-turn latency/cost down across 40 concurrent students.
+MAX_TOKENS_DEFAULT = 4096
+
+# A real session (2026-11-13, TE Lab 5's "turn this into an interactive HTML
+# slide deck" prompt) showed 4096 is NOT enough for a self-contained HTML
+# artifact with inline CSS + multiple slides + JS navigation - Claude's
+# response hit the 4096 cap and got cut off mid-<style> block on both the
+# student's first attempt and their follow-up retry, producing invalid,
+# unusable HTML with no closing tags and no navigation JS at all (since it
+# never got that far). Confirmed via Splunk AO span history showing both
+# outputs truncated mid-document. HTML-artifact turns are single-shot
+# generation (not tool-looping), so a higher cap here only costs latency on
+# turns that already route to Sonnet for quality reasons - low risk relative
+# to shipping a broken artifact with no error shown anywhere.
+MAX_TOKENS_HTML = 8192
+
 # Keywords mirroring HTML_OUTPUT_SYSTEM_PROMPT's own trigger ("report,
 # document, dashboard, or any kind of downloadable output") plus the other
 # deliverable nouns used throughout guide.html's prompts (narrative, deck,
@@ -1430,7 +1448,7 @@ def chat():
                     messages = _cap_messages_for_bedrock(messages)
                     request_body = {
                         "anthropic_version": "bedrock-2023-05-31",
-                        "max_tokens": 4096,
+                        "max_tokens": MAX_TOKENS_HTML if active_model_id == CLAUDE_MODEL_ID_HTML else MAX_TOKENS_DEFAULT,
                         "system": system_prompt,
                         "messages": messages
                     }
@@ -1480,6 +1498,29 @@ def chat():
 
                     if not tool_calls:
                         # Claude is done calling tools; this is the final answer.
+                        # Belt-and-suspenders: if this final answer got cut off by
+                        # hitting the max_tokens cap (confirmed to happen on
+                        # complex HTML artifacts even after raising the HTML-path
+                        # cap to 8192 - see MAX_TOKENS_HTML), don't silently hand
+                        # the student truncated/invalid HTML with no indication
+                        # anything went wrong. Surface it plainly instead.
+                        if result.get('stop_reason') == 'max_tokens':
+                            logger.warning(
+                                f"Bedrock response truncated by max_tokens cap for {email} "
+                                f"(model={active_model_id}); appending truncation notice"
+                            )
+                            content = content + [{
+                                "type": "text",
+                                "text": (
+                                    "\n\n⚠️ **This response was cut off because it hit the AI's "
+                                    "output length limit** — the artifact above is incomplete "
+                                    "(it will likely be missing closing tags, navigation code, "
+                                    "or later slides/sections) and won't work if you try to use "
+                                    "it as-is. Try asking for something shorter (e.g. fewer "
+                                    "slides, less detail per section), or ask me to \"continue "
+                                    "from where you left off.\""
+                                )
+                            }]
                         break
 
                     # Any text Claude wrote alongside this round's tool call(s)
