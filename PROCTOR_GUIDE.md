@@ -2,8 +2,9 @@
 
 This is the **single source of truth** for running the lab. Everything else you might
 find in this repo's git history (Docker/AppRunner/CodeBuild instructions, multiple
-overlapping README files) is obsolete — the lab now runs on a single always-on EC2
-instance, managed entirely through the web app or AWS CLI/SSM. No Docker, no CI/CD
+overlapping README files) is obsolete — the lab now runs on an always-on Auto
+Scaling Group behind a load balancer (1-3 EC2 instances, scaling with class
+load), managed entirely through the web app or AWS CLI/SSM. No Docker, no CI/CD
 pipeline, no local builds.
 
 For how the system is built (architecture, file layout, deploying code changes), see
@@ -22,7 +23,7 @@ lab session**.
 | Credential storage | Encrypted per-user in DynamoDB (`AIAssuranceLab-UserMCPCredentials`) |
 | MCP integrations | ThousandEyes (hosted), Meraki (hosted), Splunk (student/facilitator-provided URL) |
 | Class scheduling | `/admin/classes` - QR self-registration per class, roster view, disable/TE-cleanup actions |
-| Infra | 1× EC2 `t3.micro` (`i-09cdb070a8b829165`), Elastic IP `54.198.247.24`, Nginx + Let's Encrypt TLS, Flask/Gunicorn via systemd, managed via AWS SSM (no SSH) |
+| Infra | Auto Scaling Group `ai-assurance-lab-asg` (1-3x `m6i.large` behind ALB `ai-assurance-lab-alb`, scales on CPU), Nginx + Let's Encrypt TLS, Flask/Gunicorn via systemd, managed via AWS SSM (no SSH). See `TECHNICAL_REFERENCE.md` for the full infra table. |
 
 The lab is **designed to stay running between sessions** — you don't need to
 redeploy anything to run another cohort. You only need to reset the student list
@@ -300,9 +301,18 @@ about when a student asks:
 
 ## 8. Cost while idle
 
-The instance is a single `t3.micro` — leaving it running between sessions
-costs roughly $7–8/month (EC2) + a few cents/month (Elastic IP, Route 53,
-DynamoDB on-demand). Bedrock and any per-request costs only accrue when
-students actually chat. There's no need to shut it down between lab sessions
-unless you want to; startup/teardown isn't automated and isn't necessary given
-the low idle cost.
+Since the 2026-11-09 move to an Auto Scaling Group behind an ALB, the floor
+cost is higher than the old single `t3.micro`: the ASG normally runs **one**
+`m6i.large` instance at idle (desired capacity 1, scaling up to 3 only when
+class load pushes average CPU above the 55% target), plus the ALB itself
+(hourly charge + LCU usage) and DynamoDB on-demand. Bedrock and any
+per-request costs only accrue when students actually chat. There's no need to
+scale the ASG down to 0 between lab sessions unless you want to; nothing
+about idle scale-to-zero is automated, so leaving it as-is is the simplest
+default given class sessions can be scheduled with little notice.
+
+A pre-ASG standalone EC2 instance (`i-09cdb070a8b829165`) was left running
+after the Nov 9 migration, fully orphaned from live traffic — it was stopped
+on 2026-11-13 and its Elastic IP released (pending termination). If you ever
+see an EC2 instance that isn't a member of `ai-assurance-lab-asg`, treat it
+as leftover and safe to investigate for shutdown the same way.

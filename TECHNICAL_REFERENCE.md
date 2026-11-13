@@ -10,30 +10,53 @@ instead.
 Student browser
       │  HTTPS (443)
       ▼
+  Route 53 (ai.thousandeyeschannel.com, ALIAS → ALB)
+      ▼
+  Application Load Balancer (ai-assurance-lab-alb, public subnets, ACM/TLS)
+      │  forwards → target group ai-assurance-lab-tg (port 443)
+      ▼
+  Auto Scaling Group (ai-assurance-lab-asg, 1-3x m6i.large, scales on ASG
+  avg CPU target-tracking @ 55%, discovered fresh per-deploy by deploy.sh —
+  do not hardcode an instance ID anywhere)
+      │  (per instance)
+      ▼
   Nginx (reverse proxy, Let's Encrypt TLS, 180s proxy timeouts)
       │  proxy_pass → 127.0.0.1:5000
       ▼
-  Gunicorn (3 workers, 180s timeout) → Flask app (app.py)
+  Gunicorn (2 workers x 6 threads, 180s timeout) → Flask app (app.py)
       │
       ├── AWS Cognito ──────── login / user management (Hosted UI, OAuth2 code flow)
       ├── AWS DynamoDB ─────── encrypted per-user MCP credentials
-      ├── AWS Bedrock ──────── Claude Sonnet 4.5 (model calls + tool-use loop)
+      ├── AWS Bedrock ──────── Claude Haiku 4.5 (model calls + tool-use loop)
       ├── ThousandEyes MCP ─── https://api.thousandeyes.com/mcp   (hosted by Cisco)
       ├── Meraki MCP ───────── https://mcp.meraki.com/mcp         (hosted by Cisco)
       └── Splunk MCP ───────── user-supplied URL (local/tunneled or facilitator-hosted)
 ```
 
-Everything runs on **one EC2 instance**. There is no container runtime, no
-build pipeline, no load balancer — this is intentionally minimal for a
-40-student lab, not a production multi-tenant SaaS.
+As of **2026-11-09** the app runs behind an Auto Scaling Group + Application
+Load Balancer instead of a single named EC2 instance, so it can run multiple
+concurrent classes on separate instances without one class's load affecting
+another's. There is still no container runtime and no CI/CD build pipeline —
+instances in the ASG run the same AMI/launch template and `git pull` the app
+directly, same as the old single-instance setup; see `deploy.sh` for how a
+deploy reaches every instance currently in the group.
+
+The pre-ASG single EC2 instance (`i-09cdb070a8b829165`, with Elastic IP
+`54.198.247.24`) was fully decommissioned on 2026-11-13: it had been left
+running after the migration, orphaned from all traffic (DNS, the ALB target
+group, and the ASG had already moved on without it). It was stopped and its
+Elastic IP released; it is pending termination. **It is not part of the live
+architecture and should not be referenced for any operational task.**
 
 ### Live infra reference
 
 | Resource | Value |
 |---|---|
-| EC2 instance | `i-09cdb070a8b829165` (t3.micro, us-east-1) |
-| Elastic IP | `54.198.247.24` |
-| Domain | `ai.thousandeyeschannel.com` (Route 53 A record → EIP) |
+| Domain | `ai.thousandeyeschannel.com` (Route 53 ALIAS A record → ALB, `EvaluateTargetHealth=true`) |
+| Load balancer | `ai-assurance-lab-alb` (internet-facing ALB, listeners on 80 + 443) |
+| Target group | `ai-assurance-lab-tg` (health check on port 443; members = current ASG instances) |
+| Auto Scaling Group | `ai-assurance-lab-asg` (min 1 / max 3 / desired 1, launch template `ai-assurance-lab-lt`, instance type `m6i.large`, spans `us-east-1a/b/c`, scales on `ASGAverageCPUUtilization` target-tracking @ 55%) |
+| EC2 instance(s) | Discovered fresh per-deploy from the ASG — **do not hardcode an instance ID**; run `aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names ai-assurance-lab-asg` (or just run `deploy.sh`, which does this automatically) to find the current one(s) |
 | Security group | `sg-07f716a418f2fb83d` (`ai-assurance-lab-sg`) — inbound 80, 443 only. No port 22. |
 | IAM instance profile | `EC2-SSM-Profile` (SSM Core + app permissions — Bedrock invoke, DynamoDB CRUD, Cognito admin) |
 | Cognito User Pool | `us-east-1_wUyz157rN` |
@@ -47,7 +70,8 @@ build pipeline, no load balancer — this is intentionally minimal for a
 | Git remote | `https://github.com/sceddy-git/ai-assurance-lab` (branch `main`) |
 
 No SSH key is usable for login (port 22 closed); all instance access is via
-**AWS SSM** (`aws ssm send-command`) or the web app's built-in admin routes.
+**AWS SSM** (`aws ssm send-command`, targeting whichever instance(s) the ASG
+currently reports — see `deploy.sh`) or the web app's built-in admin routes.
 
 ### Email delivery (Cognito invite / password reset)
 
@@ -242,16 +266,43 @@ that set — proctors are never deleted by "Delete All Students".
 ## Deploying a code change
 
 There is **no CI/CD pipeline** — deployment is a manual git pull + restart,
-either from the web app or via SSM:
+either from the web app or via `deploy.sh`. Since the 2026-11-09 move to an
+Auto Scaling Group, **never hardcode an instance ID for a deploy** — the ASG's
+membership changes as it scales (1-3 instances), so a deploy has to reach
+whichever instance(s) are currently `InService`.
 
-**Via the web app** (preferred, no AWS CLI needed): log in as a proctor →
-`⚙️ Settings` → "Pull latest code from Git + restart".
+**Via the web app** (simplest for a single instance, no AWS CLI needed): log
+in as a proctor → `⚙️ Settings` → "Pull latest code from Git + restart". Note
+this only reaches the instance serving that request — if the ASG has scaled
+out to more than one instance, use `deploy.sh` instead so every instance gets
+the update.
 
-**Via SSM** (from a machine with AWS CLI configured):
+**Via `deploy.sh`** (preferred — reaches every ASG instance):
 
 ```bash
+./deploy.sh
+```
+
+This discovers the ASG's current `InService` instances fresh from AWS, waits
+for each to be SSM-Online, pushes `git pull` + a `py_compile` sanity check +
+`systemctl restart flask-app` to all of them, and reports per-instance
+success/failure plus a final health check against the live domain.
+
+**Manually via SSM**, if you need to target the fleet by hand (e.g. to debug
+one specific instance): first discover the current instance ID(s), then send
+the command to them — do not reuse an instance ID from a previous session,
+since the ASG may have replaced it:
+
+```bash
+# 1. Discover current ASG instance(s)
+aws autoscaling describe-auto-scaling-groups \
+  --auto-scaling-group-names ai-assurance-lab-asg --region us-east-1 \
+  --query "AutoScalingGroups[0].Instances[?LifecycleState=='InService'].InstanceId" \
+  --output text
+
+# 2. Send the command to one of those instance IDs
 aws ssm send-command --region us-east-1 \
-  --instance-ids i-09cdb070a8b829165 \
+  --instance-ids <INSTANCE_ID_FROM_STEP_1> \
   --document-name "AWS-RunShellScript" \
   --parameters 'commands=[
     "export HOME=/root",
@@ -263,8 +314,8 @@ aws ssm send-command --region us-east-1 \
   ]'
 ```
 
-Then check the result with `aws ssm get-command-invocation --command-id ... 
---instance-id i-09cdb070a8b829165`.
+Then check the result with `aws ssm get-command-invocation --command-id <id>
+--instance-id <INSTANCE_ID>`.
 
 If `requirements.txt` changed, also run
 `venv/bin/pip install -r requirements.txt` before the restart.
@@ -272,27 +323,38 @@ If `requirements.txt` changed, also run
 ## Emergency access without the web UI
 
 If Nginx/Flask is fully down and `/admin/settings` is unreachable, use SSM
-directly (same credentials/permissions as above):
+directly (same credentials/permissions as above). As above, discover the
+current ASG instance ID(s) first rather than assuming a fixed one:
 
 ```bash
+# Discover current instance(s)
+IIDS=$(aws autoscaling describe-auto-scaling-groups \
+  --auto-scaling-group-names ai-assurance-lab-asg --region us-east-1 \
+  --query "AutoScalingGroups[0].Instances[?LifecycleState=='InService'].InstanceId" \
+  --output text)
+
 # Check service status
-aws ssm send-command --region us-east-1 --instance-ids i-09cdb070a8b829165 \
+aws ssm send-command --region us-east-1 --instance-ids $IIDS \
   --document-name "AWS-RunShellScript" \
   --parameters 'commands=["systemctl status flask-app --no-pager","systemctl status nginx --no-pager"]'
 
 # Restart both
-aws ssm send-command --region us-east-1 --instance-ids i-09cdb070a8b829165 \
+aws ssm send-command --region us-east-1 --instance-ids $IIDS \
   --document-name "AWS-RunShellScript" \
   --parameters 'commands=["systemctl restart flask-app","systemctl restart nginx"]'
 
 # Tail logs
-aws ssm send-command --region us-east-1 --instance-ids i-09cdb070a8b829165 \
+aws ssm send-command --region us-east-1 --instance-ids $IIDS \
   --document-name "AWS-RunShellScript" \
   --parameters 'commands=["journalctl -u flask-app -n 200 --no-pager"]'
 ```
 
 Use `aws ssm get-command-invocation --command-id <id> --instance-id
-i-09cdb070a8b829165` to retrieve output after sending.
+<INSTANCE_ID>` to retrieve output after sending.
+
+If the ALB/target group itself is the problem (e.g. all targets unhealthy),
+check target health directly: `aws elbv2 describe-target-health --target-group-arn
+arn:aws:elasticloadbalancing:us-east-1:004878717866:targetgroup/ai-assurance-lab-tg/bbea4ca2196cb6a2`.
 
 ## Known bugs found & fixed during verification (Sept 2026)
 
