@@ -201,7 +201,7 @@
     <p class="lead">The ThousandEyes MCP server is cloud-hosted by Cisco. This lab platform talks to it on your behalf using your own personal API key — nothing to install, nothing to configure locally.</p>
     <div class="te">
     <ol class="steps">
-      <li><div><div class="st-t">Get your ThousandEyes API key</div><div class="st-d">In the ThousandEyes UI, go to <b>Account Settings → Users and Roles → API Keys</b>, then click <b>Create API Key</b> (or ask your proctor for the demo account's key). See the full walkthrough below if this is your first time.</div></div></li>
+      <li><div><div class="st-t">Get your ThousandEyes API key</div><div class="st-d">In the ThousandEyes UI, go to <b>Account Settings → Users and Roles → API Keys</b>, then click <b>Create API Key</b> (or ask your proctor for the demo account's key). See the <a href="#sec-appendix-te-walkthrough">full walkthrough</a> if this is your first time.</div></div></li>
       <li><div><div class="st-t">Open Credentials in this app</div><div class="st-d">Click <b>⚙️ Credentials</b> in the header of the chat page.</div></div></li>
       <li><div><div class="st-t">Paste your key and save</div><div class="st-d">Paste the key into the <b>ThousandEyes</b> field (labeled <b>API Key</b>) and click <b>Save Token</b>.</div></div></li>
       <li><div><div class="st-t">Test the connection</div><div class="st-d">Click <b>Test Connection</b>. You should see <b>Connected ✓</b> — that's it, you're done. Click <b>Back to Chat</b> at the bottom to continue. The header status dot next to "ThousandEyes" will also turn green.</div></div></li>
@@ -520,13 +520,13 @@ by http_user_agent dest src status
   </section>
 
   <!-- APPENDIX -->
-  <section>
+  <section id="sec-appendix">
     <div class="sec-head"><div class="sec-tag">Appendix</div><h2>Troubleshooting &amp; glossary</h2></div>
     <h4>Claude says it has no tools</h4>
     <p>Open <b>⚙️ Credentials</b> and check the status for that service. If it doesn't say <b>Connected ✓</b>, re-paste the token/key and click <b>Test Connection</b> again. Then start a new chat message — tool availability is refreshed per request.</p>
     <h4>ThousandEyes won't connect</h4>
     <p>Confirm your account has <b>API Access</b> permission and your org isn't opted out of AI features. Demo accounts from the proctor already satisfy both. Double-check you copied the full token with no extra spaces.</p>
-    <h4>How to get your ThousandEyes API Key</h4>
+    <h4 id="sec-appendix-te-walkthrough">How to get your ThousandEyes API Key</h4>
     <div class="te">
     <ol class="steps">
       <li><div><div class="st-t">Go to API Keys</div><div class="st-d">In ThousandEyes, go to <b>Account Settings → Users and Roles → API Keys</b>, then click <b>Create API Key</b>.</div></div></li>
