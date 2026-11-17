@@ -172,7 +172,7 @@
       <h4>Everything runs in one place — this web app</h4>
       <ul class="tick">
         <li><b>No installs, no config files, no Claude Desktop.</b> You're already in the lab platform. The chat on the right talks to Claude on AWS Bedrock, which calls ThousandEyes and Meraki through their official hosted MCP servers on your behalf.</li>
-        <li><b>One-time setup per service:</b> open <b>⚙️ Credentials</b> in the header, paste in your ThousandEyes OAuth Bearer token and Meraki API token, and click <b>Test Connection</b>. That's it — no OAuth pop-ups to click through, no local Python servers, no JSON config to edit.</li>
+        <li><b>One-time setup per service:</b> open <b>⚙️ Credentials</b> in the header, paste in your ThousandEyes API key and Meraki API token, and click <b>Test Connection</b>. That's it — no OAuth pop-ups to click through, no local Python servers, no JSON config to edit.</li>
         <li>Once a service shows <b>Connected ✓</b>, just ask Claude questions in the chat — it automatically knows which tools it has available and uses them for you.</li>
         <li><b>Curious what Claude actually did behind the scenes?</b> Every answer that involved tool calls shows small collapsed rows above the text — <code>🔧 tool name</code> for each tool it called (click to expand and see exactly what was sent and what came back), and <code>💭</code> for any reasoning it wrote along the way. They're collapsed by default so they stay out of your way, but expanding them is a great way to see which MCP tools solved a given question.</li>
       </ul>
@@ -193,18 +193,18 @@
   <section id="sec-te">
     <div class="sec-head te"><div class="sec-tag">Module 1 · Required<a href="#">↑ back to top</a></div>
       <h2>ThousandEyes MCP</h2>
-      <div class="sec-desc">Connect this web app to Cisco's official ThousandEyes MCP server — one OAuth Bearer token, pasted once, no install.</div></div>
+      <div class="sec-desc">Connect this web app to Cisco's official ThousandEyes MCP server — one API key, pasted once, no install.</div></div>
 
-    <div class="tip"><span class="i">🎟️</span><div><b>No ThousandEyes account?</b> See the lab proctor — demo licenses and an OAuth Bearer token are provided for today.</div></div>
+    <div class="tip"><span class="i">🎟️</span><div><b>No ThousandEyes account?</b> See the lab proctor — demo licenses and an API key are provided for today.</div></div>
 
     <h3>Connect ThousandEyes (2 minutes, in this app)</h3>
-    <p class="lead">The ThousandEyes MCP server is cloud-hosted by Cisco. This lab platform talks to it on your behalf using your own personal OAuth Bearer token — nothing to install, nothing to configure locally.</p>
+    <p class="lead">The ThousandEyes MCP server is cloud-hosted by Cisco. This lab platform talks to it on your behalf using your own personal API key — nothing to install, nothing to configure locally.</p>
     <div class="te">
     <ol class="steps">
-      <li><div><div class="st-t">Get your ThousandEyes OAuth Bearer token</div><div class="st-d">In the ThousandEyes UI, go to <b>Account Settings → Users and Roles → User API Tokens</b> (or ask your proctor for the demo account's token). Copy the <b>OAuth Bearer Token</b> — you'll paste it once.</div></div></li>
+      <li><div><div class="st-t">Get your ThousandEyes API key</div><div class="st-d">In the ThousandEyes UI, go to <b>Account Settings → Users and Roles → API Keys</b>, then click <b>Create API Key</b> (or ask your proctor for the demo account's key). See the full walkthrough below if this is your first time.</div></div></li>
       <li><div><div class="st-t">Open Credentials in this app</div><div class="st-d">Click <b>⚙️ Credentials</b> in the header of the chat page.</div></div></li>
-      <li><div><div class="st-t">Paste your token and save</div><div class="st-d">Paste the token into the <b>ThousandEyes</b> field (labeled <b>OAuth Bearer Token</b>) and click <b>Save Token</b>.</div></div></li>
-      <li><div><div class="st-t">Test the connection</div><div class="st-d">Click <b>Test Connection</b>. You should see <b>Connected ✓</b> — that's it, you're done. The header status dot next to "ThousandEyes" will also turn green.</div></div></li>
+      <li><div><div class="st-t">Paste your key and save</div><div class="st-d">Paste the key into the <b>ThousandEyes</b> field (labeled <b>API Key</b>) and click <b>Save Token</b>.</div></div></li>
+      <li><div><div class="st-t">Test the connection</div><div class="st-d">Click <b>Test Connection</b>. You should see <b>Connected ✓</b> — that's it, you're done. Click <b>Back to Chat</b> at the bottom to continue. The header status dot next to "ThousandEyes" will also turn green.</div></div></li>
     </ol>
     </div>
 
@@ -526,16 +526,19 @@ by http_user_agent dest src status
     <p>Open <b>⚙️ Credentials</b> and check the status for that service. If it doesn't say <b>Connected ✓</b>, re-paste the token/key and click <b>Test Connection</b> again. Then start a new chat message — tool availability is refreshed per request.</p>
     <h4>ThousandEyes won't connect</h4>
     <p>Confirm your account has <b>API Access</b> permission and your org isn't opted out of AI features. Demo accounts from the proctor already satisfy both. Double-check you copied the full token with no extra spaces.</p>
-    <h4>How to get your ThousandEyes OAuth Bearer Token</h4>
+    <h4>How to get your ThousandEyes API Key</h4>
     <div class="te">
     <ol class="steps">
-      <li><div><div class="st-t">Go to Users and Roles</div><div class="st-d">In ThousandEyes, go to <b>Account Settings → Users and Roles</b>.</div></div></li>
-      <li><div><div class="st-t">Find the OAuth Bearer Token control</div><div class="st-d">On the <b>Profile</b> tab, scroll to the bottom and click <b>Create</b> next to <b>OAuth Bearer Token</b> — <i>not</i> the Basic Auth token.</div></div></li>
-      <li><div><div class="st-t">Enter your 2-factor code</div><div class="st-d">A 2-factor code is emailed to you. Paste it in when prompted.</div></div></li>
-      <li><div><div class="st-t">Copy the token immediately</div><div class="st-d">Your token is shown once in a popup window. Copy it right away.</div></div></li>
+      <li><div><div class="st-t">Go to API Keys</div><div class="st-d">In ThousandEyes, go to <b>Account Settings → Users and Roles → API Keys</b>, then click <b>Create API Key</b>.</div></div></li>
+      <li><div><div class="st-t">Name it and pick your account group</div><div class="st-d">Enter a name like <b>AI Day &lt;location&gt;</b>, then select the account group with your name and email on it.</div></div></li>
+      <li><div><div class="st-t">Set permissions and default account group</div><div class="st-d">Add all permissions, then set the default account group to the same one you picked above, then click <b>Next</b>.</div></div></li>
+      <li><div><div class="st-t">Verify your identity</div><div class="st-d">A verification code is emailed to you. Enter it, then click <b>Next</b>.</div></div></li>
+      <li><div><div class="st-t">Copy the key</div><div class="st-d">Click <b>Copy and Close</b> to copy the API key to your clipboard.</div></div></li>
+      <li><div><div class="st-t">Paste it into this app</div><div class="st-d">Go to the <b>Credentials</b> tab in this platform, paste the key into the ThousandEyes field, click <b>Save</b>, then click <b>Test Connection</b>.</div></div></li>
+      <li><div><div class="st-t">Back to the lab</div><div class="st-d">Once you see <b>Connected ✓</b>, click <b>Back to Chat</b> at the bottom to continue.</div></div></li>
     </ol>
     </div>
-    <div class="note"><span class="i">⚠️</span><div><b>You only get to see it once.</b> If you close the popup without copying the token, you cannot retrieve it again — you'll have to <b>revoke</b> that token and repeat the whole process to generate a new one. Copy it to somewhere safe (Notepad/TextEdit) the first time.</div></div>
+    <div class="note"><span class="i">⚠️</span><div><b>You only get to see it once.</b> If you close the popup without clicking <b>Copy and Close</b>, you cannot retrieve that key again — you'll have to <b>revoke</b> it and repeat the whole process to generate a new one. Copy it to somewhere safe (Notepad/TextEdit) the first time if you're not pasting it straight into Credentials.</div></div>
     <h4>Meraki won't connect</h4>
     <p>The shared org is pre-connected for everyone, so this is rare. If Claude says it has no Meraki tools, let your proctor know. If you added your own Meraki API key and Org ID on <b>⚙️ Credentials</b>, confirm the key is correct and the Org ID matches an org that key has access to, then click <b>Test Connection</b> again.</p>
     <h4>Splunk won't connect (bonus module)</h4>
